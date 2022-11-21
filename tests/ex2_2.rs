@@ -6,10 +6,12 @@ use std::{
 use soundprog::wave::{
     container::WaveContainer,
     setting::{
-        EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+        EBitsPerSample, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting,
+        WaveSoundSettingBuilder,
     },
 };
 
+#[allow(dead_code)]
 fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<WaveSoundSetting>> {
     // C長調、ド4オクターブの周波数からド5まで作る。
     const C4_FLOAT: f32 = 261.63;
@@ -37,12 +39,27 @@ fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<W
 
     let mut results = vec![];
     for index in 0..FREQUENCIES.len() {
+        const FADE_LENGTH: f64 = 0.1;
         let start_sec = startTime + (period * index as f32);
 
         results.push(
             base_setting
                 .start_sec(start_sec)
                 .frequency(FREQUENCIES[index].floor() as u32)
+                .intensity_control_items(vec![
+                    EIntensityControlItem::Fade {
+                        start_time: 0.0,
+                        length: FADE_LENGTH,
+                        start_factor: 0.0,
+                        end_factor: 1.0,
+                    },
+                    EIntensityControlItem::Fade {
+                        start_time: (period as f64) - FADE_LENGTH,
+                        length: FADE_LENGTH,
+                        start_factor: 1.0,
+                        end_factor: 0.0,
+                    },
+                ])
                 .build()
                 .unwrap(),
         );
@@ -53,13 +70,13 @@ fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<W
 
 #[test]
 fn write_fromc4toc5() {
-    const WRITE_FILE_PATH: &'static str = "assets/ex2/ex2_2.wav";
+    const WRITE_FILE_PATH: &'static str = "assets/ex2/ex2_2_4.wav";
 
     let fmt_setting = WaveFormatSetting {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = create_sound_settings_fromc4toc5(0f32, 0.25f32).unwrap();
+    let sound_settings = create_sound_settings_fromc4toc5(0f32, 1f32).unwrap();
 
     // 上の情報から波形を作る。
     // まず[0 ~ u32]までのu32値から量子化bitsに合う値として変換する。

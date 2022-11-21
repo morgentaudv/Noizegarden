@@ -8,15 +8,35 @@ use std::ops::{Shl, Shr};
 #[repr(transparent)]
 pub struct UniformedSample(u32);
 
+impl std::ops::Add<Self> for UniformedSample {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let lhs = (self.0 as i64) - (Self::MIN.0 as i64);
+        let rhs = (rhs.0 as i64) - (Self::MIN.0 as i64);
+        let new = ((lhs + rhs) + (Self::MIN.0 as i64)) as u32;
+        Self(new)
+    }
+}
+
+impl std::ops::AddAssign<Self> for UniformedSample {
+    fn add_assign(&mut self, rhs: Self) {
+        let lhs = (self.0 as i64) - (Self::MIN.0 as i64);
+        let rhs = (rhs.0 as i64) - (Self::MIN.0 as i64);
+        let new = ((lhs + rhs) + (Self::MIN.0 as i64)) as u32;
+        self.0 = new;
+    }
+}
+
 impl UniformedSample {
     ///
-    pub const MIN: UniformedSample = UniformedSample(0);
+    pub const MIN: UniformedSample = UniformedSample(2147483647);
 
     /// 0から1までの範囲内の[`f64`]を変換する。
     ///
     /// ```
     /// # use soundprog::wave::sample::UniformedSample;
-    /// let sample = UniformedSample::from_f64(-1f64);
+    /// let sample = UniformedSample::from_f64(0f64);
     /// # assert_eq!(sample, UniformedSample::MIN);
     /// ```
     pub fn from_f64(sample: f64) -> Self {

@@ -1,4 +1,4 @@
-use std::{io, mem};
+use std::{convert, io, mem};
 
 use super::{sample::UniformedSample, setting::WaveSound};
 
@@ -255,7 +255,7 @@ impl WaveDataChunk {
 
     /// [`WaveSound`]から[`WaveDataChunk`]を生成する。
     pub fn from_wave_sound(sound: &WaveSound) -> Self {
-        let uniformed_unit_samples_count = sound.buffer.len() as u32;
+        let uniformed_unit_samples_count = sound.completed_samples_count() as u32;
         let bytes_of_converted = sound.format.bits_per_sample.to_u32() / 8;
         let data_chunk_size = uniformed_unit_samples_count * bytes_of_converted;
 
@@ -391,17 +391,23 @@ impl WaveContainer {
         })
     }
 
+    /// [`WaveSound`]から[`WaveContainer`]を生成します。
     pub fn from_wavesound(sound: &WaveSound) -> Option<Self> {
         let data = WaveDataChunk::from_wave_sound(sound);
         let riff = WaveRiffHeader::from_data_chunk(&data);
         let fmt = WaveFmtHeader::from_wave_sound(sound);
+
+        //dbg!(&data, &riff, &fmt);
+
+        // まず、WaveSoundから各WaveFragmentを収集して単一のバッファーを作る必要がある。
+        let uniformed_buffer = sound.get_completed_samples();
 
         Some(WaveContainer {
             riff,
             fmt,
             fact: None,
             data,
-            uniformed_buffer: sound.buffer.clone(),
+            uniformed_buffer,
         })
     }
 
@@ -421,7 +427,7 @@ impl WaveContainer {
         self.data.write(writer);
 
         // そしてバッファーから量子化ビットとブロックサイズに合わせて別リストに変換し書き込ませる。
-        let converted_buffer: Vec<i16> = {
+        let mut converted_buffer: Vec<i16> = {
             // `unit_block_size`は各ユニットブロックのメモリ空間を、
             // `bits_per_sample`は`UniformSample`からどのように数値に変換するかを表す。
             let unit_block_size = self.unit_block_size();
@@ -434,6 +440,7 @@ impl WaveContainer {
                 .map(|v| v.to_16bits())
                 .collect()
         };
+
         let converted_buffer_slice = unsafe {
             let p_buffer = converted_buffer.as_ptr() as *const u8;
             std::slice::from_raw_parts(p_buffer, converted_buffer.len() * 2)
