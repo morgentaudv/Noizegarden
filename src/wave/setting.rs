@@ -94,7 +94,8 @@ impl EIntensityControlItem {
 #[derive(Default, Debug, Clone, Builder)]
 #[builder(default)]
 pub struct WaveSoundSetting {
-    pub frequency: u32,
+    pub frequency: f32,
+    pub phase: f32,
     pub start_sec: f32,
     pub length_sec: f32,
     pub intensity: f64,
@@ -157,7 +158,7 @@ impl SoundFragment {
         // そしてu32に変換する。最大値は`[2^32 - 1]`である。
         let coefficient = 2.0f64 * PI * (sound.frequency as f64) / (format.samples_per_sec as f64);
         for unittime in 0..samples_count.length {
-            let sin_input = coefficient * (unittime as f64);
+            let sin_input = coefficient * (unittime as f64) + (sound.phase as f64);
             let sample = sound.intensity * sin_input.sin();
             assert!(sample >= -1.0 && sample <= 1.0);
 

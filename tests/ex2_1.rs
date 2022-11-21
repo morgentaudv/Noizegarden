@@ -17,7 +17,7 @@ fn write_500hz_1second() {
         bits_per_sample: EBitsPerSample::Bits16,
     };
     let sound_setting = WaveSoundSettingBuilder::default()
-        .frequency(500)
+        .frequency(500f32)
         .length_sec(1f32)
         .intensity(1.0f64)
         .build()

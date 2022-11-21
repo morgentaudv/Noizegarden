@@ -32,7 +32,7 @@ fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<W
 
     let mut base_setting = WaveSoundSettingBuilder::default();
     base_setting
-        .frequency(0)
+        .frequency(0f32)
         .start_sec(startTime)
         .length_sec(period)
         .intensity(1.0f64);
@@ -45,7 +45,7 @@ fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<W
         results.push(
             base_setting
                 .start_sec(start_sec)
-                .frequency(FREQUENCIES[index].floor() as u32)
+                .frequency(FREQUENCIES[index])
                 .intensity_control_items(vec![
                     EIntensityControlItem::Fade {
                         start_time: 0.0,
