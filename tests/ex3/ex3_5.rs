@@ -1,8 +1,10 @@
 use std::{
+    f32::consts::PI,
     fs,
     io::{self, Write},
 };
 
+use rand::prelude::*;
 use soundprog::wave::{
     container::WaveContainer,
     setting::{
@@ -13,12 +15,7 @@ use soundprog::wave::{
 const C4_FLOAT: f32 = 261.63;
 const C5_FLOAT: f32 = C4_FLOAT * 2f32;
 
-fn square_fragments(
-    startTime: f32,
-    period: f32,
-    frequency: f32,
-    order_factor: u32,
-) -> Option<Vec<WaveSoundSetting>> {
+fn whitenoise_fragments(startTime: f32, period: f32) -> Option<Vec<WaveSoundSetting>> {
     if startTime < 0f32 || period <= 0f32 {
         return None;
     }
@@ -27,25 +24,23 @@ fn square_fragments(
     let mut setting = WaveSoundSettingBuilder::default();
 
     // 基本音を入れる。
+    const BASE_INTENSITY: f64 = 0.01;
+    const FREQ_RANGE: f32 = 20000.0;
     setting
-        .frequency(frequency)
+        .frequency(0.0)
+        .phase(0.0)
         .start_sec(startTime)
         .length_sec(period)
-        .intensity(0.2f64);
+        .intensity(BASE_INTENSITY);
     results.push(setting.build().unwrap());
 
     // 倍音を入れる。
-    for i in 2..order_factor {
-        let order = (2 * i) - 1;
-        let overtone_frequency = frequency * (order as f32);
-        let intensity = 0.2f64 * (order as f64).recip();
-        results.push(
-            setting
-                .frequency(overtone_frequency)
-                .intensity(intensity)
-                .build()
-                .unwrap(),
-        );
+    let mut rng = rand::thread_rng();
+    for i in 0..250 {
+        let frequency = (rng.gen::<f32>() * FREQ_RANGE);
+        let phase = rng.gen::<f32>() * (PI * 2.0);
+
+        results.push(setting.frequency(frequency).phase(phase).build().unwrap());
     }
 
     Some(results)
@@ -53,13 +48,13 @@ fn square_fragments(
 
 #[test]
 fn write_fromc4toc5() {
-    const WRITE_FILE_PATH: &'static str = "assets/ex3/ex3_2.wav";
+    const WRITE_FILE_PATH: &'static str = "assets/ex3/ex3_5.wav";
 
     let fmt_setting = WaveFormatSetting {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = square_fragments(0f32, 1f32, C5_FLOAT, 100).unwrap();
+    let sound_settings = whitenoise_fragments(0f32, 1f32).unwrap();
     let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
     let container = WaveContainer::from_wavesound(&sound).unwrap();
 
