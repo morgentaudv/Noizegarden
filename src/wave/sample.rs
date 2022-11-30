@@ -4,7 +4,7 @@ use std::ops::{Shl, Shr};
 /// 0が一番低く、[`std::u32::MAX`]が一番大きい。
 ///
 /// 32ビットまでの各量子化ビットへの変換で精度を保つために[`u32`]に統一する。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 #[repr(transparent)]
 pub struct UniformedSample(i32);
 
@@ -19,6 +19,14 @@ impl std::ops::Add<Self> for UniformedSample {
 impl std::ops::AddAssign<Self> for UniformedSample {
     fn add_assign(&mut self, rhs: Self) {
         self.0 += rhs.0;
+    }
+}
+
+impl std::ops::Mul<UniformedSample> for f64 {
+    type Output = UniformedSample;
+
+    fn mul(self, rhs: UniformedSample) -> Self::Output {
+        UniformedSample((self * (rhs.0 as f64)).floor() as i32)
     }
 }
 
@@ -53,5 +61,10 @@ impl UniformedSample {
     pub fn to_16bits(self) -> i16 {
         let shifted = self.0.shr(16) as i32;
         shifted as i16
+    }
+
+    pub fn to_f64(self) -> f64 {
+        let divided = (self.0 as f64) / (i32::MAX as f64);
+        divided.clamp(-1.0, 1.0)
     }
 }

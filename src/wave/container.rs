@@ -1,4 +1,7 @@
-use std::{convert, io, mem};
+use std::{convert, f64::consts::PI, io, mem};
+
+use itertools::Itertools;
+use rand::distributions::Uniform;
 
 use super::{sample::UniformedSample, setting::WaveSound};
 
@@ -34,9 +37,7 @@ impl WaveRiffHeader {
         T: io::Read + io::Seek,
     {
         let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader
-            .read(&mut buffer[..])
-            .expect("Failed to read riff header.");
+        reader.read(&mut buffer[..]).expect("Failed to read riff header.");
 
         // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
         let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
@@ -66,9 +67,7 @@ impl WaveRiffHeader {
             let cloned = (*self).clone();
             std::ptr::write(buffer.as_mut_ptr() as *mut _, cloned);
         }
-        writer
-            .write(&buffer)
-            .expect("Failed to write WaveRiffHeader to writer.");
+        writer.write(&buffer).expect("Failed to write WaveRiffHeader to writer.");
     }
 
     /// ヘッダーからデータバッファーのサイズを返す。
@@ -81,12 +80,18 @@ impl WaveRiffHeader {
 #[repr(C)]
 #[derive(Debug, Clone)]
 struct WaveFmtHeader {
+    /// `"fmt "`と同様
     fmt_chunk_id: [u8; 4],
+    /// [`WaveFmtHeader::CHUNK_SIZE`]と同様
     fmt_chunk_size: u32,
     wave_format_type: u16,
     pub channel: u16,
     samples_per_sec: u32,
+    ///
     bytes_per_sec: u32,
+    /// チャンネルを含む各サンプルの総サイズ。
+    /// もしチャンネルを分離した本当の各サンプルのサイズが取得したい場合には
+    /// [`WaveFmtHeader::unit_block_size`]メソッドを使う。
     block_size: u16,
     bits_per_sample: u16,
 }
@@ -122,9 +127,7 @@ impl WaveFmtHeader {
         T: io::Read + io::Seek,
     {
         let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader
-            .read(&mut buffer[..])
-            .expect("Failed to read fmt header.");
+        reader.read(&mut buffer[..]).expect("Failed to read fmt header.");
 
         // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
         let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
@@ -152,9 +155,7 @@ impl WaveFmtHeader {
         unsafe {
             std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
         }
-        writer
-            .write(&buffer)
-            .expect("Failed to write WaveFmtHeader to writer.");
+        writer.write(&buffer).expect("Failed to write WaveFmtHeader to writer.");
     }
 
     /// １個のチャンネルのブロックサイズを返す。
@@ -183,17 +184,13 @@ impl WaveFactChunk {
         T: io::Read + io::Seek,
     {
         let mut id_buffer = [0u8; 4];
-        let read_size = reader
-            .read(&mut id_buffer[..])
-            .expect("Failed to read fact header.");
+        let read_size = reader.read(&mut id_buffer[..]).expect("Failed to read fact header.");
 
         let id = std::str::from_utf8(&id_buffer).unwrap();
         let result = id == "fact";
 
         let return_size = (read_size as i64) * -1i64;
-        reader
-            .seek(io::SeekFrom::Current(return_size))
-            .expect("Failed to see");
+        reader.seek(io::SeekFrom::Current(return_size)).expect("Failed to see");
 
         result
     }
@@ -204,9 +201,7 @@ impl WaveFactChunk {
         T: io::Read + io::Seek,
     {
         let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader
-            .read(&mut buffer[..])
-            .expect("Failed to read fact header.");
+        reader.read(&mut buffer[..]).expect("Failed to read fact header.");
 
         // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
         let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
@@ -234,9 +229,7 @@ impl WaveFactChunk {
         unsafe {
             std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
         }
-        writer
-            .write(&buffer)
-            .expect("Failed to write WaveFactChunk to writer.");
+        writer.write(&buffer).expect("Failed to write WaveFactChunk to writer.");
     }
 }
 
@@ -271,9 +264,7 @@ impl WaveDataChunk {
         T: io::Read + io::Seek,
     {
         let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader
-            .read(&mut buffer[..])
-            .expect("Failed to read fact header.");
+        reader.read(&mut buffer[..]).expect("Failed to read fact header.");
 
         // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
         let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
@@ -297,13 +288,98 @@ impl WaveDataChunk {
         unsafe {
             std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
         }
-        writer
-            .write(&buffer)
-            .expect("Failed to write WaveDataChunk to writer.");
+        writer.write(&buffer).expect("Failed to write WaveDataChunk to writer.");
     }
 }
 
-///
+/// フィルタリングの機能
+#[derive(Debug, Clone, Copy)]
+pub enum EFilter {
+    FIRLowPass {
+        /// エッジ周波数
+        edge_frequency: f64,
+        /// 遷移帯域幅の総周波数範囲
+        delta_frequency: f64,
+    },
+}
+
+impl EFilter {
+    ///
+    pub fn apply_to_wave_container(&self, container: &WaveContainer) -> WaveContainer {
+        match self {
+            EFilter::FIRLowPass {
+                edge_frequency,
+                delta_frequency,
+            } => {
+                // まずLPFでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
+                let samples_per_sec = container.fmt.samples_per_sec as f64;
+                let edge = edge_frequency / samples_per_sec;
+                let delta = delta_frequency / samples_per_sec;
+
+                // フィルタ係数の数を計算する。
+                // フィルタ係数の数は整数になるしかないし、またJ+1が奇数じゃなきゃならない。
+                // (Window Functionをちゃんと決めるため)
+                let mut j = ((3.1 / delta).round() as isize) - 1;
+                if (j % 2) != 0 {
+                    j += 1;
+                }
+
+                // ここではcontainerのチャンネルがMONO(1)だと仮定する。
+                assert!(container.fmt.channel == 1);
+                let filter_bs = {
+                    // -J/2からJ/2までにEWindowFunction(Hann)の値リストを求める。
+                    let windows = (0..=j)
+                        .map(|v| {
+                            let sine = PI * 2.0 * ((v as f64) + 0.5) / ((j + 1) as f64);
+                            (1.0 - sine) * 0.5
+                        })
+                        .collect_vec();
+
+                    // フィルタ係数の週はす特性bを計算する。
+                    let mut bs = (((j >> 1) * -1)..=(j >> 1))
+                        .map(|v| {
+                            let input = (PI * 2.0 * edge * (v as f64));
+                            let sinc = if input == 0.0 { 1.0 } else { input.sin() / input };
+
+                            2.0 * edge * sinc
+                        })
+                        .collect_vec();
+
+                    assert!(bs.len() == windows.len());
+                    for i in 0..windows.len() {
+                        bs[i] *= windows[i];
+                    }
+
+                    bs
+                };
+
+                // bsを用いて折りたたみを行う。
+                let mut new_buffer = vec![];
+                let orig_container = &container.uniformed_buffer;
+                new_buffer.resize(orig_container.len(), UniformedSample::default());
+                for i in 0..new_buffer.len() {
+                    for ji in 0..=(j as usize) {
+                        if i < ji {
+                            break;
+                        }
+                        new_buffer[i] += filter_bs[ji] * orig_container[i - ji];
+                    }
+                }
+
+                WaveContainer {
+                    riff: container.riff.clone(),
+                    fmt: container.fmt.clone(),
+                    fact: container.fact.clone(),
+                    data: container.data.clone(),
+                    uniformed_buffer: new_buffer,
+                }
+            }
+        }
+    }
+}
+
+/// 音源の情報を保持するコンテナ。
+/// wavファイルからの読み込みやwavファイルへの書き込み、その他簡単なフィルタリング機能ができる。
 #[derive(Debug)]
 pub struct WaveContainer {
     riff: WaveRiffHeader,
@@ -311,7 +387,7 @@ pub struct WaveContainer {
     /// 非PCM形式のwaveの場合、`WaveFactChunk`が存在する。
     fact: Option<WaveFactChunk>,
     data: WaveDataChunk,
-    //raw_buffer: Vec<u8>,
+    /// 音源のバッファを平準化して保持する。
     uniformed_buffer: Vec<UniformedSample>,
 }
 
@@ -328,9 +404,7 @@ impl WaveContainer {
 
         // readerの大きさを計算して判定を行う。
         {
-            let reader_length = reader
-                .seek(io::SeekFrom::End(0))
-                .expect("Failed to seek reader.") as usize;
+            let reader_length = reader.seek(io::SeekFrom::End(0)).expect("Failed to seek reader.") as usize;
             reader.rewind().expect("Failed to rewind reader.");
             if MIMINUM_SIZE > reader_length {
                 // Chunkのサイズが足りなければ、そもそも読み込む必要はない。
@@ -339,10 +413,8 @@ impl WaveContainer {
         }
 
         // 情報を取得する。
-        let wave_riff_header =
-            WaveRiffHeader::from_bufread(reader).expect("Failed to get riff header.");
-        let wave_fmt_header =
-            WaveFmtHeader::from_bufread(reader).expect("Failed to get fmt header.");
+        let wave_riff_header = WaveRiffHeader::from_bufread(reader).expect("Failed to get riff header.");
+        let wave_fmt_header = WaveFmtHeader::from_bufread(reader).expect("Failed to get fmt header.");
         let wave_fact_chunk = {
             if WaveFactChunk::can_be_chunk(reader) {
                 Some(WaveFactChunk::from_bufread(reader).expect("Failed to get fact chunk."))
@@ -350,15 +422,12 @@ impl WaveContainer {
                 None
             }
         };
-        let wave_data_chunk =
-            WaveDataChunk::from_bufread(reader).expect("Failed to get data chunk");
+        let wave_data_chunk = WaveDataChunk::from_bufread(reader).expect("Failed to get data chunk");
         let buffer_size = wave_data_chunk.data_chunk_size / (wave_fmt_header.channel as u32);
 
         // 最後に実際データが入っているバッファーを読み取る。
         let mut buffer = vec![];
-        reader
-            .read_to_end(&mut buffer)
-            .expect("Failed to read buffer.");
+        reader.read_to_end(&mut buffer).expect("Failed to read buffer.");
         assert!(buffer.len() == (buffer_size as usize));
 
         // bufferの各ブロックから`UniformedSample`に変換する。
@@ -374,10 +443,7 @@ impl WaveContainer {
             let data_count = (wave_data_chunk.data_chunk_size as usize) / unit_block_size;
             let buffer_slice = unsafe { std::slice::from_raw_parts(p_buffer, data_count) };
 
-            let converted_buffer = buffer_slice
-                .iter()
-                .map(|&v| UniformedSample::from_16bits(v))
-                .collect();
+            let converted_buffer = buffer_slice.iter().map(|&v| UniformedSample::from_16bits(v)).collect();
             converted_buffer
         };
 
@@ -396,8 +462,6 @@ impl WaveContainer {
         let data = WaveDataChunk::from_wave_sound(sound);
         let riff = WaveRiffHeader::from_data_chunk(&data);
         let fmt = WaveFmtHeader::from_wave_sound(sound);
-
-        //dbg!(&data, &riff, &fmt);
 
         // まず、WaveSoundから各WaveFragmentを収集して単一のバッファーを作る必要がある。
         let uniformed_buffer = sound.get_completed_samples();
@@ -435,10 +499,7 @@ impl WaveContainer {
             assert_eq!(bits_per_sample, 16);
             assert_eq!(unit_block_size, 2);
 
-            self.uniformed_buffer
-                .iter()
-                .map(|v| v.to_16bits())
-                .collect()
+            self.uniformed_buffer.iter().map(|v| v.to_16bits()).collect()
         };
 
         let converted_buffer_slice = unsafe {
@@ -459,5 +520,29 @@ impl WaveContainer {
     /// 各サンプルに適用する量子化ビットを返す。
     pub fn bits_per_sample(&self) -> u32 {
         self.fmt.bits_per_sample as u32
+    }
+
+    /// サウンドの全体長さを秒数で返す。
+    pub fn sound_length(&self) -> f32 {
+        let items_per_sec = (self.fmt.samples_per_sec as usize) * (self.fmt.channel as usize);
+        let sound_length = (self.uniformed_buffer.len() as f64) / (items_per_sec as f64);
+        sound_length as f32
+    }
+
+    /// `time`から一番近い適切なサンプルを返す。
+    pub fn uniform_sample_of_f32(&self, time: f32) -> Option<UniformedSample> {
+        self.uniform_sample_of_f64(time as f64)
+    }
+
+    /// `time`から一番近い適切なサンプルを返す。
+    pub fn uniform_sample_of_f64(&self, time: f64) -> Option<UniformedSample> {
+        // 今はチャンネルをMONOに限定する。
+        assert!(self.fmt.channel == 1);
+        if time >= (self.sound_length() as f64) {
+            return None;
+        }
+
+        let index = ((self.fmt.samples_per_sec as f64) * time).floor() as usize;
+        Some(self.uniformed_buffer[index])
     }
 }

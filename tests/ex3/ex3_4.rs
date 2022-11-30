@@ -6,20 +6,13 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{
-        EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
-    },
+    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
 };
 
 const C4_FLOAT: f32 = 261.63;
 const C5_FLOAT: f32 = C4_FLOAT * 2f32;
 
-fn sawtooth_cosine_fragments(
-    startTime: f32,
-    period: f32,
-    frequency: f32,
-    order: u32,
-) -> Option<Vec<WaveSoundSetting>> {
+fn sawtooth_cosine_fragments(startTime: f32, period: f32, frequency: f32, order: u32) -> Option<Vec<WaveSoundSetting>> {
     if startTime < 0f32 || period <= 0f32 {
         return None;
     }
@@ -42,13 +35,7 @@ fn sawtooth_cosine_fragments(
         let overtone_frequency = frequency * (i as f32);
         let intensity = BASE_INTENSITY * (i as f64).recip();
 
-        results.push(
-            setting
-                .frequency(overtone_frequency)
-                .intensity(intensity)
-                .build()
-                .unwrap(),
-        );
+        results.push(setting.frequency(overtone_frequency).intensity(intensity).build().unwrap());
     }
 
     Some(results)

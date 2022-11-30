@@ -7,9 +7,7 @@ use std::{
 use rand::prelude::*;
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{
-        EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
-    },
+    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
 };
 
 const C4_FLOAT: f32 = 261.63;

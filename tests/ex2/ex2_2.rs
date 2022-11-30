@@ -6,8 +6,7 @@ use std::{
 use soundprog::wave::{
     container::WaveContainer,
     setting::{
-        EBitsPerSample, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting,
-        WaveSoundSettingBuilder,
+        EBitsPerSample, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
     },
 };
 
@@ -22,9 +21,7 @@ fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<W
     const A4_FLOAT: f32 = 440.00;
     const B4_FLOAT: f32 = 493.88;
     const C5_FLOAT: f32 = C4_FLOAT * 2f32;
-    const FREQUENCIES: [f32; 8] = [
-        C4_FLOAT, D4_FLOAT, E4_FLOAT, F4_FLOAT, G4_FLOAT, A4_FLOAT, B4_FLOAT, C5_FLOAT,
-    ];
+    const FREQUENCIES: [f32; 8] = [C4_FLOAT, D4_FLOAT, E4_FLOAT, F4_FLOAT, G4_FLOAT, A4_FLOAT, B4_FLOAT, C5_FLOAT];
 
     if startTime < 0f32 || period <= 0f32 {
         return None;
