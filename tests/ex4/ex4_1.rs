@@ -28,4 +28,5 @@ fn test_dft() {
     }
 
     // IDFTで音がちゃんと合成できるかを確認する。
+    dft_analyzer.create_sample_buffer(&wave_container, &frequencies);
 }

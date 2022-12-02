@@ -17,24 +17,24 @@ fn test_dft_hann() {
     };
 
     // DFT
-    {
-        let analyzer = FrequencyAnalyzerBuilder::default()
-            .time_start(0.0)
-            .time_length(1.0)
-            .time_precision(1.0 / 44100f64)
-            .frequency_start(0f32)
-            .frequency_length(2000f32)
-            .frequency_precision(1f32)
-            .window_function(Some(EWindowFunction::Hann))
-            .build()
-            .unwrap();
+    //{
+    //    let analyzer = FrequencyAnalyzerBuilder::default()
+    //        .time_start(0.0)
+    //        .time_length(1.0)
+    //        .time_precision(1.0 / 44100f64)
+    //        .frequency_start(0f32)
+    //        .frequency_length(2000f32)
+    //        .frequency_precision(1f32)
+    //        .window_function(Some(EWindowFunction::Hann))
+    //        .build()
+    //        .unwrap();
 
-        let frequencies = analyzer.analyze_frequencies(&wave_container).unwrap();
-        println!("DFT");
-        for frequency in frequencies {
-            println!("{:?}", frequency);
-        }
-    }
+    //    let frequencies = analyzer.analyze_frequencies(&wave_container).unwrap();
+    //    println!("DFT");
+    //    for frequency in frequencies {
+    //        println!("{:?}", frequency);
+    //    }
+    //}
 
     // FFT
     {

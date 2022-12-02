@@ -3,6 +3,7 @@ use itertools::Itertools;
 
 use super::complex::Complex;
 use super::container::WaveContainer;
+use super::sample::UniformedSample;
 use super::PI2;
 
 /// 窓関数（Windowing Function）の種類の値を持つ。
@@ -68,47 +69,32 @@ impl FrequencyAnalyzer {
         }
 
         match self.analyze_method {
-            EAnalyzeMethod::DFT => Some(self.analyze_as_dft(container)),
+            EAnalyzeMethod::DFT => Some(analyze_as_dft(self, container)),
             EAnalyzeMethod::FFT => Some(self.analyze_as_fft(container)),
         }
     }
 
-    /// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
-    /// 周波数特性を計算して返す。
-    fn analyze_as_dft(&self, container: &WaveContainer) -> Vec<SineFrequency> {
-        let frequency_end = self.frequency_start + self.frequency_length;
+    /// IDFTまたはIFFTを使って `frequencies`の周波数特性リストからサンプルバッファを作りだす。
+    pub fn create_sample_buffer(
+        &self,
+        container: &WaveContainer,
+        frequencies: &[SineFrequency],
+    ) -> Option<Vec<UniformedSample>> {
+        // まず入れられた情報から範囲に収められそうなのかを確認する。
+        // sound_lengthはhalf-opened rangeなのかclosedなのかがいかがわしい模様。
+        let sound_length = container.sound_length() as f64;
         let time_end = self.time_start + self.time_length;
-
-        let mut results = vec![];
-        let mut cursor_frequency = self.frequency_start;
-        while cursor_frequency < frequency_end {
-            let mut cursor_time = self.time_start;
-            let mut frequency = Complex::<f64>::default();
-
-            while cursor_time < time_end {
-                // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
-                let time_factor = ((cursor_time - self.time_start) / self.time_length).clamp(0.0, 1.0);
-                let coeff_input = PI2 * cursor_frequency * time_factor;
-                let coefficient = Complex::<f64>::from_exp(coeff_input).conjugate();
-
-                let sample = {
-                    let amplitude = container.uniform_sample_of_f64(cursor_time).unwrap().to_f64();
-                    let window_factor = self.get_window_fn_factor(cursor_time);
-                    amplitude * window_factor
-                };
-                frequency += sample * coefficient;
-
-                // 時間カーソルを進める。
-                cursor_time += self.time_precision;
-            }
-
-            results.push(SineFrequency::from_complex_f64(cursor_frequency, frequency));
-
-            // 周波数カーソルを進める。
-            cursor_frequency += self.frequency_precision;
+        if time_end > sound_length {
+            return None;
         }
 
-        results
+        // ここではfrequencyのチェックは行わない。(Inverse-FT)なので
+        // 周波数特性がドメインなので。
+
+        match self.analyze_method {
+            EAnalyzeMethod::DFT => Some(create_as_idft(self, container, frequencies)),
+            EAnalyzeMethod::FFT => unimplemented!("IFFT is not implemented yet."),
+        }
     }
 
     /// [`Fast Fourier Transform`](https://en.wikipedia.org/wiki/Fast_Fourier_transform)（高速フーリエ変換）を行って
@@ -216,7 +202,9 @@ impl FrequencyAnalyzer {
 
         results
     }
+}
 
+impl FrequencyAnalyzer {
     ///
     fn get_window_fn_factor(&self, time: f64) -> f64 {
         if let Some(window_fn) = self.window_function {
@@ -227,36 +215,122 @@ impl FrequencyAnalyzer {
     }
 }
 
+/// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
+/// 周波数特性を計算して返す。
+fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Vec<SineFrequency> {
+    let frequency_end = analyzer.frequency_start + analyzer.frequency_length;
+    let time_end = analyzer.time_start + analyzer.time_length;
+
+    let mut results = vec![];
+    let mut cursor_frequency = analyzer.frequency_start;
+    while cursor_frequency < frequency_end {
+        let mut cursor_time = analyzer.time_start;
+        let mut frequency = Complex::<f64>::default();
+
+        while cursor_time < time_end {
+            // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
+            // time_factorは [0, 1]までの値を持つ。
+            let time_factor = ((cursor_time - analyzer.time_start) / analyzer.time_length).clamp(0.0, 1.0);
+            let coeff_input = PI2 * cursor_frequency * time_factor;
+            let coefficient = Complex::<f64>::from_exp(coeff_input).conjugate();
+
+            let sample = {
+                let amplitude = container.uniform_sample_of_f64(cursor_time).unwrap().to_f64();
+                let window_factor = analyzer.get_window_fn_factor(cursor_time);
+                amplitude * window_factor
+            };
+            frequency += sample * coefficient;
+
+            // 時間カーソルを進める。
+            cursor_time += analyzer.time_precision;
+        }
+
+        results.push(SineFrequency::from_complex_f64(cursor_frequency, frequency));
+
+        // 周波数カーソルを進める。
+        cursor_frequency += analyzer.frequency_precision;
+    }
+
+    results
+}
+
+fn create_as_idft(
+    analyzer: &FrequencyAnalyzer,
+    container: &WaveContainer,
+    frequencies: &[SineFrequency],
+) -> Vec<UniformedSample> {
+    // まず0からtime_lengthまでのサンプルだけを収集する。
+    // time_lengthの間のサンプル数を全部求めて
+    //
+    // ただ、DFTでの時間計算が [0, 1]範囲となっていたので、IDFTも同じくする？
+    // とりあえずf64のサンプルに変換する。
+
+    // その前に、今はcontainerのチャンネルは1にする。
+    assert!(container.samples_per_second() > 0);
+    let samples_per_second = container.samples_per_second();
+    let time_precision = (samples_per_second as f64).recip();
+    let samples_count = ((samples_per_second as f64) * analyzer.time_length).ceil();
+
+    let mut raw_samples = vec![];
+    let mut cursor_time = 0.0;
+    while cursor_time < analyzer.time_length {
+        let time_factor = cursor_time / analyzer.time_length;
+
+        // すべてのfrequency特性にイテレーションする。
+        // a(k) * cos(2pik * time + phase)
+        let summed: f64 = frequencies
+            .iter()
+            .map(|frequency| frequency.amplitude * ((PI2 * frequency.frequency * time_factor) + frequency.phase).cos())
+            .sum();
+
+        // 1 / N (sigma)
+        //let raw_sample = summed / analyzer.time_length;
+        let raw_sample = summed / samples_count;
+        raw_samples.push(raw_sample);
+
+        // ここではcontainerのsamples_per_secを見る。
+        // WaveContainerのsamples_per_secに合わせなきゃならないため。
+        cursor_time += time_precision;
+    }
+
+    for raw_samples in &raw_samples {
+        println!("{:?}", raw_samples);
+    }
+
+    let mut uniformed_samples = vec![];
+    uniformed_samples
+}
+
 /// サイン波形の周波数の特性を表す。
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SineFrequency {
     pub frequency: f64,
-    pub amplitude: f32,
-    pub phase: f32,
+    pub amplitude: f64,
+    pub phase: f64,
 }
 
 impl SineFrequency {
     pub fn from(frequency: f64, (freq_real, freq_imag): (f32, f32)) -> Self {
         Self {
             frequency,
-            amplitude: (freq_real.powi(2) + freq_imag.powi(2)).sqrt(),
-            phase: (freq_imag / freq_real).atan(),
+            amplitude: (freq_real.powi(2) + freq_imag.powi(2)).sqrt() as f64,
+            phase: (freq_imag / freq_real).atan() as f64,
         }
     }
 
     pub fn from_complex_f32(frequency: f32, complex: Complex<f32>) -> Self {
         Self {
             frequency: frequency as f64,
-            amplitude: complex.absolute(),
-            phase: complex.phase(),
+            amplitude: complex.absolute() as f64,
+            phase: complex.phase() as f64,
         }
     }
 
     pub fn from_complex_f64(frequency: f64, complex: Complex<f64>) -> Self {
         Self {
             frequency,
-            amplitude: complex.absolute() as f32,
-            phase: complex.phase() as f32,
+            amplitude: complex.absolute(),
+            phase: complex.phase(),
         }
     }
 }

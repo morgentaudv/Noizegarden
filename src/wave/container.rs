@@ -1,9 +1,5 @@
-use std::{convert, f64::consts::PI, io, mem};
-
-use itertools::Itertools;
-use rand::distributions::Uniform;
-
 use super::{sample::UniformedSample, setting::WaveSound};
+use std::{io, mem};
 
 ///
 #[repr(C)]
@@ -416,7 +412,7 @@ impl WaveContainer {
         self.data.write(writer);
 
         // そしてバッファーから量子化ビットとブロックサイズに合わせて別リストに変換し書き込ませる。
-        let mut converted_buffer: Vec<i16> = {
+        let converted_buffer: Vec<i16> = {
             // `unit_block_size`は各ユニットブロックのメモリ空間を、
             // `bits_per_sample`は`UniformSample`からどのように数値に変換するかを表す。
             let unit_block_size = self.unit_block_size();
@@ -436,7 +432,9 @@ impl WaveContainer {
             .write(&converted_buffer_slice)
             .expect("Failed to write Buffer to writer.");
     }
+}
 
+impl WaveContainer {
     /// １個のチャンネルのブロックサイズを返す。
     pub fn unit_block_size(&self) -> usize {
         self.fmt.unit_block_size()
