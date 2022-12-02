@@ -15,12 +15,17 @@ fn test_dft() {
     let dft_analyzer = FrequencyAnalyzer {
         time_start: 0.0,
         time_length: 1.0,
-        time_precision: (1.0 / 64f64),
-        frequency_start: 0f32,
-        frequency_length: 64f32,
-        frequency_precision: 1f32,
+        time_precision: 1.0 / 44100f64,
+        frequency_start: 0.0,
+        frequency_length: 1000.0,
+        frequency_precision: 1.0,
         ..Default::default()
     };
 
     let frequencies = dft_analyzer.analyze_frequencies(&wave_container).unwrap();
+    for frequency in &frequencies {
+        println!("{:?}", frequency);
+    }
+
+    // IDFTで音がちゃんと合成できるかを確認する。
 }

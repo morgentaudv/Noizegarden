@@ -22,6 +22,20 @@ impl std::ops::AddAssign<Self> for UniformedSample {
     }
 }
 
+impl std::ops::Sub<Self> for UniformedSample {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl std::ops::SubAssign<Self> for UniformedSample {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+
 impl std::ops::Mul<UniformedSample> for f64 {
     type Output = UniformedSample;
 

@@ -1,12 +1,9 @@
 use derive_builder::Builder;
 use itertools::Itertools;
-use std::f64::consts::PI;
 
 use super::complex::Complex;
 use super::container::WaveContainer;
-
-/// 2PIを示す。
-const PI2: f64 = 2.0 * PI;
+use super::PI2;
 
 /// 窓関数（Windowing Function）の種類の値を持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,9 +44,9 @@ pub struct FrequencyAnalyzer {
     pub time_start: f64,
     pub time_length: f64,
     pub time_precision: f64,
-    pub frequency_start: f32,
-    pub frequency_length: f32,
-    pub frequency_precision: f32,
+    pub frequency_start: f64,
+    pub frequency_length: f64,
+    pub frequency_precision: f64,
     pub window_function: Option<EWindowFunction>,
     pub analyze_method: EAnalyzeMethod,
 }
@@ -66,7 +63,7 @@ impl FrequencyAnalyzer {
         }
 
         // [freuqnecy_start, start + frequency_length)までに分析する。
-        if self.frequency_length <= 0f32 || self.frequency_start < 0f32 || self.frequency_precision <= 0f32 {
+        if self.frequency_length <= 0.0 || self.frequency_start < 0.0 || self.frequency_precision <= 0.0 {
             return None;
         }
 
@@ -90,8 +87,8 @@ impl FrequencyAnalyzer {
 
             while cursor_time < time_end {
                 // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
-                let time_factor = ((cursor_time - self.time_start) / self.time_length).clamp(0.0, 1.0) as f64;
-                let coeff_input = PI2 * (cursor_frequency as f64) * time_factor;
+                let time_factor = ((cursor_time - self.time_start) / self.time_length).clamp(0.0, 1.0);
+                let coeff_input = PI2 * cursor_frequency * time_factor;
                 let coefficient = Complex::<f64>::from_exp(coeff_input).conjugate();
 
                 let sample = {
@@ -208,11 +205,11 @@ impl FrequencyAnalyzer {
         let mut results = vec![];
         results.resize(index_count as usize, SineFrequency::default());
 
-        let frequency_precision = self.frequency_length / (index_count as f32);
+        let frequency_precision = self.frequency_length / (index_count as f64);
         for i in 0..(index_count as usize) {
             let target_i = lookup_table[i] as usize;
 
-            let frequency = self.frequency_start + (frequency_precision * (target_i as f32));
+            let frequency = self.frequency_start + (frequency_precision * (target_i as f64));
             let sine_freq = SineFrequency::from_complex_f64(frequency, final_signals[i]);
             results[target_i] = sine_freq;
         }
@@ -230,15 +227,16 @@ impl FrequencyAnalyzer {
     }
 }
 
+/// サイン波形の周波数の特性を表す。
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SineFrequency {
-    pub frequency: f32,
+    pub frequency: f64,
     pub amplitude: f32,
     pub phase: f32,
 }
 
 impl SineFrequency {
-    pub fn from(frequency: f32, (freq_real, freq_imag): (f32, f32)) -> Self {
+    pub fn from(frequency: f64, (freq_real, freq_imag): (f32, f32)) -> Self {
         Self {
             frequency,
             amplitude: (freq_real.powi(2) + freq_imag.powi(2)).sqrt(),
@@ -248,13 +246,13 @@ impl SineFrequency {
 
     pub fn from_complex_f32(frequency: f32, complex: Complex<f32>) -> Self {
         Self {
-            frequency,
+            frequency: frequency as f64,
             amplitude: complex.absolute(),
             phase: complex.phase(),
         }
     }
 
-    pub fn from_complex_f64(frequency: f32, complex: Complex<f64>) -> Self {
+    pub fn from_complex_f64(frequency: f64, complex: Complex<f64>) -> Self {
         Self {
             frequency,
             amplitude: complex.absolute() as f32,

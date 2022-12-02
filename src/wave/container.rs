@@ -292,92 +292,6 @@ impl WaveDataChunk {
     }
 }
 
-/// フィルタリングの機能
-#[derive(Debug, Clone, Copy)]
-pub enum EFilter {
-    FIRLowPass {
-        /// エッジ周波数
-        edge_frequency: f64,
-        /// 遷移帯域幅の総周波数範囲
-        delta_frequency: f64,
-    },
-}
-
-impl EFilter {
-    ///
-    pub fn apply_to_wave_container(&self, container: &WaveContainer) -> WaveContainer {
-        match self {
-            EFilter::FIRLowPass {
-                edge_frequency,
-                delta_frequency,
-            } => {
-                // まずLPFでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
-                let samples_per_sec = container.fmt.samples_per_sec as f64;
-                let edge = edge_frequency / samples_per_sec;
-                let delta = delta_frequency / samples_per_sec;
-
-                // フィルタ係数の数を計算する。
-                // フィルタ係数の数は整数になるしかないし、またJ+1が奇数じゃなきゃならない。
-                // (Window Functionをちゃんと決めるため)
-                let mut j = ((3.1 / delta).round() as isize) - 1;
-                if (j % 2) != 0 {
-                    j += 1;
-                }
-
-                // ここではcontainerのチャンネルがMONO(1)だと仮定する。
-                assert!(container.fmt.channel == 1);
-                let filter_bs = {
-                    // -J/2からJ/2までにEWindowFunction(Hann)の値リストを求める。
-                    let windows = (0..=j)
-                        .map(|v| {
-                            let sine = PI * 2.0 * ((v as f64) + 0.5) / ((j + 1) as f64);
-                            (1.0 - sine) * 0.5
-                        })
-                        .collect_vec();
-
-                    // フィルタ係数の週はす特性bを計算する。
-                    let mut bs = (((j >> 1) * -1)..=(j >> 1))
-                        .map(|v| {
-                            let input = (PI * 2.0 * edge * (v as f64));
-                            let sinc = if input == 0.0 { 1.0 } else { input.sin() / input };
-
-                            2.0 * edge * sinc
-                        })
-                        .collect_vec();
-
-                    assert!(bs.len() == windows.len());
-                    for i in 0..windows.len() {
-                        bs[i] *= windows[i];
-                    }
-
-                    bs
-                };
-
-                // bsを用いて折りたたみを行う。
-                let mut new_buffer = vec![];
-                let orig_container = &container.uniformed_buffer;
-                new_buffer.resize(orig_container.len(), UniformedSample::default());
-                for i in 0..new_buffer.len() {
-                    for ji in 0..=(j as usize) {
-                        if i < ji {
-                            break;
-                        }
-                        new_buffer[i] += filter_bs[ji] * orig_container[i - ji];
-                    }
-                }
-
-                WaveContainer {
-                    riff: container.riff.clone(),
-                    fmt: container.fmt.clone(),
-                    fact: container.fact.clone(),
-                    data: container.data.clone(),
-                    uniformed_buffer: new_buffer,
-                }
-            }
-        }
-    }
-}
-
 /// 音源の情報を保持するコンテナ。
 /// wavファイルからの読み込みやwavファイルへの書き込み、その他簡単なフィルタリング機能ができる。
 #[derive(Debug)]
@@ -466,13 +380,24 @@ impl WaveContainer {
         // まず、WaveSoundから各WaveFragmentを収集して単一のバッファーを作る必要がある。
         let uniformed_buffer = sound.get_completed_samples();
 
-        Some(WaveContainer {
+        Some(Self {
             riff,
             fmt,
             fact: None,
             data,
             uniformed_buffer,
         })
+    }
+
+    ///
+    pub(crate) fn from_uniformed_sample_buffer(original: &Self, uniformed_buffer: Vec<UniformedSample>) -> Self {
+        Self {
+            riff: original.riff.clone(),
+            fmt: original.fmt.clone(),
+            fact: original.fact.clone(),
+            data: original.data.clone(),
+            uniformed_buffer,
+        }
     }
 
     /// [`WaveContainer`]の情報を[`std::io::Write`]ストリームに書き込む。
@@ -522,11 +447,21 @@ impl WaveContainer {
         self.fmt.bits_per_sample as u32
     }
 
+    /// サウンドの秒ごとのサンプル数を返す。
+    pub fn samples_per_second(&self) -> u32 {
+        self.fmt.samples_per_sec
+    }
+
     /// サウンドの全体長さを秒数で返す。
     pub fn sound_length(&self) -> f32 {
         let items_per_sec = (self.fmt.samples_per_sec as usize) * (self.fmt.channel as usize);
         let sound_length = (self.uniformed_buffer.len() as f64) / (items_per_sec as f64);
         sound_length as f32
+    }
+
+    /// サウンドのチャンネル数を返す。
+    pub fn channel(&self) -> u32 {
+        self.fmt.channel as u32
     }
 
     /// `time`から一番近い適切なサンプルを返す。
@@ -544,5 +479,10 @@ impl WaveContainer {
 
         let index = ((self.fmt.samples_per_sec as f64) * time).floor() as usize;
         Some(self.uniformed_buffer[index])
+    }
+
+    /// サンプルが入っているバッファーのSliceを貸す形で返す。
+    pub(crate) fn uniformed_sample_buffer(&self) -> &'_ [UniformedSample] {
+        &self.uniformed_buffer
     }
 }
