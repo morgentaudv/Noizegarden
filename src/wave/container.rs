@@ -451,10 +451,10 @@ impl WaveContainer {
     }
 
     /// サウンドの全体長さを秒数で返す。
-    pub fn sound_length(&self) -> f32 {
+    pub fn sound_length(&self) -> f64 {
         let items_per_sec = (self.fmt.samples_per_sec as usize) * (self.fmt.channel as usize);
         let sound_length = (self.uniformed_buffer.len() as f64) / (items_per_sec as f64);
-        sound_length as f32
+        sound_length
     }
 
     /// サウンドのチャンネル数を返す。
@@ -469,18 +469,25 @@ impl WaveContainer {
 
     /// `time`から一番近い適切なサンプルを返す。
     pub fn uniform_sample_of_f64(&self, time: f64) -> Option<UniformedSample> {
-        // 今はチャンネルをMONOに限定する。
-        assert!(self.fmt.channel == 1);
-        if time >= (self.sound_length() as f64) {
-            return None;
+        match self.calculate_sample_index_of_time(time) {
+            Some(sample_i) => Some(self.uniformed_sample_buffer()[sample_i]),
+            None => None,
         }
-
-        let index = ((self.fmt.samples_per_sec as f64) * time).floor() as usize;
-        Some(self.uniformed_buffer[index])
     }
 
     /// サンプルが入っているバッファーのSliceを貸す形で返す。
     pub(crate) fn uniformed_sample_buffer(&self) -> &'_ [UniformedSample] {
         &self.uniformed_buffer
+    }
+
+    ///
+    pub(crate) fn calculate_sample_index_of_time(&self, time: f64) -> Option<usize> {
+        // 今はチャンネルをMONOに限定する。
+        assert!(self.fmt.channel == 1);
+        if time >= self.sound_length() {
+            return None;
+        }
+
+        Some(((self.samples_per_second() as f64) * time).floor() as usize)
     }
 }

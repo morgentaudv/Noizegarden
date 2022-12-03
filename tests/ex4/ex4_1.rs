@@ -1,6 +1,9 @@
 use std::{fs, io};
 
-use soundprog::wave::{analyze::FrequencyAnalyzer, container::WaveContainer};
+use soundprog::wave::{
+    analyze::{ETransformMethod, FrequencyAnalyzer, FrequencyTransformer},
+    container::WaveContainer,
+};
 
 #[test]
 fn test_dft() {
@@ -14,11 +17,9 @@ fn test_dft() {
     };
     let dft_analyzer = FrequencyAnalyzer {
         time_start: 0.0,
-        time_length: 1.0,
-        time_precision: 1.0 / 44100f64,
-        frequency_start: 0.0,
-        frequency_length: 1000.0,
-        frequency_precision: 1.0,
+        frequency_start: 1.0,
+        frequency_length: 22000.0,
+        sample_counts: 8000,
         ..Default::default()
     };
 
@@ -27,6 +28,12 @@ fn test_dft() {
         println!("{:?}", frequency);
     }
 
+    let uniformed_sample_buffer = FrequencyTransformer {
+        transform_method: ETransformMethod::IDFT,
+    }
+    .transform_frequencies(&wave_container, &frequencies)
+    .unwrap();
+
     // IDFTで音がちゃんと合成できるかを確認する。
-    dft_analyzer.create_sample_buffer(&wave_container, &frequencies);
+    //dft_analyzer.create_sample_buffer(&wave_container, &frequencies);
 }
