@@ -1,5 +1,5 @@
 use num_traits::{Float, FromPrimitive};
-use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Mul, MulAssign, Sub, SubAssign};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Complex<T: Float + FromPrimitive> {
@@ -119,5 +119,23 @@ where
         let new = (*self) * rhs;
         self.real = new.real;
         self.imag = new.imag;
+    }
+}
+
+impl<T> Div for Complex<T>
+where
+    T: Float + FromPrimitive + Add + Mul + Sub,
+{
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        let a = self.real;
+        let b = self.imag;
+        let c = rhs.real;
+        let d = rhs.imag;
+
+        let real = ((a * c) + (b * d)) / (c.powi(2) + d.powi(2));
+        let imag = ((b * c) - (a * d)) / (c.powi(2) + d.powi(2));
+        Self { real, imag }
     }
 }
