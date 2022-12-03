@@ -1,5 +1,13 @@
+use rand::distributions::Uniform;
+
 use super::{sample::UniformedSample, setting::WaveSound};
 use std::{io, mem};
+
+// ----------------------------------------------------------------------------
+//
+// LOW-LEVEL STRUCTURES
+//
+// ----------------------------------------------------------------------------
 
 ///
 #[repr(C)]
@@ -98,6 +106,21 @@ impl LowWaveFormatHeader {
     const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveFormatHeader>();
     const CHUNK_SIZE: u32 = 16;
     const ID_SPECIFIER: [u8; 4] = ['f' as u8, 'm' as u8, 't' as u8, ' ' as u8];
+
+    fn from_builder(samples_per_sec: u32, bits_per_sample: u16) -> Self {
+        let block_size = (bits_per_sample >> 3) as u16;
+        let bytes_per_sec = (block_size as u32) * samples_per_sec;
+        Self {
+            fmt_chunk_id: Self::ID_SPECIFIER,
+            fmt_chunk_size: Self::CHUNK_SIZE,
+            wave_format_type: 1,
+            channel: 1,
+            samples_per_sec,
+            bytes_per_sec,
+            block_size,
+            bits_per_sample,
+        }
+    }
 
     /// [`WaveSound`]から[`LowWaveFormatHeader`]を生成する。
     pub fn from_wave_sound(sound: &WaveSound) -> Self {
@@ -489,5 +512,44 @@ impl WaveContainer {
         }
 
         Some(((self.samples_per_second() as f64) * time).floor() as usize)
+    }
+}
+
+// ----------------------------------------------------------------------------
+//
+// BUILDER
+//
+// ----------------------------------------------------------------------------
+
+pub struct WaveBuilder {
+    pub samples_per_sec: u32,
+    pub bits_per_sample: u16,
+}
+
+impl WaveBuilder {
+    pub fn build_container(&self, uniformed_samples: Vec<UniformedSample>) -> Option<WaveContainer> {
+        if self.bits_per_sample != 8 && self.bits_per_sample != 16 {
+            return None;
+        }
+        if self.samples_per_sec == 0 {
+            return None;
+        }
+
+        // 今はMONO、PCMで固定する。
+        // ローレベルのヘッダーの情報などを作る。
+        let format_header = LowWaveFormatHeader::from_builder(self.samples_per_sec, self.bits_per_sample);
+        let data_chunk = LowWaveDataChunk {
+            data_chunk_id: LowWaveDataChunk::ID_SPECIFIER,
+            data_chunk_size: (format_header.unit_block_size() * uniformed_samples.len()) as u32,
+        };
+        let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
+
+        Some(WaveContainer {
+            riff: riff_header,
+            fmt: format_header,
+            fact: None,
+            data: data_chunk,
+            uniformed_buffer: uniformed_samples,
+        })
     }
 }

@@ -239,7 +239,7 @@ fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
             // coeff_input = exp(2pifn / N)
             let time_factor = (local_i as f64) / (analyzer.sample_counts as f64);
             let coeff_input = PI2 * cursor_frequency * time_factor;
-            let coefficient = Complex::<f64>::from_exp(coeff_input).conjugate();
+            let coefficient = Complex::<f64>::from_exp(coeff_input * -1.0);
 
             let sample = {
                 let sample_i = local_i + sample_start_index;
@@ -315,7 +315,9 @@ fn transform_as_idft(
         // a(k) * cos(2pik * time + phase)
         let summed: f64 = frequencies
             .iter()
-            .map(|frequency| frequency.amplitude * ((PI2 * frequency.frequency * time_factor) + frequency.phase).cos())
+            .map(|frequency|  
+                frequency.amplitude * ((PI2 * frequency.frequency * time_factor) + frequency.phase).cos()
+            )
             .sum();
 
         // 1 / N (sigma)
@@ -324,20 +326,7 @@ fn transform_as_idft(
         raw_samples.push(raw_sample);
     }
 
-    // 一番大きい値を取って平準化をする。
-    let raw_sample_absmax = raw_samples
-        .iter()
-        .map(|raw_sample| raw_sample.abs())
-        .max_by(|x, y| x.total_cmp(y))
-        .unwrap();
-    assert!(raw_sample_absmax.is_finite());
-    raw_samples.iter_mut().for_each(|raw_sample| {
-        *raw_sample /= raw_sample_absmax;
-    });
-
-    for raw_samples in &raw_samples {
-        println!("{:?}", raw_samples);
-    }
+    //for raw_samples in &raw_samples { println!("{:?}", raw_samples); }
 
     raw_samples
         .into_iter()

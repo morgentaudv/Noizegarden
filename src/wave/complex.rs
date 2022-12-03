@@ -31,7 +31,7 @@ where
 
     ///
     pub fn phase(&self) -> T {
-        (self.imag / self.real).atan()
+        (self.imag).atan2(self.real)
     }
 }
 
