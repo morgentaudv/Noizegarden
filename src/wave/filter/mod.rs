@@ -1,10 +1,8 @@
 use std::f64::consts::PI;
 
-use itertools::Itertools;
-
-use crate::wave::{sample::UniformedSample, PI2};
-
 use super::container::WaveContainer;
+use crate::wave::{sample::UniformedSample, PI2};
+use itertools::Itertools;
 
 /// フィルタリングの機能
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +27,10 @@ pub enum EFilter {
         edge_frequency: f64,
         /// 遷移帯域幅の総周波数範囲
         delta_frequency: f64,
+        /// フレーム別に入力するサンプルの最大数
+        max_input_samples_count: usize,
+        /// フーリエ変換を行う時のサンプル周期
+        transform_compute_count: usize,
     },
 }
 
@@ -39,60 +41,71 @@ struct FIRLowPassInternal {
     delta_frequency: f64,
 }
 
+fn compute_fir_lpf_filters_count(delta: f64) -> usize {
+    let mut filters_count = ((3.1 / delta).round() as isize) - 1;
+    if (filters_count % 2) != 0 {
+        filters_count += 1;
+    }
+
+    filters_count as usize
+}
+
+fn compute_fir_lpf_response(filters_count: usize, edge: f64) -> Vec<f64> {
+    // isizeに変更する理由としては、responseを計算する際に負の数のIndexにも接近するため
+    let filters_count = filters_count as isize;
+
+    // -filters_count/2からfilters_count/2までにEWindowFunction(Hann)の値リストを求める。
+    let windows = (0..=filters_count)
+        .map(|v| {
+            let sine = PI2 * ((v as f64) + 0.5) / ((filters_count + 1) as f64);
+            (1.0 - sine) * 0.5
+        })
+        .collect_vec();
+
+    // フィルタ係数の週はす特性bを計算する。
+    let mut bs = (((filters_count >> 1) * -1)..=(filters_count >> 1))
+        .map(|v| {
+            let input = PI2 * edge * (v as f64);
+            let sinc = if input == 0.0 { 1.0 } else { input.sin() / input };
+
+            2.0 * edge * sinc
+        })
+        .collect_vec();
+
+    assert!(bs.len() == windows.len());
+    for i in 0..windows.len() {
+        bs[i] *= windows[i];
+    }
+    bs
+}
+
 impl FIRLowPassInternal {
     fn apply(&self, container: &WaveContainer) -> WaveContainer {
+        // ここではcontainerのチャンネルがMONO(1)だと仮定する。
+        assert!(container.channel() == 1);
+
         // まずLPFでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
         let samples_per_sec = container.samples_per_second() as f64;
         let edge = self.edge_frequency / samples_per_sec;
         let delta = self.delta_frequency / samples_per_sec;
 
         // フィルタ係数の数を計算する。
-        // フィルタ係数の数は整数になるしかないし、またJ+1が奇数じゃなきゃならない。
+        // フィルタ係数の数は整数になるしかないし、またfilters_count+1が奇数じゃなきゃならない。
         // (Window Functionをちゃんと決めるため)
-        let mut j = ((3.1 / delta).round() as isize) - 1;
-        if (j % 2) != 0 {
-            j += 1;
-        }
+        let filters_count = compute_fir_lpf_filters_count(delta);
+        let filter_responses = compute_fir_lpf_response(filters_count, edge);
 
-        // ここではcontainerのチャンネルがMONO(1)だと仮定する。
-        assert!(container.channel() == 1);
-        let filter_bs = {
-            // -J/2からJ/2までにEWindowFunction(Hann)の値リストを求める。
-            let windows = (0..=j)
-                .map(|v| {
-                    let sine = PI2 * ((v as f64) + 0.5) / ((j + 1) as f64);
-                    (1.0 - sine) * 0.5
-                })
-                .collect_vec();
-
-            // フィルタ係数の週はす特性bを計算する。
-            let mut bs = (((j >> 1) * -1)..=(j >> 1))
-                .map(|v| {
-                    let input = PI2 * edge * (v as f64);
-                    let sinc = if input == 0.0 { 1.0 } else { input.sin() / input };
-
-                    2.0 * edge * sinc
-                })
-                .collect_vec();
-
-            assert!(bs.len() == windows.len());
-            for i in 0..windows.len() {
-                bs[i] *= windows[i];
-            }
-
-            bs
-        };
-
-        // bsを用いて折りたたみを行う。
+        // filter_responsesを用いて折りたたみを行う。
         let mut new_buffer = vec![];
         let orig_container = container.uniformed_sample_buffer();
         new_buffer.resize(orig_container.len(), UniformedSample::default());
-        for i in 0..new_buffer.len() {
-            for ji in 0..=(j as usize) {
-                if i < ji {
+        for sample_i in 0..new_buffer.len() {
+            for fc_i in 0..=filters_count {
+                if sample_i < fc_i {
                     break;
                 }
-                new_buffer[i] += filter_bs[ji] * orig_container[i - ji];
+
+                new_buffer[sample_i] += filter_responses[fc_i] * orig_container[sample_i - fc_i];
             }
         }
 
@@ -105,62 +118,43 @@ struct DFTLowPassInternal {
     edge_frequency: f64,
     /// 遷移帯域幅の総周波数範囲
     delta_frequency: f64,
+    /// フレーム別に入力するサンプルの最大数
+    max_input_samples_count: usize,
+    /// フーリエ変換を行う時のサンプル周期
+    transform_compute_count: usize,
 }
 
 impl DFTLowPassInternal {
     fn apply(&self, container: &WaveContainer) -> WaveContainer {
+        // ここではcontainerのチャンネルがMONO(1)だと仮定する。
+        assert!(container.channel() == 1);
+
         // まずLPFでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
         let samples_per_sec = container.samples_per_second() as f64;
         let edge = self.edge_frequency / samples_per_sec;
         let delta = self.delta_frequency / samples_per_sec;
 
         // フィルタ係数の数を計算する。
-        // フィルタ係数の数は整数になるしかないし、またJ+1が奇数じゃなきゃならない。
+        // フィルタ係数の数は整数になるしかないし、またfilters_count+1が奇数じゃなきゃならない。
         // (Window Functionをちゃんと決めるため)
-        let mut j = ((3.1 / delta).round() as isize) - 1;
-        if (j % 2) != 0 {
-            j += 1;
-        }
+        let filters_count = compute_fir_lpf_filters_count(delta);
+        let filter_responses = compute_fir_lpf_response(filters_count, edge);
 
-        // ここではcontainerのチャンネルがMONO(1)だと仮定する。
-        assert!(container.channel() == 1);
-        let filter_bs = {
-            // -J/2からJ/2までにEWindowFunction(Hann)の値リストを求める。
-            let windows = (0..=j)
-                .map(|v| {
-                    let sine = PI2 * ((v as f64) + 0.5) / ((j + 1) as f64);
-                    (1.0 - sine) * 0.5
-                })
-                .collect_vec();
+        // filter_responsesを用いて折りたたみを行う。
+        let orig_sample_buffer = container.uniformed_sample_buffer();
+        let orig_sample_buffer_len = orig_sample_buffer.len();
+        // DFTでできる最大のフレームを計算する。完全に割り切れなかった場合には残りは適当にする。
+        let frames_to_compute = orig_sample_buffer_len / self.max_input_samples_count;
 
-            // フィルタ係数の週はす特性bを計算する。
-            let mut bs = (((j >> 1) * -1)..=(j >> 1))
-                .map(|v| {
-                    let input = PI2 * edge * (v as f64);
-                    let sinc = if input == 0.0 { 1.0 } else { input.sin() / input };
-
-                    2.0 * edge * sinc
-                })
-                .collect_vec();
-
-            assert!(bs.len() == windows.len());
-            for i in 0..windows.len() {
-                bs[i] *= windows[i];
-            }
-
-            bs
-        };
-
-        // bsを用いて折りたたみを行う。
         let mut new_buffer = vec![];
-        let orig_container = container.uniformed_sample_buffer();
-        new_buffer.resize(orig_container.len(), UniformedSample::default());
-        for i in 0..new_buffer.len() {
-            for ji in 0..=(j as usize) {
-                if i < ji {
+        new_buffer.resize(orig_sample_buffer_len, UniformedSample::default());
+        for sample_i in 0..new_buffer.len() {
+            for fc_i in 0..=filters_count {
+                if sample_i < fc_i {
                     break;
                 }
-                new_buffer[i] += filter_bs[ji] * orig_container[i - ji];
+
+                new_buffer[sample_i] += filter_responses[fc_i] * orig_sample_buffer[sample_i - fc_i];
             }
         }
 
@@ -249,10 +243,14 @@ impl EFilter {
             EFilter::DFTLowPass {
                 edge_frequency,
                 delta_frequency,
+                max_input_samples_count,
+                transform_compute_count,
             } => DFTLowPassInternal {
                 // ここで書くには長いのでInternal構造体に移して処理を行う。
                 edge_frequency: *edge_frequency,
                 delta_frequency: *delta_frequency,
+                max_input_samples_count: *max_input_samples_count,
+                transform_compute_count: *transform_compute_count,
             }
             .apply(container),
         }
