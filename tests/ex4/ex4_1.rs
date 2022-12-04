@@ -26,7 +26,7 @@ fn test_dft() {
         samples_count: 8000,
         ..Default::default()
     };
-    let frequencies = dft_analyzer.analyze_frequencies(&wave_container).unwrap();
+    let frequencies = dft_analyzer.analyze_container(&wave_container).unwrap();
 
     // IDFTで音がちゃんと合成できるかを確認する。
     let uniformed_samples = FrequencyTransformer {

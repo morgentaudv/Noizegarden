@@ -51,7 +51,7 @@ pub struct FrequencyAnalyzer {
 
 impl FrequencyAnalyzer {
     /// 周波数特性を計算する。
-    pub fn analyze_frequencies(&self, container: &WaveContainer) -> Option<Vec<SineFrequency>> {
+    pub fn analyze_container(&self, container: &WaveContainer) -> Option<Vec<SineFrequency>> {
         // まず入れられた情報から範囲に収められそうなのかを確認する。
         // sound_lengthはhalf-opened rangeなのかclosedなのかがいかがわしい模様。
         let wave_sound_length = container.sound_length() as f64;
@@ -71,14 +71,15 @@ impl FrequencyAnalyzer {
         if self.frequency_start < 0.0 || self.samples_count <= 0 {
             return None;
         }
+        assert!(container.channel() == 1);
 
         match self.analyze_method {
-            EAnalyzeMethod::DFT => Some(analyze_as_dft(self, container)),
+            EAnalyzeMethod::DFT => Some(analyze_as_dft(self, container.uniformed_sample_buffer())),
             EAnalyzeMethod::FFT => {
                 if !self.samples_count.is_power_of_two() {
                     None
                 } else {
-                    Some(analyze_as_fft(self, container))
+                    Some(analyze_as_fft(self, container.uniformed_sample_buffer()))
                 }
             }
         }
@@ -98,16 +99,13 @@ impl FrequencyAnalyzer {
 
 /// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
 /// 周波数特性を計算して返す。
-fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Vec<SineFrequency> {
-    assert!(container.channel() == 1);
-
+fn analyze_as_dft(analyzer: &FrequencyAnalyzer, sample_buffer: &[UniformedSample]) -> Vec<SineFrequency> {
     let frequency_end = analyzer.frequency_start + (analyzer.samples_count as f64);
     let freq_precision = 1.0;
 
     let mut results = vec![];
     let mut cursor_frequency = analyzer.frequency_start;
 
-    let sample_buffer = container.uniformed_sample_buffer();
     while cursor_frequency < frequency_end {
         let mut frequency_response = Complex::<f64>::default();
 
@@ -138,8 +136,7 @@ fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
 
 /// [`Fast Fourier Transform`](https://en.wikipedia.org/wiki/Fast_Fourier_transform)（高速フーリエ変換）を行って
 /// 周波数特性を計算して返す。
-fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Vec<SineFrequency> {
-    assert!(container.channel() == 1);
+fn analyze_as_fft(analyzer: &FrequencyAnalyzer, sample_buffer: &[UniformedSample]) -> Vec<SineFrequency> {
     assert!(analyzer.samples_count.is_power_of_two());
 
     // まず最後に求められる各Frequencyの情報をちゃんとした位置に入れるためのIndexルックアップテーブルを作る。
@@ -159,8 +156,6 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
 
     // まず最後レベルの信号を計算する。index_count分作る。
     let final_signals = {
-        let samples_buffer = container.uniformed_sample_buffer();
-
         let mut prev_signals: Vec<Complex<f64>> = vec![];
         prev_signals.reserve(samples_count);
 
@@ -169,7 +164,7 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
             // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
             let amplitude = {
                 let sample_i = local_i + analyzer.start_sample_index;
-                let signal = samples_buffer[sample_i].to_f64();
+                let signal = sample_buffer[sample_i].to_f64();
 
                 let time_factor = (local_i as f64) / (samples_count as f64);
                 let window_factor = analyzer.get_window_fn_factor(1.0, time_factor);

@@ -31,7 +31,7 @@ fn test_dft_hann() {
             .build()
             .unwrap();
 
-        analyzer.analyze_frequencies(&wave_container).unwrap()
+        analyzer.analyze_container(&wave_container).unwrap()
     };
 
     // IDFTで音がちゃんと合成できるかを確認する。
