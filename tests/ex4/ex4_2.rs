@@ -4,7 +4,7 @@ use std::{
 };
 
 use soundprog::wave::{
-    analyze::{EAnalyzeMethod, ETransformMethod, EWindowFunction, FrequencyAnalyzerBuilder, FrequencyTransformer},
+    analyze::{EAnalyzeMethod, ETransformMethod, FrequencyAnalyzerBuilder, FrequencyTransformer},
     container::{WaveBuilder, WaveContainer},
 };
 
@@ -23,7 +23,7 @@ fn test_dft_hann() {
     // FFT
     let frequencies = {
         let analyzer = FrequencyAnalyzerBuilder::default()
-            .time_start(0.0)
+            .start_sample_index(0)
             .frequency_start(0.0)
             .frequency_length(4096.0)
             .sample_counts(4096)

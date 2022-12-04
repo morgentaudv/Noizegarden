@@ -21,7 +21,7 @@ fn test_dft() {
         WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
     };
     let dft_analyzer = FrequencyAnalyzer {
-        time_start: 0.0,
+        start_sample_index: 0,
         frequency_start: 1.0,
         frequency_length: 8000.0, // sample_countsとfrequency_lengthは一対一じゃないとIDFTしたあとの波形が不安定になる。
         sample_counts: 8000,

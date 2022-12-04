@@ -1,5 +1,3 @@
-use std::f64::consts::PI;
-
 use derive_builder::Builder;
 use itertools::Itertools;
 
@@ -44,7 +42,7 @@ pub enum EAnalyzeMethod {
 #[derive(Debug, Default, Clone, Copy, Builder)]
 #[builder(default)]
 pub struct FrequencyAnalyzer {
-    pub time_start: f64,
+    pub start_sample_index: usize,
     pub frequency_start: f64,
     pub frequency_length: f64,
     pub sample_counts: usize,
@@ -60,7 +58,8 @@ impl FrequencyAnalyzer {
         let wave_sound_length = container.sound_length() as f64;
         let recip_sample_per_sec = (container.samples_per_second() as f64).recip();
         let samples_time_length = recip_sample_per_sec * (self.sample_counts as f64);
-        let samples_time_end = self.time_start + samples_time_length;
+        let samples_time_start = (self.start_sample_index as f64) * recip_sample_per_sec;
+        let samples_time_end = samples_time_start + samples_time_length;
 
         if samples_time_end > wave_sound_length {
             return None;
@@ -108,8 +107,7 @@ fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
     let mut results = vec![];
     let mut cursor_frequency = analyzer.frequency_start;
 
-    let sample_start_index = container.calculate_sample_index_of_time(analyzer.time_start).expect("");
-    let buffer = container.uniformed_sample_buffer();
+    let sample_buffer = container.uniformed_sample_buffer();
     while cursor_frequency < frequency_end {
         let mut frequency = Complex::<f64>::default();
 
@@ -121,8 +119,8 @@ fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
             let coefficient = Complex::<f64>::from_exp(coeff_input * -1.0);
 
             let sample = {
-                let sample_i = local_i + sample_start_index;
-                let amplitude = buffer[sample_i].to_f64();
+                let sample_i = local_i + analyzer.start_sample_index;
+                let amplitude = sample_buffer[sample_i].to_f64();
                 let window_factor = analyzer.get_window_fn_factor(1.0, time_factor);
                 amplitude * window_factor
             };
@@ -161,7 +159,6 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
 
     // まず最後レベルの信号を計算する。index_count分作る。
     let final_signals = {
-        let sample_start_index = container.calculate_sample_index_of_time(analyzer.time_start).expect("");
         let samples_buffer = container.uniformed_sample_buffer();
 
         let mut prev_signals: Vec<Complex<f64>> = vec![];
@@ -171,7 +168,7 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
         for local_i in 0..sample_counts {
             // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
             let amplitude = {
-                let sample_i = local_i + sample_start_index;
+                let sample_i = local_i + analyzer.start_sample_index;
                 let signal = samples_buffer[sample_i].to_f64();
 
                 let time_factor = (local_i as f64) / (sample_counts as f64);
