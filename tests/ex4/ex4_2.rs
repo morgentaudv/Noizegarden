@@ -38,7 +38,7 @@ fn test_dft_hann() {
     let uniformed_samples = FrequencyTransformer {
         transform_method: ETransformMethod::IFFT,
     }
-    .transform_frequencies(&wave_container, &frequencies)
+    .transform_frequencies(&frequencies)
     .unwrap();
 
     let new_wave_container = WaveBuilder {

@@ -32,7 +32,7 @@ fn test_dft() {
     let uniformed_samples = FrequencyTransformer {
         transform_method: ETransformMethod::IDFT,
     }
-    .transform_frequencies(&wave_container, &frequencies)
+    .transform_frequencies(&frequencies)
     .unwrap();
 
     let new_wave_container = WaveBuilder {
