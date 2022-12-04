@@ -2,14 +2,20 @@ use std::f64::consts::PI;
 
 use super::container::WaveContainer;
 use crate::wave::{
-    analyze::{self, EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
+    analyze::{EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
     sample::UniformedSample,
     PI2,
 };
 use itertools::Itertools;
 
+#[derive(Debug, Clone)]
+pub enum EEdgeFrequency {
+    Constant(f64),
+    ChangeBySample(fn(/* sample_i */ usize, /* samples_count */ usize) -> f64),
+}
+
 /// フィルタリングの機能
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum EFilter {
     /// FIR(Finite Impulse Response)のLPF(Low Pass Filter)
     FIRLowPass {
@@ -21,7 +27,7 @@ pub enum EFilter {
     /// IIR(Infinite Impulse Response)のLPF(Low Pass Filter)
     IIRLowPass {
         /// エッジ周波数
-        edge_frequency: f64,
+        edge_frequency: EEdgeFrequency,
         /// クォリティファクタ
         quality_factor: f64,
     },
@@ -246,30 +252,38 @@ impl DFTLowPassInternal {
 
 struct IIRLowPassInternal {
     /// エッジ周波数
-    edge_frequency: f64,
+    edge_frequency: EEdgeFrequency,
     /// クォリティファクタ
     quality_factor: f64,
 }
 
 impl IIRLowPassInternal {
+    /// IIRに使う遅延機フィルターの伝達関数の特性を計算する。
+    fn compute_filter_asbs(edge_frequency: f64, samples_per_sec: f64, quality_factor: f64) -> ([f64; 3], [f64; 3]) {
+        let analog_frequency = { 1.0 / (PI * 2.0) * (edge_frequency * PI / samples_per_sec).tan() };
+        let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
+        let pi2adivq = (2.0 * PI * analog_frequency) / quality_factor;
+        let b1 = pi24a2 / (1.0 + pi2adivq + pi24a2);
+        let b2 = 2.0 * b1;
+        let b3 = b1;
+        let a1 = (2.0 * pi24a2 - 2.0) / (1.0 + pi2adivq + pi24a2);
+        let a2 = (1.0 - pi2adivq + pi24a2) / (1.0 + pi2adivq + pi24a2);
+
+        ([1.0, a1, a2], [b1, b2, b3])
+    }
+
     fn apply(&self, container: &WaveContainer) -> WaveContainer {
         // IIRはアナログの伝達関数を流用して（デジタルに適用できる形に変換）処理を行うけど
         // デジタル周波数はアナログ周波数に変換して使う。
         let samples_per_sec = container.samples_per_second() as f64;
-        let analog_frequency = { 1.0 / (PI * 2.0) * (self.edge_frequency * PI / samples_per_sec).tan() };
 
-        // そしてIIR-LPFの伝達関数の各乗算器の係数を求める。
+        // もしEdgeFrequencyがサンプルによって動的に変わるのではなければ、IIR-LPFの伝達関数の各乗算器の係数を求める。
         // まず共用の値を先に計算する。
-        let (filter_bs, filter_as) = {
-            let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
-            let pi2adivq = (2.0 * PI * analog_frequency) / self.quality_factor;
-            let b1 = pi24a2 / (1.0 + pi2adivq + pi24a2);
-            let b2 = 2.0 * b1;
-            let b3 = b1;
-            let a1 = (2.0 * pi24a2 - 2.0) / (1.0 + pi2adivq + pi24a2);
-            let a2 = (1.0 - pi2adivq + pi24a2) / (1.0 + pi2adivq + pi24a2);
-
-            ([b1, b2, b3], [1.0, a1, a2])
+        let constant_filter_asbs = match self.edge_frequency {
+            EEdgeFrequency::Constant(freq) => {
+                Some(Self::compute_filter_asbs(freq, samples_per_sec, self.quality_factor))
+            }
+            EEdgeFrequency::ChangeBySample(_) => None,
         };
 
         // 処理する。
@@ -278,7 +292,15 @@ impl IIRLowPassInternal {
         let orig_buffer = container.uniformed_sample_buffer();
         new_buffer.resize(orig_buffer.len(), UniformedSample::default());
 
-        for i in 0..new_buffer.len() {
+        let total_sample_count = new_buffer.len();
+        for i in 0..total_sample_count {
+            let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.edge_frequency {
+                let edge_frequency = compute_func(i, total_sample_count);
+                Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
+            } else {
+                constant_filter_asbs.clone().unwrap()
+            };
+
             for ji in 0..=2 {
                 if i < ji {
                     break;
@@ -318,7 +340,7 @@ impl EFilter {
                 edge_frequency,
                 quality_factor,
             } => IIRLowPassInternal {
-                edge_frequency: *edge_frequency,
+                edge_frequency: edge_frequency.clone(),
                 quality_factor: *quality_factor,
             }
             .apply(container),

@@ -3,7 +3,10 @@ use std::{
     io::{self, Write},
 };
 
-use soundprog::wave::{container::WaveContainer, filter::EFilter};
+use soundprog::wave::{
+    container::WaveContainer,
+    filter::{EEdgeFrequency, EFilter},
+};
 
 #[test]
 fn ex6_2() {
@@ -17,7 +20,7 @@ fn ex6_2() {
         WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
     };
     let new_container = EFilter::IIRLowPass {
-        edge_frequency: 1000.0,
+        edge_frequency: EEdgeFrequency::Constant(1000.0),
         quality_factor: 2f64.sqrt().recip(),
     }
     .apply_to_wave_container(&wave_container);
