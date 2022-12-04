@@ -50,7 +50,7 @@ pub struct FrequencyAnalyzer {
 }
 
 impl FrequencyAnalyzer {
-    /// 周波数特性を計算する。
+    /// [`WaveContainer`]の波形から周波数特性を計算する。
     pub fn analyze_container(&self, container: &WaveContainer) -> Option<Vec<SineFrequency>> {
         // まず入れられた情報から範囲に収められそうなのかを確認する。
         // sound_lengthはhalf-opened rangeなのかclosedなのかがいかがわしい模様。
@@ -80,6 +80,28 @@ impl FrequencyAnalyzer {
                     None
                 } else {
                     Some(analyze_as_fft(self, container.uniformed_sample_buffer()))
+                }
+            }
+        }
+    }
+
+    /// [`UniformedSample`]のある任意の波形バッファから周波数特性を計算する。
+    pub fn analyze_sample_buffer(&self, sample_buffer: &[UniformedSample]) -> Option<Vec<SineFrequency>> {
+        // まずsampleの尺が足りるかを確認する。
+        if sample_buffer.len() < self.samples_count {
+            return None;
+        }
+        if self.frequency_start < 0.0 || self.samples_count <= 0 {
+            return None;
+        }
+
+        match self.analyze_method {
+            EAnalyzeMethod::DFT => Some(analyze_as_dft(self, sample_buffer)),
+            EAnalyzeMethod::FFT => {
+                if !self.samples_count.is_power_of_two() {
+                    None
+                } else {
+                    Some(analyze_as_fft(self, sample_buffer))
                 }
             }
         }
@@ -241,11 +263,7 @@ pub struct FrequencyTransformer {
 }
 
 impl FrequencyTransformer {
-    pub fn transform_frequencies(
-        &self,
-        container: &WaveContainer,
-        frequencies: &[SineFrequency],
-    ) -> Option<Vec<UniformedSample>> {
+    pub fn transform_frequencies(&self, frequencies: &[SineFrequency]) -> Option<Vec<UniformedSample>> {
         // まずそれぞれの方法が使えるかを確認する。
         // たとえば、IFFTは周波数特性のサイズが2のべき乗じゃないとできない。
         if frequencies.is_empty() {
@@ -253,27 +271,19 @@ impl FrequencyTransformer {
         }
 
         match self.transform_method {
-            ETransformMethod::IDFT => Some(transform_as_idft(self, container, frequencies)),
-            ETransformMethod::IFFT => Some(transform_as_ifft(self, container, frequencies)),
+            ETransformMethod::IDFT => Some(transform_as_idft(frequencies)),
+            ETransformMethod::IFFT => Some(transform_as_ifft(frequencies)),
         }
     }
 }
 
 /// Inverse Discrete Fourier Transformを使って波形のサンプルリストに変換する。
-fn transform_as_idft(
-    _transformer: &FrequencyTransformer,
-    container: &WaveContainer,
-    frequencies: &[SineFrequency],
-) -> Vec<UniformedSample> {
+fn transform_as_idft(frequencies: &[SineFrequency]) -> Vec<UniformedSample> {
     // まず0からtime_lengthまでのサンプルだけを収集する。
     // time_lengthの間のサンプル数を全部求めて
     //
     // ただ、DFTでの時間計算が [0, 1]範囲となっていたので、IDFTも同じくする？
     // とりあえずf64のサンプルに変換する。
-
-    // その前に、今はcontainerのチャンネルは1にする。
-
-    assert!(container.samples_per_second() > 0);
     let samples_count = frequencies.len();
 
     let mut raw_samples = vec![];
@@ -303,13 +313,8 @@ fn transform_as_idft(
 
 /// Inverse Fast Fourier Transformを使って波形のサンプルリストに変換する。
 /// `frequencies`のサイズは必ず2のべき乗である必要がある。
-fn transform_as_ifft(
-    _transformer: &FrequencyTransformer,
-    container: &WaveContainer,
-    frequencies: &[SineFrequency],
-) -> Vec<UniformedSample> {
+fn transform_as_ifft(frequencies: &[SineFrequency]) -> Vec<UniformedSample> {
     assert!(frequencies.len().is_power_of_two());
-    assert!(container.samples_per_second() > 0);
 
     // freqs_count == samples_countにする。
     let samples_count = frequencies.len();
