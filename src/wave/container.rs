@@ -1,5 +1,3 @@
-use rand::distributions::Uniform;
-
 use super::{sample::UniformedSample, setting::WaveSound};
 use std::{io, mem};
 
