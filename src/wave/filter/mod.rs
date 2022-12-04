@@ -35,6 +35,12 @@ pub enum EFilter {
         /// クォリティファクタ
         quality_factor: f64,
     },
+    IIRBandPass {
+        /// 中心周波数
+        center_frequency: EEdgeFrequency,
+        /// クォリティファクタ
+        quality_factor: f64,
+    },
     /// DiscreteもしくはFastなFourier Transformを使ってLPFを行う。
     DFTLowPass {
         /// エッジ周波数
@@ -93,12 +99,12 @@ fn compute_fir_lpf_response(filters_count: usize, edge: f64) -> Vec<f64> {
 impl EFilter {
     ///
     pub fn apply_to_wave_container(&self, container: &WaveContainer) -> WaveContainer {
+        // ここで書くには長いのでInternal構造体に移して処理を行う。
         match self {
             EFilter::FIRLowPass {
                 edge_frequency,
                 delta_frequency,
             } => fir::FIRLowPassInternal {
-                // ここで書くには長いのでInternal構造体に移して処理を行う。
                 edge_frequency: *edge_frequency,
                 delta_frequency: *delta_frequency,
             }
@@ -106,7 +112,7 @@ impl EFilter {
             EFilter::IIRLowPass {
                 edge_frequency,
                 quality_factor,
-            } => iir::IIRLowPassInternal {
+            } => iir::LowPassInternal {
                 edge_frequency: edge_frequency.clone(),
                 quality_factor: *quality_factor,
             }
@@ -114,8 +120,16 @@ impl EFilter {
             EFilter::IIRHighPass {
                 edge_frequency,
                 quality_factor,
-            } => iir::IIRHighPassInternal {
+            } => iir::HighPassInternal {
                 edge_frequency: edge_frequency.clone(),
+                quality_factor: *quality_factor,
+            }
+            .apply(container),
+            EFilter::IIRBandPass {
+                center_frequency,
+                quality_factor,
+            } => iir::BandPassInternal {
+                center_frequency: center_frequency.clone(),
                 quality_factor: *quality_factor,
             }
             .apply(container),
