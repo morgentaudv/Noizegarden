@@ -2,7 +2,7 @@ use std::f64::consts::PI;
 
 use super::container::WaveContainer;
 use crate::wave::{
-    analyze::{EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
+    analyze::{self, EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
     sample::UniformedSample,
     PI2,
 };
@@ -35,6 +35,8 @@ pub enum EFilter {
         max_input_samples_count: usize,
         /// フーリエ変換を行う時のサンプル周期
         transform_compute_count: usize,
+        /// オーバーラッピング機能を使うか？（Hann関数を基本使用する）
+        use_overlap: bool,
     },
 }
 
@@ -126,6 +128,8 @@ struct DFTLowPassInternal {
     max_input_samples_count: usize,
     /// フーリエ変換を行う時のサンプル周期
     transform_compute_count: usize,
+    /// オーバーラッピング機能を使うか？（Hann関数を基本使用する）
+    use_overlap: bool,
 }
 
 impl DFTLowPassInternal {
@@ -146,14 +150,20 @@ impl DFTLowPassInternal {
         assert!(self.max_input_samples_count + filters_count <= self.transform_compute_count);
 
         // FFTで使うAnalzyer情報を記す。
-        let common_analyzer = FrequencyAnalyzer {
+        let input_analyzer = FrequencyAnalyzer {
             start_sample_index: 0,
             frequency_start: 1.0,
             samples_count: self.max_input_samples_count,
             window_function: None,
             analyze_method: EAnalyzeMethod::FFT,
         };
-
+        let filter_analyzer = FrequencyAnalyzer {
+            start_sample_index: 0,
+            frequency_start: 1.0,
+            samples_count: self.max_input_samples_count,
+            window_function: None,
+            analyze_method: EAnalyzeMethod::FFT,
+        };
         let common_transformer = FrequencyTransformer {
             transform_method: ETransformMethod::IFFT,
         };
@@ -162,7 +172,19 @@ impl DFTLowPassInternal {
         let orig_sample_buffer = container.uniformed_sample_buffer();
         let orig_sample_buffer_len = orig_sample_buffer.len();
         // DFTでできる最大のフレームを計算する。完全に割り切れなかった場合には残りは適当にする。
-        let frames_to_compute = orig_sample_buffer_len / self.max_input_samples_count;
+        let frames_to_compute = if self.use_overlap {
+            // max_input_samples_countの半分おきにオーバーラップするので、
+            // 最後のフレームは足りなくなるので１減らす。
+            (orig_sample_buffer_len / (self.max_input_samples_count >> 1)) - 1
+        } else {
+            orig_sample_buffer_len / self.max_input_samples_count
+        };
+        let proceed_samples_count = if self.use_overlap {
+            self.max_input_samples_count >> 1
+        } else {
+            self.max_input_samples_count
+        };
+
         // B(m)リストを作る。
         let filter_buffer = {
             let mut buffer = filter_responses.iter().map(|v| UniformedSample::from_f64(*v)).collect_vec();
@@ -173,12 +195,13 @@ impl DFTLowPassInternal {
         let mut new_buffer = vec![];
         new_buffer.resize(orig_sample_buffer_len, UniformedSample::default());
         for frame_i in 0..frames_to_compute {
-            let begin_sample_index = frame_i * self.max_input_samples_count;
-            let end_sample_index = ((frame_i + 1) * self.max_input_samples_count).min(orig_sample_buffer_len);
+            let begin_sample_index = frame_i * proceed_samples_count;
+            let end_sample_index = (begin_sample_index + self.max_input_samples_count).min(orig_sample_buffer_len);
 
             // X(n)リストを作る。
             let input_buffer = {
                 // まずNカウント全部0で埋め尽くす。
+                // ここではmax_input_samples_countを使わず、FFTのためのサンプルカウントでリストを作る。
                 let mut buffer = vec![];
                 buffer.resize(self.transform_compute_count, UniformedSample::default());
 
@@ -191,10 +214,10 @@ impl DFTLowPassInternal {
             };
 
             // X(n)とB(m)を全部FFTをかける。
-            let input_frequencies = common_analyzer
+            let input_frequencies = input_analyzer
                 .analyze_sample_buffer(&input_buffer)
                 .expect("Failed to analyze input signal buffer.");
-            let filter_frequencies = common_analyzer
+            let filter_frequencies = filter_analyzer
                 .analyze_sample_buffer(&filter_buffer)
                 .expect("Failed to analyze filter response buffer.");
 
@@ -208,8 +231,9 @@ impl DFTLowPassInternal {
                     SineFrequency::from_complex_f64(frequency, filter.to_complex_f64() * input.to_complex_f64())
                 })
                 .collect_vec();
-
             let frame_result_buffer = common_transformer.transform_frequencies(&output_frequencies).unwrap();
+
+            // 適切な位置に書き込む。
             for write_i in begin_sample_index..end_sample_index {
                 let load_i = write_i - begin_sample_index;
                 new_buffer[write_i] = frame_result_buffer[load_i];
@@ -303,12 +327,14 @@ impl EFilter {
                 delta_frequency,
                 max_input_samples_count,
                 transform_compute_count,
+                use_overlap,
             } => DFTLowPassInternal {
                 // ここで書くには長いのでInternal構造体に移して処理を行う。
                 edge_frequency: *edge_frequency,
                 delta_frequency: *delta_frequency,
                 max_input_samples_count: *max_input_samples_count,
                 transform_compute_count: *transform_compute_count,
+                use_overlap: *use_overlap,
             }
             .apply(container),
         }
