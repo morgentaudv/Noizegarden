@@ -41,6 +41,12 @@ pub enum EFilter {
         /// クォリティファクタ
         quality_factor: f64,
     },
+    IIRBandEliminate {
+        /// 中心周波数
+        center_frequency: EEdgeFrequency,
+        /// クォリティファクタ
+        quality_factor: f64,
+    },
     /// DiscreteもしくはFastなFourier Transformを使ってLPFを行う。
     DFTLowPass {
         /// エッジ周波数
@@ -129,6 +135,14 @@ impl EFilter {
                 center_frequency,
                 quality_factor,
             } => iir::BandPassInternal {
+                center_frequency: center_frequency.clone(),
+                quality_factor: *quality_factor,
+            }
+            .apply(container),
+            EFilter::IIRBandEliminate {
+                center_frequency,
+                quality_factor,
+            } => iir::BandEliminateInternal {
                 center_frequency: center_frequency.clone(),
                 quality_factor: *quality_factor,
             }
