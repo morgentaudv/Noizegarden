@@ -23,8 +23,7 @@ fn test_dft() {
     let dft_analyzer = FrequencyAnalyzer {
         start_sample_index: 0,
         frequency_start: 1.0,
-        frequency_length: 8000.0, // sample_countsとfrequency_lengthは一対一じゃないとIDFTしたあとの波形が不安定になる。
-        sample_counts: 8000,
+        samples_count: 8000,
         ..Default::default()
     };
     let frequencies = dft_analyzer.analyze_frequencies(&wave_container).unwrap();

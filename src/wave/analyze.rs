@@ -44,8 +44,7 @@ pub enum EAnalyzeMethod {
 pub struct FrequencyAnalyzer {
     pub start_sample_index: usize,
     pub frequency_start: f64,
-    pub frequency_length: f64,
-    pub sample_counts: usize,
+    pub samples_count: usize,
     pub window_function: Option<EWindowFunction>,
     pub analyze_method: EAnalyzeMethod,
 }
@@ -57,7 +56,7 @@ impl FrequencyAnalyzer {
         // sound_lengthはhalf-opened rangeなのかclosedなのかがいかがわしい模様。
         let wave_sound_length = container.sound_length() as f64;
         let recip_sample_per_sec = (container.samples_per_second() as f64).recip();
-        let samples_time_length = recip_sample_per_sec * (self.sample_counts as f64);
+        let samples_time_length = recip_sample_per_sec * (self.samples_count as f64);
         let samples_time_start = (self.start_sample_index as f64) * recip_sample_per_sec;
         let samples_time_end = samples_time_start + samples_time_length;
 
@@ -67,15 +66,16 @@ impl FrequencyAnalyzer {
 
         // [time_start, time_start + sampels_time_end)の時間領域を
         // [frequency_start, frequency_start + frequency_length]まで分析する。
-        if self.frequency_length <= 0.0 || self.frequency_start < 0.0 || self.sample_counts <= 0 {
+        //
+        // 現在はfrequency_lengthはsamples_countと同様。
+        if self.frequency_start < 0.0 || self.samples_count <= 0 {
             return None;
         }
 
-        assert!(self.frequency_length == (self.sample_counts as f64));
         match self.analyze_method {
             EAnalyzeMethod::DFT => Some(analyze_as_dft(self, container)),
             EAnalyzeMethod::FFT => {
-                if !self.sample_counts.is_power_of_two() {
+                if !self.samples_count.is_power_of_two() {
                     None
                 } else {
                     Some(analyze_as_fft(self, container))
@@ -101,20 +101,20 @@ impl FrequencyAnalyzer {
 fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Vec<SineFrequency> {
     assert!(container.channel() == 1);
 
-    let frequency_end = analyzer.frequency_start + analyzer.frequency_length;
-    let freq_precision = analyzer.frequency_length * (analyzer.sample_counts as f64).recip();
+    let frequency_end = analyzer.frequency_start + (analyzer.samples_count as f64);
+    let freq_precision = 1.0;
 
     let mut results = vec![];
     let mut cursor_frequency = analyzer.frequency_start;
 
     let sample_buffer = container.uniformed_sample_buffer();
     while cursor_frequency < frequency_end {
-        let mut frequency = Complex::<f64>::default();
+        let mut frequency_response = Complex::<f64>::default();
 
-        for local_i in 0..analyzer.sample_counts {
+        for local_i in 0..analyzer.samples_count {
             // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
             // coeff_input = exp(2pifn / N)
-            let time_factor = (local_i as f64) / (analyzer.sample_counts as f64);
+            let time_factor = (local_i as f64) / (analyzer.samples_count as f64);
             let coeff_input = PI2 * cursor_frequency * time_factor;
             let coefficient = Complex::<f64>::from_exp(coeff_input * -1.0);
 
@@ -124,10 +124,10 @@ fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
                 let window_factor = analyzer.get_window_fn_factor(1.0, time_factor);
                 amplitude * window_factor
             };
-            frequency += sample * coefficient;
+            frequency_response += sample * coefficient;
         }
 
-        results.push(SineFrequency::from_complex_f64(cursor_frequency, frequency));
+        results.push(SineFrequency::from_complex_f64(cursor_frequency, frequency_response));
 
         // 周波数カーソルを進める。
         cursor_frequency += freq_precision;
@@ -140,14 +140,14 @@ fn analyze_as_dft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
 /// 周波数特性を計算して返す。
 fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Vec<SineFrequency> {
     assert!(container.channel() == 1);
-    assert!(analyzer.sample_counts.is_power_of_two());
+    assert!(analyzer.samples_count.is_power_of_two());
 
     // まず最後に求められる各Frequencyの情報をちゃんとした位置に入れるためのIndexルックアップテーブルを作る。
     // たとえば、index_count = 8のときに1番目のFrequency情報は4番目に入れるべきなど…
     let lookup_table = {
         // ビットリバーステクニックを使ってテーブルを作成。
         let mut results = vec![0];
-        let mut addition_count = analyzer.sample_counts >> 1;
+        let mut addition_count = analyzer.samples_count >> 1;
         while addition_count > 0 {
             results.append(&mut results.iter().map(|v| v + addition_count).collect_vec());
             addition_count >>= 1;
@@ -155,23 +155,23 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
 
         results
     };
-    let sample_counts = analyzer.sample_counts;
+    let samples_count = analyzer.samples_count;
 
     // まず最後レベルの信号を計算する。index_count分作る。
     let final_signals = {
         let samples_buffer = container.uniformed_sample_buffer();
 
         let mut prev_signals: Vec<Complex<f64>> = vec![];
-        prev_signals.reserve(sample_counts);
+        prev_signals.reserve(samples_count);
 
         // 無限に伸びる周期波形をつくるよりは、すでに与えられた波形をもっと細かく刻んでサンプルしたほうが安定そう。
-        for local_i in 0..sample_counts {
+        for local_i in 0..samples_count {
             // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
             let amplitude = {
                 let sample_i = local_i + analyzer.start_sample_index;
                 let signal = samples_buffer[sample_i].to_f64();
 
-                let time_factor = (local_i as f64) / (sample_counts as f64);
+                let time_factor = (local_i as f64) / (samples_count as f64);
                 let window_factor = analyzer.get_window_fn_factor(1.0, time_factor);
                 signal * window_factor
             };
@@ -185,14 +185,14 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
 
         //
         let mut next_signals: Vec<Complex<f64>> = vec![];
-        next_signals.resize(analyzer.sample_counts, <Complex<f64> as Default>::default());
+        next_signals.resize(analyzer.samples_count, <Complex<f64> as Default>::default());
 
-        let level = (sample_counts as f64).log2().ceil() as usize;
+        let level = (samples_count as f64).log2().ceil() as usize;
         for lv_i in 0..level {
-            let index_period = sample_counts >> lv_i;
+            let index_period = samples_count >> lv_i;
             let half_index = index_period >> 1;
 
-            for period_i in (0..sample_counts).step_by(index_period) {
+            for period_i in (0..samples_count).step_by(index_period) {
                 for local_i in 0..half_index {
                     let lhs_i = period_i + local_i;
                     let rhs_i = period_i + local_i + half_index;
@@ -218,10 +218,10 @@ fn analyze_as_fft(analyzer: &FrequencyAnalyzer, container: &WaveContainer) -> Ve
     // 計算済みの`final_signals`はビットリバースのシグナルリストに１対１対応しているので
     // このままルックアップテーブルから結果シグナルに入れて[`SineFrequency`]に変換して返す。
     let mut results = vec![];
-    results.resize(sample_counts, SineFrequency::default());
+    results.resize(samples_count, SineFrequency::default());
 
-    let freq_precision = analyzer.frequency_length * (analyzer.sample_counts as f64).recip();
-    for freq_i in 0..sample_counts {
+    let freq_precision = 1.0;
+    for freq_i in 0..samples_count {
         let target_i = lookup_table[freq_i];
 
         let frequency = analyzer.frequency_start + (freq_precision * (target_i as f64));
