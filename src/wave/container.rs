@@ -407,7 +407,7 @@ impl WaveContainer {
     }
 
     ///
-    pub(crate) fn from_uniformed_sample_buffer(original: &Self, uniformed_buffer: Vec<UniformedSample>) -> Self {
+    pub fn from_uniformed_sample_buffer(original: &Self, uniformed_buffer: Vec<UniformedSample>) -> Self {
         Self {
             riff: original.riff.clone(),
             fmt: original.fmt.clone(),
@@ -497,7 +497,7 @@ impl WaveContainer {
     }
 
     /// サンプルが入っているバッファーのSliceを貸す形で返す。
-    pub(crate) fn uniformed_sample_buffer(&self) -> &'_ [UniformedSample] {
+    pub fn uniformed_sample_buffer(&self) -> &'_ [UniformedSample] {
         &self.uniformed_buffer
     }
 
