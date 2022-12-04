@@ -172,7 +172,7 @@ impl DFTLowPassInternal {
 
         let mut new_buffer = vec![];
         new_buffer.resize(orig_sample_buffer_len, UniformedSample::default());
-        for frame_i in 0..(frames_to_compute + 1) {
+        for frame_i in 0..frames_to_compute {
             let begin_sample_index = frame_i * self.max_input_samples_count;
             let end_sample_index = ((frame_i + 1) * self.max_input_samples_count).min(orig_sample_buffer_len);
 
