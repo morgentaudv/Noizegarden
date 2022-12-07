@@ -2,10 +2,11 @@ use itertools::Itertools;
 
 use crate::wave::{
     analyze::{EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
-    container::WaveContainer,
     filter::{compute_fir_lpf_filters_count, compute_fir_lpf_response},
     sample::UniformedSample,
 };
+
+use super::FilterCommonSetting;
 
 pub(super) struct DFTLowPassInternal {
     /// エッジ周波数
@@ -21,12 +22,16 @@ pub(super) struct DFTLowPassInternal {
 }
 
 impl DFTLowPassInternal {
-    pub(super) fn apply(&self, container: &WaveContainer) -> WaveContainer {
+    pub(super) fn apply(
+        &self,
+        common_setting: &FilterCommonSetting,
+        read_buffer: &[UniformedSample],
+    ) -> Vec<UniformedSample> {
         // ここではcontainerのチャンネルがMONO(1)だと仮定する。
-        assert!(container.channel() == 1);
+        assert!(common_setting.channel == 1);
 
         // まずLPFでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
-        let samples_per_sec = container.samples_per_second() as f64;
+        let samples_per_sec = common_setting.samples_per_second as f64;
         let edge = self.edge_frequency / samples_per_sec;
         let delta = self.delta_frequency / samples_per_sec;
 
@@ -57,15 +62,14 @@ impl DFTLowPassInternal {
         };
 
         // filter_responsesを用いて折りたたみを行う。
-        let orig_sample_buffer = container.uniformed_sample_buffer();
-        let orig_sample_buffer_len = orig_sample_buffer.len();
+        let read_buffer_len = read_buffer.len();
         // DFTでできる最大のフレームを計算する。完全に割り切れなかった場合には残りは適当にする。
         let frames_to_compute = if self.use_overlap {
             // max_input_samples_countの半分おきにオーバーラップするので、
             // 最後のフレームは足りなくなるので１減らす。
-            (orig_sample_buffer_len / (self.max_input_samples_count >> 1)) - 1
+            (read_buffer_len / (self.max_input_samples_count >> 1)) - 1
         } else {
-            orig_sample_buffer_len / self.max_input_samples_count
+            read_buffer_len / self.max_input_samples_count
         };
         let proceed_samples_count = if self.use_overlap {
             self.max_input_samples_count >> 1
@@ -81,10 +85,10 @@ impl DFTLowPassInternal {
         };
 
         let mut new_buffer = vec![];
-        new_buffer.resize(orig_sample_buffer_len, UniformedSample::default());
+        new_buffer.resize(read_buffer_len, UniformedSample::default());
         for frame_i in 0..frames_to_compute {
             let begin_sample_index = frame_i * proceed_samples_count;
-            let end_sample_index = (begin_sample_index + self.max_input_samples_count).min(orig_sample_buffer_len);
+            let end_sample_index = (begin_sample_index + self.max_input_samples_count).min(read_buffer_len);
 
             // X(n)リストを作る。
             let input_buffer = {
@@ -96,7 +100,7 @@ impl DFTLowPassInternal {
                 // それから実際インプットのシグナル（実数）を最初から入れる。
                 for load_i in begin_sample_index..end_sample_index {
                     let write_i = load_i - begin_sample_index;
-                    buffer[write_i] = orig_sample_buffer[load_i];
+                    buffer[write_i] = read_buffer[load_i];
                 }
                 buffer
             };
@@ -128,6 +132,6 @@ impl DFTLowPassInternal {
             }
         }
 
-        WaveContainer::from_uniformed_sample_buffer(container, new_buffer)
+        new_buffer
     }
 }

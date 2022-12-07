@@ -1,8 +1,8 @@
 use std::f64::consts::PI;
 
-use crate::wave::{container::WaveContainer, sample::UniformedSample, PI2};
+use crate::wave::{sample::UniformedSample, PI2};
 
-use super::EEdgeFrequency;
+use super::{EEdgeFrequency, FilterCommonSetting};
 
 fn compute_sample(
     write_sample_i: usize,
@@ -54,10 +54,14 @@ impl LowPassInternal {
         ([1.0, a1, a2], [b1, b2, b3])
     }
 
-    pub(super) fn apply(&self, container: &WaveContainer) -> WaveContainer {
+    pub(super) fn apply(
+        &self,
+        common_setting: &FilterCommonSetting,
+        read_buffer: &[UniformedSample],
+    ) -> Vec<UniformedSample> {
         // はアナログの伝達関数を流用して（デジタルに適用できる形に変換）処理を行うけど
         // デジタル周波数はアナログ周波数に変換して使う。
-        let samples_per_sec = container.samples_per_second() as f64;
+        let samples_per_sec = common_setting.samples_per_second as f64;
 
         // もしEdgeFrequencyがサンプルによって動的に変わるのではなければ、LPFの伝達関数の各乗算器の係数を求める。
         // まず共用の値を先に計算する。
@@ -71,8 +75,7 @@ impl LowPassInternal {
         // 処理する。
         // -LPFではB側で遅延機が２個、A側で遅延にが２個。
         let mut new_buffer = vec![];
-        let orig_buffer = container.uniformed_sample_buffer();
-        new_buffer.resize(orig_buffer.len(), UniformedSample::default());
+        new_buffer.resize(read_buffer.len(), UniformedSample::default());
 
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
@@ -83,10 +86,10 @@ impl LowPassInternal {
                 constant_filter_asbs.clone().unwrap()
             };
 
-            compute_sample(i, &mut new_buffer, orig_buffer, &filter_as, &filter_bs);
+            compute_sample(i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
         }
 
-        WaveContainer::from_uniformed_sample_buffer(container, new_buffer)
+        new_buffer
     }
 }
 
@@ -115,10 +118,14 @@ impl HighPassInternal {
         ([1.0, a1, a2], [b1, b2, b3])
     }
 
-    pub(super) fn apply(&self, container: &WaveContainer) -> WaveContainer {
+    pub(super) fn apply(
+        &self,
+        common_setting: &FilterCommonSetting,
+        read_buffer: &[UniformedSample],
+    ) -> Vec<UniformedSample> {
         // はアナログの伝達関数を流用して（デジタルに適用できる形に変換）処理を行うけど
         // デジタル周波数はアナログ周波数に変換して使う。
-        let samples_per_sec = container.samples_per_second() as f64;
+        let samples_per_sec = common_setting.samples_per_second as f64;
 
         // もしEdgeFrequencyがサンプルによって動的に変わるのではなければ、HPFの伝達関数の各乗算器の係数を求める。
         // まず共用の値を先に計算する。
@@ -132,8 +139,7 @@ impl HighPassInternal {
         // 処理する。
         // HPFではB側で遅延機が２個、A側で遅延にが２個。
         let mut new_buffer = vec![];
-        let orig_buffer = container.uniformed_sample_buffer();
-        new_buffer.resize(orig_buffer.len(), UniformedSample::default());
+        new_buffer.resize(read_buffer.len(), UniformedSample::default());
 
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
@@ -144,10 +150,10 @@ impl HighPassInternal {
                 constant_filter_asbs.clone().unwrap()
             };
 
-            compute_sample(i, &mut new_buffer, orig_buffer, &filter_as, &filter_bs);
+            compute_sample(i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
         }
 
-        WaveContainer::from_uniformed_sample_buffer(container, new_buffer)
+        new_buffer
     }
 }
 
@@ -177,10 +183,14 @@ impl BandPassInternal {
         ([1.0, a1, a2], [b1, b2, b3])
     }
 
-    pub(super) fn apply(&self, container: &WaveContainer) -> WaveContainer {
+    pub(super) fn apply(
+        &self,
+        common_setting: &FilterCommonSetting,
+        read_buffer: &[UniformedSample],
+    ) -> Vec<UniformedSample> {
         // はアナログの伝達関数を流用して（デジタルに適用できる形に変換）処理を行うけど
         // デジタル周波数はアナログ周波数に変換して使う。
-        let samples_per_sec = container.samples_per_second() as f64;
+        let samples_per_sec = common_setting.samples_per_second as f64;
 
         // もしCenterFrequencyがサンプルによって動的に変わるのではなければ、BPFの伝達関数の各乗算器の係数を求める。
         // まず共用の値を先に計算する。
@@ -194,8 +204,7 @@ impl BandPassInternal {
         // 処理する。
         // BPFではB側で遅延機が２個、A側で遅延にが２個。
         let mut new_buffer = vec![];
-        let orig_buffer = container.uniformed_sample_buffer();
-        new_buffer.resize(orig_buffer.len(), UniformedSample::default());
+        new_buffer.resize(read_buffer.len(), UniformedSample::default());
 
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
@@ -206,10 +215,10 @@ impl BandPassInternal {
                 constant_filter_asbs.clone().unwrap()
             };
 
-            compute_sample(i, &mut new_buffer, orig_buffer, &filter_as, &filter_bs);
+            compute_sample(i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
         }
 
-        WaveContainer::from_uniformed_sample_buffer(container, new_buffer)
+        new_buffer
     }
 }
 
@@ -239,10 +248,14 @@ impl BandEliminateInternal {
         ([1.0, a1, a2], [b1, b2, b3])
     }
 
-    pub(super) fn apply(&self, container: &WaveContainer) -> WaveContainer {
+    pub(super) fn apply(
+        &self,
+        common_setting: &FilterCommonSetting,
+        read_buffer: &[UniformedSample],
+    ) -> Vec<UniformedSample> {
         // IIRはアナログの伝達関数を流用して（デジタルに適用できる形に変換）処理を行うけど
         // デジタル周波数はアナログ周波数に変換して使う。
-        let samples_per_sec = container.samples_per_second() as f64;
+        let samples_per_sec = common_setting.samples_per_second as f64;
 
         // もしCenterFrequencyがサンプルによって動的に変わるのではなければ、BEFの伝達関数の各乗算器の係数を求める。
         // まず共用の値を先に計算する。
@@ -256,8 +269,7 @@ impl BandEliminateInternal {
         // 処理する。
         // BEFではB側で遅延機が２個、A側で遅延にが２個。
         let mut new_buffer = vec![];
-        let orig_buffer = container.uniformed_sample_buffer();
-        new_buffer.resize(orig_buffer.len(), UniformedSample::default());
+        new_buffer.resize(read_buffer.len(), UniformedSample::default());
 
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
@@ -268,9 +280,9 @@ impl BandEliminateInternal {
                 constant_filter_asbs.clone().unwrap()
             };
 
-            compute_sample(i, &mut new_buffer, orig_buffer, &filter_as, &filter_bs);
+            compute_sample(i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
         }
 
-        WaveContainer::from_uniformed_sample_buffer(container, new_buffer)
+        new_buffer
     }
 }

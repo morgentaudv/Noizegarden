@@ -1,9 +1,15 @@
-use super::container::WaveContainer;
+use super::{container::WaveContainer, sample::UniformedSample};
 use crate::wave::PI2;
 use itertools::Itertools;
 mod dft;
 mod fir;
 mod iir;
+
+#[derive(Debug, Clone, Copy)]
+pub struct FilterCommonSetting {
+    pub channel: u32,
+    pub samples_per_second: u32,
+}
 
 #[derive(Debug, Clone)]
 pub enum EEdgeFrequency {
@@ -103,8 +109,11 @@ fn compute_fir_lpf_response(filters_count: usize, edge: f64) -> Vec<f64> {
 }
 
 impl EFilter {
-    ///
-    pub fn apply_to_wave_container(&self, container: &WaveContainer) -> WaveContainer {
+    pub fn apply_to_buffer(
+        &self,
+        common_setting: &FilterCommonSetting,
+        buffer: &[UniformedSample],
+    ) -> Vec<UniformedSample> {
         // ここで書くには長いのでInternal構造体に移して処理を行う。
         match self {
             EFilter::FIRLowPass {
@@ -114,7 +123,7 @@ impl EFilter {
                 edge_frequency: *edge_frequency,
                 delta_frequency: *delta_frequency,
             }
-            .apply(container),
+            .apply(common_setting, buffer),
             EFilter::IIRLowPass {
                 edge_frequency,
                 quality_factor,
@@ -122,7 +131,7 @@ impl EFilter {
                 edge_frequency: edge_frequency.clone(),
                 quality_factor: *quality_factor,
             }
-            .apply(container),
+            .apply(common_setting, buffer),
             EFilter::IIRHighPass {
                 edge_frequency,
                 quality_factor,
@@ -130,7 +139,7 @@ impl EFilter {
                 edge_frequency: edge_frequency.clone(),
                 quality_factor: *quality_factor,
             }
-            .apply(container),
+            .apply(common_setting, buffer),
             EFilter::IIRBandPass {
                 center_frequency,
                 quality_factor,
@@ -138,7 +147,7 @@ impl EFilter {
                 center_frequency: center_frequency.clone(),
                 quality_factor: *quality_factor,
             }
-            .apply(container),
+            .apply(common_setting, buffer),
             EFilter::IIRBandEliminate {
                 center_frequency,
                 quality_factor,
@@ -146,7 +155,7 @@ impl EFilter {
                 center_frequency: center_frequency.clone(),
                 quality_factor: *quality_factor,
             }
-            .apply(container),
+            .apply(common_setting, buffer),
             EFilter::DFTLowPass {
                 edge_frequency,
                 delta_frequency,
@@ -161,7 +170,19 @@ impl EFilter {
                 transform_compute_count: *transform_compute_count,
                 use_overlap: *use_overlap,
             }
-            .apply(container),
+            .apply(common_setting, buffer),
         }
+    }
+
+    ///
+    pub fn apply_to_wave_container(&self, container: &WaveContainer) -> WaveContainer {
+        // ここで書くには長いのでInternal構造体に移して処理を行う。
+        let common_setting = FilterCommonSetting {
+            channel: container.channel(),
+            samples_per_second: container.samples_per_second(),
+        };
+        let filtered_buffer = self.apply_to_buffer(&common_setting, container.uniformed_sample_buffer());
+
+        WaveContainer::from_uniformed_sample_buffer(&container, filtered_buffer)
     }
 }
