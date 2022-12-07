@@ -4,6 +4,7 @@ use itertools::Itertools;
 mod dft;
 mod fir;
 mod iir;
+mod other;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FilterCommonSetting {
@@ -184,5 +185,21 @@ impl EFilter {
         let filtered_buffer = self.apply_to_buffer(&common_setting, container.uniformed_sample_buffer());
 
         WaveContainer::from_uniformed_sample_buffer(&container, filtered_buffer)
+    }
+}
+
+pub enum ESourceFilter {
+    /// [De-Emphasize](https://www.fon.hum.uva.nl/praat/manual/Sound__De-emphasize__in-place____.html)
+    Deemphasizer { coefficient: f64 },
+}
+
+impl ESourceFilter {
+    pub fn apply_to_buffer(&self, buffer: &[UniformedSample]) -> Vec<UniformedSample> {
+        match self {
+            ESourceFilter::Deemphasizer { coefficient } => other::DeemphasizerInternal {
+                coefficient: *coefficient,
+            }
+            .apply(buffer),
+        }
     }
 }

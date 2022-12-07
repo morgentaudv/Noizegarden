@@ -5,7 +5,7 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    filter::{EEdgeFrequency, EFilter},
+    filter::{EEdgeFrequency, EFilter, ESourceFilter},
     sample::UniformedSample,
 };
 
@@ -44,17 +44,7 @@ fn ex7_3() {
     };
 
     // ディエンファシスする。
-    let deemphasised_buffer = {
-        let buffer_length = filtered_buffer.len();
-        let mut buffer = vec![UniformedSample::default(); buffer_length];
-
-        buffer[0] = filtered_buffer[0];
-        for sample_i in 1..buffer_length {
-            buffer[sample_i] = filtered_buffer[sample_i] + (0.98 * buffer[sample_i - 1]);
-        }
-
-        buffer
-    };
+    let deemphasised_buffer = ESourceFilter::Deemphasizer { coefficient: 0.98 }.apply_to_buffer(&filtered_buffer);
 
     {
         let new_container = WaveContainer::from_uniformed_sample_buffer(&wave_container, deemphasised_buffer);
