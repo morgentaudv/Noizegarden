@@ -56,9 +56,7 @@ impl UniformedSample {
     /// # assert_eq!(sample, UniformedSample::MIN);
     /// ```
     pub fn from_f64(sample: f64) -> Self {
-        assert!(sample >= -1.0 && sample <= 1.0);
-
-        let scaled_sample = sample * (i32::MAX as f64);
+        let scaled_sample = sample.clamp(-1.0, 1.0) * (i32::MAX as f64);
         Self(scaled_sample.floor() as i32)
     }
 
