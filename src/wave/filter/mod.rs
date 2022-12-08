@@ -190,13 +190,22 @@ impl EFilter {
 
 pub enum ESourceFilter {
     /// [De-Emphasize](https://www.fon.hum.uva.nl/praat/manual/Sound__De-emphasize__in-place____.html)
-    Deemphasizer { coefficient: f64 },
+    Deemphasizer {
+        coefficient: f64,
+    },
+    PreEmphasizer {
+        coefficient: f64,
+    },
 }
 
 impl ESourceFilter {
     pub fn apply_to_buffer(&self, buffer: &[UniformedSample]) -> Vec<UniformedSample> {
         match self {
             ESourceFilter::Deemphasizer { coefficient } => other::DeemphasizerInternal {
+                coefficient: *coefficient,
+            }
+            .apply(buffer),
+            ESourceFilter::PreEmphasizer { coefficient } => other::PreEmphasizerInternal {
                 coefficient: *coefficient,
             }
             .apply(buffer),
