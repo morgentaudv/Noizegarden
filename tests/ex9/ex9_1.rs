@@ -6,67 +6,17 @@ use std::{
 use soundprog::wave::{
     container::WaveContainer,
     filter::ESourceFilter,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
+    psg::EPSGSignal,
+    setting::{EBitsPerSample, WaveFormatSetting, WaveSound},
+    Second,
 };
 
 use crate::ex9::C5_FLOAT;
-
-#[repr(transparent)]
-pub struct Second(pub f64);
-
-pub enum EPSGSignal {
-    Sawtooth {
-        length_time: Second,
-        frequency: f64,
-        order: usize,
-    },
-}
 
 pub struct OscillatorVibrato {
     initial_frequency: f64,
     period_scale_factor: f64,
     periodic_frequency: f64,
-}
-
-impl EPSGSignal {
-    pub fn apply(&self) -> Option<Vec<WaveSoundSetting>> {
-        match &self {
-            EPSGSignal::Sawtooth {
-                length_time,
-                frequency,
-                order,
-            } => {
-                if length_time.0 <= 0.0 {
-                    return None;
-                }
-
-                let mut results = vec![];
-                let mut setting = WaveSoundSettingBuilder::default();
-
-                // 基本音を入れる。
-                setting
-                    .frequency(*frequency as f32)
-                    .length_sec(length_time.0 as f32)
-                    .intensity(0.4f64);
-                results.push(setting.build().unwrap());
-
-                // 倍音を入れる。
-                for order_i in 2..*order {
-                    let overtone_frequency = (*frequency * (order_i as f64));
-                    let intensity = 0.4f64 * (order_i as f64).recip();
-                    results.push(
-                        setting
-                            .frequency(overtone_frequency as f32)
-                            .intensity(intensity)
-                            .build()
-                            .unwrap(),
-                    );
-                }
-
-                Some(results)
-            }
-        }
-    }
 }
 
 #[test]

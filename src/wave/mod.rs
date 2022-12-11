@@ -6,9 +6,14 @@ pub mod analyze;
 pub mod complex;
 pub mod container;
 pub mod filter;
+pub mod psg;
 pub mod sample;
 pub mod setting;
 pub mod time;
 
 /// 2PIを示す。
 pub(crate) const PI2: f64 = 2.0 * PI;
+
+/// 秒を表す。
+#[repr(transparent)]
+pub struct Second(pub f64);
