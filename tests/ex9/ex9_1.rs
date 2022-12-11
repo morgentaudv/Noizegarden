@@ -7,17 +7,11 @@ use soundprog::wave::{
     container::WaveContainer,
     filter::ESourceFilter,
     psg::EPSGSignal,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSound},
+    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundBuilder},
     Second,
 };
 
 use crate::ex9::C5_FLOAT;
-
-pub struct OscillatorVibrato {
-    initial_frequency: f64,
-    period_scale_factor: f64,
-    periodic_frequency: f64,
-}
 
 #[test]
 fn test_ex9_1() {
@@ -35,7 +29,13 @@ fn test_ex9_1() {
         }
         .apply()
         .unwrap();
-        WaveSound::from_settings(&fmt_setting, &sound_settings)
+
+        WaveSoundBuilder {
+            format: fmt_setting,
+            sound_settings,
+            oscillator_vibrator: None,
+        }
+        .into_build()
     };
 
     // Apply LFO to Amplifier to be tremolo.

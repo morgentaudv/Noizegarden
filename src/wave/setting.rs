@@ -302,6 +302,13 @@ pub struct WaveSound {
     pub sound_fragments: Vec<SoundFragment>,
 }
 
+#[derive(Debug)]
+pub struct OscillatorVibrato {
+    pub initial_frequency: f64,
+    pub period_scale_factor: f64,
+    pub periodic_frequency: f64,
+}
+
 impl WaveSound {
     pub fn from_setting(format: &WaveFormatSetting, sound: &WaveSoundSetting) -> Self {
         let p_sound = sound as *const WaveSoundSetting;
@@ -324,8 +331,25 @@ impl WaveSound {
         }
     }
 
+    pub fn from_builder(builder: WaveSoundBuilder) -> Self {
+        // 今は複数のサウンド波形は一つのバッファーに入れることにする。
+        // 後で拡張できればいいだけ。
+        let sound_fragments = builder
+            .sound_settings
+            .iter()
+            .map(|v| SoundFragment::from_setting(&builder.format, v).unwrap())
+            .collect_vec();
+
+        WaveSound {
+            format: builder.format,
+            sound_fragments,
+        }
+    }
+}
+
+impl WaveSound {
     pub fn completed_samples_count(&self) -> usize {
-        let mut buffer_end_index = {
+        let buffer_end_index = {
             let mut result = 0;
             for fragment in &self.sound_fragments {
                 let end_index = fragment.samples_count.end_index();
@@ -358,5 +382,18 @@ impl WaveSound {
         }
 
         buffer
+    }
+}
+
+#[derive(Debug)]
+pub struct WaveSoundBuilder {
+    pub format: WaveFormatSetting,
+    pub sound_settings: Vec<WaveSoundSetting>,
+    pub oscillator_vibrator: Option<OscillatorVibrato>,
+}
+
+impl WaveSoundBuilder {
+    pub fn into_build(self) -> WaveSound {
+        WaveSound::from_builder(self)
     }
 }
