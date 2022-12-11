@@ -40,7 +40,7 @@ impl std::ops::Mul<UniformedSample> for f64 {
     type Output = UniformedSample;
 
     fn mul(self, rhs: UniformedSample) -> Self::Output {
-        UniformedSample((self * (rhs.0 as f64)).floor() as i32)
+        UniformedSample::from_f64(self * rhs.to_f64())
     }
 }
 
