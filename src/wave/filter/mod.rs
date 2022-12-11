@@ -196,6 +196,13 @@ pub enum ESourceFilter {
     PreEmphasizer {
         coefficient: f64,
     },
+    /// LFO (Low Frequency Oscillator)を使ってVCAに振幅の時間エンベロープを適用する。
+    AmplitudeTremolo {
+        initial_scale: f64,
+        periodical_scale_factor: f64,
+        period_time_frequency: f64,
+        source_samples_per_second: f64,
+    },
 }
 
 impl ESourceFilter {
@@ -207,6 +214,18 @@ impl ESourceFilter {
             .apply(buffer),
             ESourceFilter::PreEmphasizer { coefficient } => other::PreEmphasizerInternal {
                 coefficient: *coefficient,
+            }
+            .apply(buffer),
+            ESourceFilter::AmplitudeTremolo {
+                initial_scale,
+                periodical_scale_factor,
+                period_time_frequency,
+                source_samples_per_second,
+            } => other::AmplitudeTremoloInternal {
+                initial_scale: *initial_scale,
+                periodical_scale_factor: *periodical_scale_factor,
+                period_time_frequency: *period_time_frequency,
+                source_samples_per_second: *source_samples_per_second,
             }
             .apply(buffer),
         }
