@@ -5,43 +5,68 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    filter::{self, ESourceFilter},
+    filter::ESourceFilter,
     setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
 };
 
-const C4_FLOAT: f32 = 261.63;
-const D4_FLOAT: f32 = 293.66;
-const E4_FLOAT: f32 = 329.63;
-const F4_FLOAT: f32 = 349.23;
-const G4_FLOAT: f32 = 392.00;
-const A4_FLOAT: f32 = 440.00;
-const B4_FLOAT: f32 = 493.88;
-const C5_FLOAT: f32 = C4_FLOAT * 2f32;
+use crate::ex9::C5_FLOAT;
 
-fn sawtooth_fragments(startTime: f32, period: f32, frequency: f32, order: u32) -> Option<Vec<WaveSoundSetting>> {
-    if startTime < 0f32 || period <= 0f32 {
-        return None;
+#[repr(transparent)]
+pub struct Second(pub f64);
+
+pub enum EPSGSignal {
+    Sawtooth {
+        length_time: Second,
+        frequency: f64,
+        order: usize,
+    },
+}
+
+pub struct OscillatorVibrato {
+    initial_frequency: f64,
+    period_scale_factor: f64,
+    periodic_frequency: f64,
+}
+
+impl EPSGSignal {
+    pub fn apply(&self) -> Option<Vec<WaveSoundSetting>> {
+        match &self {
+            EPSGSignal::Sawtooth {
+                length_time,
+                frequency,
+                order,
+            } => {
+                if length_time.0 <= 0.0 {
+                    return None;
+                }
+
+                let mut results = vec![];
+                let mut setting = WaveSoundSettingBuilder::default();
+
+                // 基本音を入れる。
+                setting
+                    .frequency(*frequency as f32)
+                    .length_sec(length_time.0 as f32)
+                    .intensity(0.4f64);
+                results.push(setting.build().unwrap());
+
+                // 倍音を入れる。
+                for order_i in 2..*order {
+                    let overtone_frequency = (*frequency * (order_i as f64));
+                    let intensity = 0.4f64 * (order_i as f64).recip();
+                    results.push(
+                        setting
+                            .frequency(overtone_frequency as f32)
+                            .intensity(intensity)
+                            .build()
+                            .unwrap(),
+                    );
+                }
+
+                Some(results)
+            }
+        }
     }
-
-    let mut results = vec![];
-    let mut setting = WaveSoundSettingBuilder::default();
-
-    // 基本音を入れる。
-    setting
-        .frequency(frequency)
-        .start_sec(startTime)
-        .length_sec(period)
-        .intensity(0.4f64);
-    results.push(setting.build().unwrap());
-
-    // 倍音を入れる。
-    for i in 2..order {
-        let overtone_frequency = (frequency * (i as f32));
-        let intensity = 0.4f64 * (i as f64).recip();
-        results.push(setting.frequency(overtone_frequency).intensity(intensity).build().unwrap());
-    }
-
-    Some(results)
 }
 
 #[test]
@@ -53,7 +78,13 @@ fn test_ex9_1() {
             samples_per_sec: 44100,
             bits_per_sample: EBitsPerSample::Bits16,
         };
-        let sound_settings = sawtooth_fragments(0f32, 5f32, C5_FLOAT, 100).unwrap();
+        let sound_settings = EPSGSignal::Sawtooth {
+            length_time: Second(5.0),
+            frequency: C5_FLOAT as f64,
+            order: 100,
+        }
+        .apply()
+        .unwrap();
         WaveSound::from_settings(&fmt_setting, &sound_settings)
     };
 
