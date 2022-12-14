@@ -5,9 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use soundprog::wave::{
-    analyze::{
-        EAnalyzeMethod, ETransformMethod, EWindowFunction, FrequencyAnalyzer, FrequencyTransformer, SineFrequency,
-    },
+    analyze::{EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
     container::WaveContainer,
     filter::ESourceFilter,
     sample::UniformedSample,

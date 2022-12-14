@@ -12,9 +12,6 @@ use soundprog::wave::{
     },
 };
 
-const C4_FLOAT: f32 = 261.63;
-const C5_FLOAT: f32 = C4_FLOAT * 2f32;
-
 fn whitenoise_fragments(period: f32) -> Option<Vec<WaveSoundSetting>> {
     if period <= 0f32 {
         return None;
@@ -35,8 +32,8 @@ fn whitenoise_fragments(period: f32) -> Option<Vec<WaveSoundSetting>> {
 
     // 倍音を入れる。
     let mut rng = rand::thread_rng();
-    for i in 0..250 {
-        let frequency = (rng.gen::<f32>() * FREQ_RANGE);
+    for _ in 0..250 {
+        let frequency = rng.gen::<f32>() * FREQ_RANGE;
         let phase = rng.gen::<f32>() * (PI * 2.0);
 
         results.push(

@@ -124,6 +124,7 @@ impl EIntensityControlItem {
 pub enum EFrequencyItem {
     Constant { frequency: f64 },
     Chirp { start_frequency: f64, end_frequency: f64 },
+    Sawtooth { frequency: f64 },
 }
 
 impl Default for EFrequencyItem {
@@ -220,6 +221,7 @@ impl SoundFragment {
 
                         (start_frequency * x) + ((end_frequency - start_frequency) * mul_factor)
                     }
+                    EFrequencyItem::Sawtooth { frequency } => todo!(),
                 }
             };
 
