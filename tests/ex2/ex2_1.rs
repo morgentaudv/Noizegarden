@@ -5,7 +5,7 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
+    setting::{EBitsPerSample, EFrequencyItem::Constant, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
 };
 
 #[test]
@@ -17,7 +17,7 @@ fn write_500hz_1second() {
         bits_per_sample: EBitsPerSample::Bits16,
     };
     let sound_setting = WaveSoundSettingBuilder::default()
-        .frequency(500f32)
+        .frequency(Constant { frequency: 500.0 })
         .length_sec(1f32)
         .intensity(1.0f64)
         .build()

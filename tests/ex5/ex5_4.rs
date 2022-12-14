@@ -6,12 +6,13 @@ use std::{
 use soundprog::wave::{
     container::WaveContainer,
     setting::{
-        EBitsPerSample, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+        EBitsPerSample, EFrequencyItem, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting,
+        WaveSoundSettingBuilder,
     },
 };
 
-fn piano_sound(start_time: f32, period: f32, frequency: f64) -> Option<Vec<WaveSoundSetting>> {
-    if start_time < 0f32 || period <= 0f32 {
+fn piano_sound(period: f32, frequency: f64) -> Option<Vec<WaveSoundSetting>> {
+    if period <= 0f32 {
         return None;
     }
 
@@ -28,11 +29,11 @@ fn piano_sound(start_time: f32, period: f32, frequency: f64) -> Option<Vec<WaveS
 
     // 基本音を入れる。
     const BASE_INTENSITY: f64 = 0.2;
-    setting.start_sec(start_time).length_sec(period);
+    setting.length_sec(period);
     for (frequency, intensity, exp_recip) in wave_infos {
         results.push(
             setting
-                .frequency(frequency as f32)
+                .frequency(EFrequencyItem::Constant { frequency })
                 .intensity(BASE_INTENSITY * intensity)
                 .intensity_control_items(vec![EIntensityControlItem::Exp {
                     start_time: 0.0,
@@ -55,7 +56,7 @@ fn ex5_4_test() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = piano_sound(0f32, 5f32, 440.0).unwrap();
+    let sound_settings = piano_sound(5f32, 440.0).unwrap();
     let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
     let container = WaveContainer::from_wavesound(&sound).unwrap();
 

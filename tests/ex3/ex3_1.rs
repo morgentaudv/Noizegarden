@@ -5,7 +5,9 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
+    setting::{
+        EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+    },
 };
 
 const C4_FLOAT: f32 = 261.63;
@@ -17,8 +19,8 @@ const A4_FLOAT: f32 = 440.00;
 const B4_FLOAT: f32 = 493.88;
 const C5_FLOAT: f32 = C4_FLOAT * 2f32;
 
-fn sawtooth_fragments(startTime: f32, period: f32, frequency: f32, order: u32) -> Option<Vec<WaveSoundSetting>> {
-    if startTime < 0f32 || period <= 0f32 {
+fn sawtooth_fragments(period: f32, frequency: f32, order: u32) -> Option<Vec<WaveSoundSetting>> {
+    if period <= 0f32 {
         return None;
     }
 
@@ -27,17 +29,27 @@ fn sawtooth_fragments(startTime: f32, period: f32, frequency: f32, order: u32) -
 
     // 基本音を入れる。
     setting
-        .frequency(frequency)
-        .start_sec(startTime)
+        .frequency(EFrequencyItem::Constant {
+            frequency: frequency as f64,
+        })
         .length_sec(period)
         .intensity(0.4f64);
     results.push(setting.build().unwrap());
 
     // 倍音を入れる。
     for i in 2..order {
-        let overtone_frequency = (frequency * (i as f32));
+        let overtone_frequency = frequency * (i as f32);
         let intensity = 0.4f64 * (i as f64).recip();
-        results.push(setting.frequency(overtone_frequency).intensity(intensity).build().unwrap());
+        results.push(
+            setting
+                .frequency(EFrequencyItem::Constant {
+                    frequency: overtone_frequency as f64,
+                })
+                .intensity(intensity)
+                .length_sec(period)
+                .build()
+                .unwrap(),
+        );
     }
 
     Some(results)
@@ -51,7 +63,7 @@ fn write_fromc4toc5() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = sawtooth_fragments(0f32, 1f32, C5_FLOAT, 100).unwrap();
+    let sound_settings = sawtooth_fragments(1f32, C5_FLOAT, 100).unwrap();
 
     // 上の情報から波形を作る。
     // まず[0 ~ u32]までのu32値から量子化bitsに合う値として変換する。

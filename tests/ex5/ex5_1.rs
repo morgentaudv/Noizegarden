@@ -6,20 +6,16 @@ use std::{
 use soundprog::wave::{
     container::WaveContainer,
     setting::{
-        EBitsPerSample, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+        EBitsPerSample, EFrequencyItem, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting,
+        WaveSoundSettingBuilder,
     },
 };
 
 const C4_FLOAT: f32 = 261.63;
 const C5_FLOAT: f32 = C4_FLOAT * 2f32;
 
-fn triangle_fragments(
-    start_time: f32,
-    period: f32,
-    frequency: f32,
-    order_factor: u32,
-) -> Option<Vec<WaveSoundSetting>> {
-    if start_time < 0f32 || period <= 0f32 {
+fn triangle_fragments(period: f32, frequency: f32, order_factor: u32) -> Option<Vec<WaveSoundSetting>> {
+    if period <= 0f32 {
         return None;
     }
 
@@ -29,8 +25,9 @@ fn triangle_fragments(
     // 基本音を入れる。
     const BASE_INTENSITY: f64 = 0.5;
     setting
-        .frequency(frequency)
-        .start_sec(start_time)
+        .frequency(EFrequencyItem::Constant {
+            frequency: frequency as f64,
+        })
         .length_sec(period)
         .intensity_control_items(vec![EIntensityControlItem::Fade {
             start_time: 0.0,
@@ -52,7 +49,16 @@ fn triangle_fragments(
                 1.0
             }
         };
-        results.push(setting.frequency(overtone_frequency).intensity(intensity).build().unwrap());
+        results.push(
+            setting
+                .frequency(EFrequencyItem::Constant {
+                    frequency: overtone_frequency as f64,
+                })
+                .intensity(intensity)
+                .length_sec(period)
+                .build()
+                .unwrap(),
+        );
     }
 
     Some(results)
@@ -66,7 +72,7 @@ fn ex5_1_test() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = triangle_fragments(0f32, 5f32, C5_FLOAT, 50).unwrap();
+    let sound_settings = triangle_fragments(5f32, C5_FLOAT, 50).unwrap();
     let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
     let container = WaveContainer::from_wavesound(&sound).unwrap();
 

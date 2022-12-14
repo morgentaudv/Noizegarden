@@ -7,14 +7,16 @@ use std::{
 use rand::prelude::*;
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
+    setting::{
+        EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+    },
 };
 
 const C4_FLOAT: f32 = 261.63;
 const C5_FLOAT: f32 = C4_FLOAT * 2f32;
 
-fn whitenoise_fragments(startTime: f32, period: f32) -> Option<Vec<WaveSoundSetting>> {
-    if startTime < 0f32 || period <= 0f32 {
+fn whitenoise_fragments(period: f32) -> Option<Vec<WaveSoundSetting>> {
+    if period <= 0f32 {
         return None;
     }
 
@@ -25,9 +27,8 @@ fn whitenoise_fragments(startTime: f32, period: f32) -> Option<Vec<WaveSoundSett
     const BASE_INTENSITY: f64 = 0.01;
     const FREQ_RANGE: f32 = 20000.0;
     setting
-        .frequency(0.0)
+        .frequency(EFrequencyItem::Constant { frequency: 0.0 })
         .phase(0.0)
-        .start_sec(startTime)
         .length_sec(period)
         .intensity(BASE_INTENSITY);
     results.push(setting.build().unwrap());
@@ -38,7 +39,15 @@ fn whitenoise_fragments(startTime: f32, period: f32) -> Option<Vec<WaveSoundSett
         let frequency = (rng.gen::<f32>() * FREQ_RANGE);
         let phase = rng.gen::<f32>() * (PI * 2.0);
 
-        results.push(setting.frequency(frequency).phase(phase).build().unwrap());
+        results.push(
+            setting
+                .frequency(EFrequencyItem::Constant {
+                    frequency: frequency as f64,
+                })
+                .phase(phase)
+                .build()
+                .unwrap(),
+        );
     }
 
     Some(results)
@@ -52,7 +61,7 @@ fn write_fromc4toc5() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = whitenoise_fragments(0f32, 1f32).unwrap();
+    let sound_settings = whitenoise_fragments(1f32).unwrap();
     let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
     let container = WaveContainer::from_wavesound(&sound).unwrap();
 

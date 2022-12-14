@@ -5,11 +5,13 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder},
+    setting::{
+        EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+    },
 };
 
-fn organ_sound(start_time: f32, period: f32, frequency: f64) -> Option<Vec<WaveSoundSetting>> {
-    if start_time < 0f32 || period <= 0f32 {
+fn organ_sound(period: f32, frequency: f64) -> Option<Vec<WaveSoundSetting>> {
+    if period <= 0f32 {
         return None;
     }
 
@@ -26,11 +28,11 @@ fn organ_sound(start_time: f32, period: f32, frequency: f64) -> Option<Vec<WaveS
 
     // 基本音を入れる。
     const BASE_INTENSITY: f64 = 0.2;
-    setting.start_sec(start_time).length_sec(period);
+    setting.length_sec(period);
     for wave_info in wave_infos {
         results.push(
             setting
-                .frequency(wave_info.0 as f32)
+                .frequency(EFrequencyItem::Constant { frequency: wave_info.0 })
                 .intensity(BASE_INTENSITY * wave_info.1)
                 .build()
                 .unwrap(),
@@ -48,7 +50,7 @@ fn ex5_3_test() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = organ_sound(0f32, 5f32, 440.0).unwrap();
+    let sound_settings = organ_sound(5f32, 440.0).unwrap();
     let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
     let container = WaveContainer::from_wavesound(&sound).unwrap();
 

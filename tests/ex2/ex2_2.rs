@@ -3,15 +3,17 @@ use std::{
     io::{self, Write},
 };
 
+use itertools::Itertools;
 use soundprog::wave::{
     container::WaveContainer,
     setting::{
-        EBitsPerSample, EIntensityControlItem, WaveFormatSetting, WaveSound, WaveSoundSetting, WaveSoundSettingBuilder,
+        EBitsPerSample, EFrequencyItem::Constant, EIntensityControlItem, WaveFormatSetting, WaveSound,
+        WaveSoundSetting, WaveSoundSettingBuilder,
     },
 };
 
 #[allow(dead_code)]
-fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<WaveSoundSetting>> {
+fn create_sound_settings_fromc4toc5(period: f32) -> Option<Vec<WaveSoundSetting>> {
     // C長調、ド4オクターブの周波数からド5まで作る。
     const C4_FLOAT: f32 = 261.63;
     const D4_FLOAT: f32 = 293.66;
@@ -23,26 +25,26 @@ fn create_sound_settings_fromc4toc5(startTime: f32, period: f32) -> Option<Vec<W
     const C5_FLOAT: f32 = C4_FLOAT * 2f32;
     const FREQUENCIES: [f32; 8] = [C4_FLOAT, D4_FLOAT, E4_FLOAT, F4_FLOAT, G4_FLOAT, A4_FLOAT, B4_FLOAT, C5_FLOAT];
 
-    if startTime < 0f32 || period <= 0f32 {
+    if period <= 0f32 {
         return None;
     }
 
     let mut base_setting = WaveSoundSettingBuilder::default();
     base_setting
-        .frequency(0f32)
-        .start_sec(startTime)
+        .frequency(Constant { frequency: 0.0 })
         .length_sec(period)
         .intensity(1.0f64);
 
     let mut results = vec![];
     for index in 0..FREQUENCIES.len() {
         const FADE_LENGTH: f64 = 0.1;
-        let start_sec = startTime + (period * index as f32);
 
         results.push(
             base_setting
-                .start_sec(start_sec)
-                .frequency(FREQUENCIES[index])
+                .frequency(Constant {
+                    frequency: FREQUENCIES[index] as f64,
+                })
+                .length_sec(period)
                 .intensity_control_items(vec![
                     EIntensityControlItem::Fade {
                         start_time: 0.0,
@@ -73,21 +75,44 @@ fn write_fromc4toc5() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = create_sound_settings_fromc4toc5(0f32, 1f32).unwrap();
+    let sound_settings = create_sound_settings_fromc4toc5(1f32).unwrap();
 
     // 上の情報から波形を作る。
     // まず[0 ~ u32]までのu32値から量子化bitsに合う値として変換する。
     //
     // 浮動小数点を使わない理由としては、24bitsの場合f64でも精度が落ちる可能性がみられる。
-    let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
-    // そして情報をまとめてWaveContainerに書く。
-    let container = WaveContainer::from_wavesound(&sound).unwrap();
+    let buffer = {
+        let buffers = sound_settings
+            .into_iter()
+            .map(|setting| {
+                let sound = WaveSound::from_settings(&fmt_setting, &[setting]);
 
-    // ファイルの出力
-    {
-        let dest_file = fs::File::create(WRITE_FILE_PATH).expect("Could not create 500hz.wav.");
-        let mut writer = io::BufWriter::new(dest_file);
-        container.write(&mut writer);
-        writer.flush().expect("Failed to flush writer.")
-    }
+                let mut buffer = vec![];
+                for mut fragment in sound.sound_fragments {
+                    buffer.append(&mut fragment.buffer)
+                }
+                buffer
+            })
+            .collect_vec();
+
+        let mut new_buffer = vec![];
+        for mut buffer in buffers {
+            new_buffer.append(&mut buffer);
+        }
+        new_buffer
+    };
+
+    //WaveContainer::from_uniformed_sample_buffer(original, buffer);
+
+    //let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
+    //// そして情報をまとめてWaveContainerに書く。
+    //let container = WaveContainer::from_wavesound(&sound).unwrap();
+
+    //// ファイルの出力
+    //{
+    //    let dest_file = fs::File::create(WRITE_FILE_PATH).expect("Could not create 500hz.wav.");
+    //    let mut writer = io::BufWriter::new(dest_file);
+    //    container.write(&mut writer);
+    //    writer.flush().expect("Failed to flush writer.")
+    //}
 }

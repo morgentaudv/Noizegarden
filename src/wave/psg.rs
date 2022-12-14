@@ -1,5 +1,5 @@
 use super::{
-    setting::{WaveSoundSetting, WaveSoundSettingBuilder},
+    setting::{EFrequencyItem, WaveSoundSetting, WaveSoundSettingBuilder},
     Second,
 };
 
@@ -8,6 +8,7 @@ pub enum EPSGSignal {
         length_time: Second,
         frequency: f64,
         order: usize,
+        intensity: f64,
     },
 }
 
@@ -18,6 +19,7 @@ impl EPSGSignal {
                 length_time,
                 frequency,
                 order,
+                intensity,
             } => {
                 if length_time.0 <= 0.0 {
                     return None;
@@ -28,19 +30,22 @@ impl EPSGSignal {
 
                 // 基本音を入れる。
                 setting
-                    .frequency(*frequency as f32)
+                    .frequency(EFrequencyItem::Constant { frequency: *frequency })
                     .length_sec(length_time.0 as f32)
-                    .intensity(0.4f64);
+                    .intensity(*intensity);
                 results.push(setting.build().unwrap());
 
                 // 倍音を入れる。
                 for order_i in 2..*order {
                     let overtone_frequency = *frequency * (order_i as f64);
-                    let intensity = 0.4f64 * (order_i as f64).recip();
+                    let overtone_intensity = intensity * (order_i as f64).recip();
                     results.push(
                         setting
-                            .frequency(overtone_frequency as f32)
-                            .intensity(intensity)
+                            .frequency(EFrequencyItem::Constant {
+                                frequency: overtone_frequency,
+                            })
+                            .length_sec(length_time.0 as f32)
+                            .intensity(overtone_intensity)
                             .build()
                             .unwrap(),
                     );

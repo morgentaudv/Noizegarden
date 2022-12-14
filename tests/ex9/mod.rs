@@ -1,4 +1,5 @@
 pub mod ex9_1;
+pub mod ex9_2;
 
 const C4_FLOAT: f32 = 261.63;
 const D4_FLOAT: f32 = 293.66;

@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use itertools::Itertools;
 use std::f64::consts::PI;
 
-use super::sample::UniformedSample;
+use super::{sample::UniformedSample, PI2};
 
 /// 各サンプルの量子化レベルを表す。
 ///
@@ -122,25 +122,22 @@ impl EIntensityControlItem {
 
 #[derive(Debug, Clone, Copy)]
 pub enum EFrequencyItem {
-    Constant {
-        frequency: f64,
-        length: f64,
-    },
-    Chirp {
-        length: f64,
-        start_frequency: f64,
-        end_frequency: f64,
-    },
+    Constant { frequency: f64 },
+    Chirp { start_frequency: f64, end_frequency: f64 },
+}
+
+impl Default for EFrequencyItem {
+    fn default() -> Self {
+        Self::Constant { frequency: 0.0 }
+    }
 }
 
 ///
 #[derive(Default, Debug, Clone, Builder)]
 #[builder(default)]
 pub struct WaveSoundSetting {
-    pub frequency: f32,
-    pub frequency_items: Vec<EFrequencyItem>,
+    pub frequency: EFrequencyItem,
     pub phase: f32,
-    pub start_sec: f32,
     pub length_sec: f32,
     pub intensity: f64,
     pub intensity_control_items: Vec<EIntensityControlItem>,
@@ -175,7 +172,7 @@ impl SoundFragment {
         //
         // 小数点がある場合には、総サンプルは足りないよりは余ったほうが都合が良いかもしれない。
         let samples = samples_per_sec as f32;
-        let begin_index = (samples * sound_setting.start_sec).ceil() as usize;
+        let begin_index = 0usize;
         let length = (samples * sound_setting.length_sec).ceil() as usize;
 
         CalculatedSamplesCount { begin_index, length }
@@ -187,84 +184,41 @@ impl SoundFragment {
         // 今はMONOなので1:1でマッチできる。
         // 小数点がある場合には、総サンプルは足りないよりは余ったほうが都合が良いかもしれない。
         let samples_count = Self::calc_samples_count(format.samples_per_sec, sound);
-        //dbg!(samples_count);
 
         let mut buffer = vec![];
         buffer.reserve(samples_count.length);
 
         // Sin波形に入れる値はf64として計算する。
         // そしてu32に変換する。最大値は`[2^32 - 1]`である。
-        let coefficient = 2.0f64 * PI / (format.samples_per_sec as f64);
+        let coefficient = PI2 / (format.samples_per_sec as f64);
         for unittime in 0..samples_count.length {
             // 振幅と周波数のエンベロープのため相対時間を計算
             let relative_time = (unittime as f64) / (format.samples_per_sec as f64);
 
             // もしfrequency_itemsがなければ、constantで行う。（簡単）
             let frequency = {
-                if sound.frequency_items.is_empty() {
-                    // この場合にはEnvelopeは全然考慮しない。
-                    (sound.frequency as f64) * (unittime as f64)
-                } else {
-                    // [Envelope](https://en.wikipedia.org/wiki/Envelope_(waves))
-                    // 周波数エンベロープの対応。
-                    // unittimeをそのままpowiしちゃうと精度関連で事故るので、それぞれ分離して掛け算する。
+                // [Envelope](https://en.wikipedia.org/wiki/Envelope_(waves))
+                // 周波数エンベロープの対応。
+                // unittimeをそのままpowiしちゃうと精度関連で事故るので、それぞれ分離して掛け算する。
 
-                    // relative_timeから適切なアイテムを選ぶ。
-                    let unittime = unittime as f64;
-                    let mut cursor_start_time = 0.0;
-                    let mut cursor_item: Option<&EFrequencyItem> = None;
-                    for item in &sound.frequency_items {
-                        match item {
-                            EFrequencyItem::Constant { frequency: _, length } => {
-                                let end_time = cursor_start_time + length;
-                                if relative_time < cursor_start_time || end_time < relative_time {
-                                    cursor_start_time = end_time;
-                                    continue;
-                                }
+                // relative_timeから適切なアイテムを選ぶ。
+                let unittime = unittime as f64;
+                match &sound.frequency {
+                    EFrequencyItem::Constant { frequency } => frequency * unittime,
+                    EFrequencyItem::Chirp {
+                        start_frequency,
+                        end_frequency,
+                    } => {
+                        let samples_per_sec = format.samples_per_sec as f64;
+                        let x = unittime;
+                        let mul_factor = {
+                            let sample_length = samples_per_sec * (sound.length_sec as f64);
+                            let divided = x / (sample_length - 1.0);
+                            let divided2 = x * 0.5;
+                            divided * divided2
+                        };
 
-                                cursor_item = Some(item);
-                                break;
-                            }
-                            EFrequencyItem::Chirp {
-                                length,
-                                start_frequency: _,
-                                end_frequency: _,
-                            } => {
-                                let end_time = cursor_start_time + length;
-                                if relative_time < cursor_start_time || end_time < relative_time {
-                                    cursor_start_time = end_time;
-                                    continue;
-                                }
-
-                                cursor_item = Some(item);
-                                break;
-                            }
-                        }
-                    }
-
-                    if cursor_item.is_none() {
-                        // 無音で流す。
-                        0.0
-                    } else {
-                        match cursor_item.unwrap() {
-                            EFrequencyItem::Constant { frequency, length: _ } => frequency * unittime,
-                            EFrequencyItem::Chirp {
-                                length,
-                                start_frequency,
-                                end_frequency,
-                            } => {
-                                let samples_per_sec = format.samples_per_sec as f64;
-                                let x = unittime - (cursor_start_time * samples_per_sec);
-                                let mul_factor = {
-                                    let sample_length = *length * samples_per_sec;
-                                    let divided = x / (sample_length - 1.0);
-                                    let divided2 = x * 0.5;
-                                    divided * divided2
-                                };
-
-                                (start_frequency * x) + ((end_frequency - start_frequency) * mul_factor)
-                            }
-                        }
+                        (start_frequency * x) + ((end_frequency - start_frequency) * mul_factor)
                     }
                 }
             };
@@ -309,6 +263,13 @@ pub struct OscillatorVibrato {
     pub periodic_frequency: f64,
 }
 
+impl OscillatorVibrato {
+    pub fn compute_frequency(&self, sample_i: usize, samples_per_sec: usize) -> f64 {
+        let time = (sample_i as f64) / (samples_per_sec as f64);
+        self.initial_frequency + (self.period_scale_factor * (PI2 * self.periodic_frequency * time).sin())
+    }
+}
+
 impl WaveSound {
     pub fn from_setting(format: &WaveFormatSetting, sound: &WaveSoundSetting) -> Self {
         let p_sound = sound as *const WaveSoundSetting;
@@ -334,6 +295,9 @@ impl WaveSound {
     pub fn from_builder(builder: WaveSoundBuilder) -> Self {
         // 今は複数のサウンド波形は一つのバッファーに入れることにする。
         // 後で拡張できればいいだけ。
+        //
+        // `as_ref()`で参照だけを取っているので、中で渡す時にはCloneする。
+        let ref_vibrato = builder.oscillator_vibrator.as_ref();
         let sound_fragments = builder
             .sound_settings
             .iter()

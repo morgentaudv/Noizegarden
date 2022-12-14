@@ -5,17 +5,16 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    filter::ESourceFilter,
     psg::EPSGSignal,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSoundBuilder},
+    setting::{EBitsPerSample, OscillatorVibrato, WaveFormatSetting, WaveSoundBuilder},
     Second,
 };
 
 use crate::ex9::C5_FLOAT;
 
 #[test]
-fn test_ex9_1() {
-    const WRITE_FILE_PATH: &'static str = "assets/ex9/ex9_1_tremolo.wav";
+fn test_ex9_2() {
+    const WRITE_FILE_PATH: &'static str = "assets/ex9/ex9_2_vibrato.wav";
 
     let original_sound = {
         let fmt_setting = WaveFormatSetting {
@@ -26,7 +25,7 @@ fn test_ex9_1() {
             length_time: Second(5.0),
             frequency: C5_FLOAT as f64,
             order: 100,
-            intensity: 0.4,
+            intensity: 0.1,
         }
         .apply()
         .unwrap();
@@ -34,25 +33,16 @@ fn test_ex9_1() {
         WaveSoundBuilder {
             format: fmt_setting,
             sound_settings,
-            oscillator_vibrator: None,
+            oscillator_vibrator: Some(OscillatorVibrato {
+                initial_frequency: C5_FLOAT as f64,
+                period_scale_factor: 100.0,
+                periodic_frequency: 2.0,
+            }),
         }
         .into_build()
     };
 
-    // Apply LFO to Amplifier to be tremolo.
-    let filtered_buffer = ESourceFilter::AmplitudeTremolo {
-        initial_scale: 0.75,
-        periodical_scale_factor: 0.25,
-        period_time_frequency: 1.0,
-        source_samples_per_second: original_sound.format.samples_per_sec as f64,
-    }
-    .apply_to_buffer(&original_sound.get_completed_samples());
-
-    let new_sound_container = {
-        // そして情報をまとめてWaveContainerに書く。
-        let container = WaveContainer::from_wavesound(&original_sound).unwrap();
-        WaveContainer::from_uniformed_sample_buffer(&container, filtered_buffer)
-    };
+    let new_sound_container = WaveContainer::from_wavesound(&original_sound).unwrap();
 
     // ファイルの出力
     {
