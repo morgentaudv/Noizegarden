@@ -197,7 +197,7 @@ impl SoundFragment {
             let relative_time = (unittime as f64) / (format.samples_per_sec as f64);
 
             // もしfrequency_itemsがなければ、constantで行う。（簡単）
-            let frequency = {
+            let sample = {
                 // [Envelope](https://en.wikipedia.org/wiki/Envelope_(waves))
                 // 周波数エンベロープの対応。
                 // unittimeをそのままpowiしちゃうと精度関連で事故るので、それぞれ分離して掛け算する。
@@ -205,7 +205,11 @@ impl SoundFragment {
                 // relative_timeから適切なアイテムを選ぶ。
                 let unittime = unittime as f64;
                 match &sound.frequency {
-                    EFrequencyItem::Constant { frequency } => frequency * unittime,
+                    EFrequencyItem::Constant { frequency } => {
+                        let frequency = frequency * unittime;
+                        let sin_input = (coefficient * frequency) + (sound.phase as f64);
+                        sound.intensity * sin_input.sin()
+                    }
                     EFrequencyItem::Chirp {
                         start_frequency,
                         end_frequency,
@@ -219,14 +223,16 @@ impl SoundFragment {
                             divided * divided2
                         };
 
-                        (start_frequency * x) + ((end_frequency - start_frequency) * mul_factor)
+                        let frequency = (start_frequency * x) + ((end_frequency - start_frequency) * mul_factor);
+                        let sin_input = (coefficient * frequency) + (sound.phase as f64);
+                        sound.intensity * sin_input.sin()
                     }
-                    EFrequencyItem::Sawtooth { frequency } => todo!(),
+                    EFrequencyItem::Sawtooth { frequency } => {
+                        let orig_intensity = 1.0 - (2.0 * (relative_time * frequency).fract());
+                        sound.intensity * orig_intensity
+                    }
                 }
             };
-
-            let sin_input = (coefficient * frequency) + (sound.phase as f64);
-            let sample = sound.intensity * sin_input.sin();
             assert!(sample >= -1.0 && sample <= 1.0);
 
             // ここでdynamic_mul_funcを使って掛け算を行う。

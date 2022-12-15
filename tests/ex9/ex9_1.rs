@@ -7,8 +7,7 @@ use soundprog::wave::{
     container::WaveContainer,
     filter::ESourceFilter,
     psg::EPSGSignal,
-    setting::{EBitsPerSample, WaveFormatSetting, WaveSoundBuilder},
-    Second,
+    setting::{EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSoundBuilder, WaveSoundSettingBuilder},
 };
 
 use crate::ex9::C5_FLOAT;
@@ -18,22 +17,23 @@ fn test_ex9_1() {
     const WRITE_FILE_PATH: &'static str = "assets/ex9/ex9_1_tremolo.wav";
 
     let original_sound = {
+        let setting = WaveSoundSettingBuilder::default()
+            .length_sec(5.0)
+            .frequency(EFrequencyItem::Sawtooth {
+                frequency: C5_FLOAT as f64,
+            })
+            .intensity(0.25)
+            .build()
+            .unwrap();
+
         let fmt_setting = WaveFormatSetting {
             samples_per_sec: 44100,
             bits_per_sample: EBitsPerSample::Bits16,
         };
-        let sound_settings = EPSGSignal::Sawtooth {
-            length_time: Second(5.0),
-            frequency: C5_FLOAT as f64,
-            order: 100,
-            intensity: 0.4,
-        }
-        .apply()
-        .unwrap();
 
         WaveSoundBuilder {
             format: fmt_setting,
-            sound_settings,
+            sound_settings: vec![setting],
             oscillator_vibrator: None,
         }
         .into_build()
