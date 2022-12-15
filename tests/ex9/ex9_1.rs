@@ -6,7 +6,6 @@ use std::{
 use soundprog::wave::{
     container::WaveContainer,
     filter::ESourceFilter,
-    psg::EPSGSignal,
     setting::{EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSoundBuilder, WaveSoundSettingBuilder},
 };
 
@@ -34,7 +33,6 @@ fn test_ex9_1() {
         WaveSoundBuilder {
             format: fmt_setting,
             sound_settings: vec![setting],
-            oscillator_vibrator: None,
         }
         .into_build()
     };

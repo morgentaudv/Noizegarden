@@ -141,6 +141,7 @@ pub struct WaveSoundSetting {
     pub phase: f32,
     pub length_sec: f32,
     pub intensity: f64,
+    pub oscillator_vibrato: Option<OscillatorVibrato>,
     pub intensity_control_items: Vec<EIntensityControlItem>,
 }
 
@@ -186,54 +187,93 @@ impl SoundFragment {
         // 小数点がある場合には、総サンプルは足りないよりは余ったほうが都合が良いかもしれない。
         let samples_count = Self::calc_samples_count(format.samples_per_sec, sound);
 
-        let mut buffer = vec![];
-        buffer.reserve(samples_count.length);
-
         // Sin波形に入れる値はf64として計算する。
         // そしてu32に変換する。最大値は`[2^32 - 1]`である。
         let coefficient = PI2 / (format.samples_per_sec as f64);
-        for unittime in 0..samples_count.length {
-            // 振幅と周波数のエンベロープのため相対時間を計算
-            let relative_time = (unittime as f64) / (format.samples_per_sec as f64);
+        let samples = {
+            let mut samples = vec![];
+            samples.reserve(samples_count.length);
 
-            // もしfrequency_itemsがなければ、constantで行う。（簡単）
-            let sample = {
-                // [Envelope](https://en.wikipedia.org/wiki/Envelope_(waves))
-                // 周波数エンベロープの対応。
-                // unittimeをそのままpowiしちゃうと精度関連で事故るので、それぞれ分離して掛け算する。
+            match &sound.frequency {
+                EFrequencyItem::Constant { frequency } => {
+                    for unittime in 0..samples_count.length {
+                        // 振幅と周波数のエンベロープのため相対時間を計算
+                        let unittime = unittime as f64;
+                        let sin_input = (coefficient * frequency * unittime) + (sound.phase as f64);
 
-                // relative_timeから適切なアイテムを選ぶ。
-                let unittime = unittime as f64;
-                match &sound.frequency {
-                    EFrequencyItem::Constant { frequency } => {
-                        let frequency = frequency * unittime;
-                        let sin_input = (coefficient * frequency) + (sound.phase as f64);
-                        sound.intensity * sin_input.sin()
+                        let sample = sound.intensity * sin_input.sin();
+                        assert!(sample >= -1.0 && sample <= 1.0);
+                        samples.push(sample);
                     }
-                    EFrequencyItem::Chirp {
-                        start_frequency,
-                        end_frequency,
-                    } => {
+                }
+                EFrequencyItem::Chirp {
+                    start_frequency,
+                    end_frequency,
+                } => {
+                    for unittime in 0..samples_count.length {
+                        // 振幅と周波数のエンベロープのため相対時間を計算
+                        let unittime = unittime as f64;
                         let samples_per_sec = format.samples_per_sec as f64;
-                        let x = unittime;
                         let mul_factor = {
                             let sample_length = samples_per_sec * (sound.length_sec as f64);
-                            let divided = x / (sample_length - 1.0);
-                            let divided2 = x * 0.5;
+                            let divided = unittime / (sample_length - 1.0);
+                            let divided2 = unittime * 0.5;
                             divided * divided2
                         };
 
-                        let frequency = (start_frequency * x) + ((end_frequency - start_frequency) * mul_factor);
+                        let frequency = (start_frequency * unittime) + ((end_frequency - start_frequency) * mul_factor);
                         let sin_input = (coefficient * frequency) + (sound.phase as f64);
-                        sound.intensity * sin_input.sin()
-                    }
-                    EFrequencyItem::Sawtooth { frequency } => {
-                        let orig_intensity = 1.0 - (2.0 * (relative_time * frequency).fract());
-                        sound.intensity * orig_intensity
+                        let sample = sound.intensity * sin_input.sin();
+
+                        assert!(sample >= -1.0 && sample <= 1.0);
+                        samples.push(sample);
                     }
                 }
-            };
-            assert!(sample >= -1.0 && sample <= 1.0);
+                EFrequencyItem::Sawtooth { frequency } => {
+                    match sound.oscillator_vibrato.as_ref() {
+                        Some(vibrato) => {
+                            let mut unittime = 0usize;
+                            while unittime < samples_count.length {
+                                let target_frequency =
+                                    vibrato.compute_frequency(*frequency, unittime, format.samples_per_sec as usize);
+
+                                for local_i in 0usize.. {
+                                    let rel_time = (local_i as f64) / (format.samples_per_sec as f64);
+                                    let rate = rel_time * target_frequency;
+
+                                    let orig_intensity = 1.0 - (2.0 * rate.fract());
+                                    samples.push(sound.intensity * orig_intensity);
+
+                                    unittime += 1;
+                                    if rate >= 1.0 {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        None => {
+                            for unittime in 0..samples_count.length {
+                                // 振幅と周波数のエンベロープのため相対時間を計算
+                                let relative_time = (unittime as f64) / (format.samples_per_sec as f64);
+
+                                let orig_intensity = 1.0 - (2.0 * (relative_time * frequency).fract());
+                                let sample = sound.intensity * orig_intensity;
+
+                                assert!(sample >= -1.0 && sample <= 1.0);
+                                samples.push(sample);
+                            }
+                        }
+                    }
+                }
+            }
+
+            samples
+        };
+
+        let mut buffer = vec![];
+        buffer.reserve(samples_count.length);
+        for unittime in 0..samples_count.length {
+            let relative_time = (unittime as f64) / (format.samples_per_sec as f64);
 
             // ここでdynamic_mul_funcを使って掛け算を行う。
             // もし範囲を超える可能性もあるので、もう一度Clampをかける。
@@ -243,10 +283,8 @@ impl SoundFragment {
                 .map(|v| v.calculate_factor(relative_time, sound))
                 .product();
 
-            let input_sample = (sample * intensity_envelop).clamp(-1f64, 1f64);
-
-            let uniformed_sample = UniformedSample::from_f64(input_sample);
-            buffer.push(uniformed_sample);
+            let input_sample = (samples[unittime] * intensity_envelop).clamp(-1f64, 1f64);
+            buffer.push(UniformedSample::from_f64(input_sample));
         }
 
         // 値を返す。
@@ -264,17 +302,16 @@ pub struct WaveSound {
     pub sound_fragments: Vec<SoundFragment>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OscillatorVibrato {
-    pub initial_frequency: f64,
     pub period_scale_factor: f64,
     pub periodic_frequency: f64,
 }
 
 impl OscillatorVibrato {
-    pub fn compute_frequency(&self, sample_i: usize, samples_per_sec: usize) -> f64 {
+    pub fn compute_frequency(&self, initial_frequency: f64, sample_i: usize, samples_per_sec: usize) -> f64 {
         let time = (sample_i as f64) / (samples_per_sec as f64);
-        self.initial_frequency + (self.period_scale_factor * (PI2 * self.periodic_frequency * time).sin())
+        initial_frequency + (self.period_scale_factor * (PI2 * self.periodic_frequency * time).sin())
     }
 }
 
@@ -305,7 +342,6 @@ impl WaveSound {
         // 後で拡張できればいいだけ。
         //
         // `as_ref()`で参照だけを取っているので、中で渡す時にはCloneする。
-        let ref_vibrato = builder.oscillator_vibrator.as_ref();
         let sound_fragments = builder
             .sound_settings
             .iter()
@@ -361,7 +397,6 @@ impl WaveSound {
 pub struct WaveSoundBuilder {
     pub format: WaveFormatSetting,
     pub sound_settings: Vec<WaveSoundSetting>,
-    pub oscillator_vibrator: Option<OscillatorVibrato>,
 }
 
 impl WaveSoundBuilder {

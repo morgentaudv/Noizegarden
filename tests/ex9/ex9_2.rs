@@ -5,9 +5,9 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    psg::EPSGSignal,
-    setting::{EBitsPerSample, OscillatorVibrato, WaveFormatSetting, WaveSoundBuilder},
-    Second,
+    setting::{
+        EBitsPerSample, EFrequencyItem, OscillatorVibrato, WaveFormatSetting, WaveSoundBuilder, WaveSoundSettingBuilder,
+    },
 };
 
 use crate::ex9::C5_FLOAT;
@@ -17,27 +17,27 @@ fn test_ex9_2() {
     const WRITE_FILE_PATH: &'static str = "assets/ex9/ex9_2_vibrato.wav";
 
     let original_sound = {
+        let setting = WaveSoundSettingBuilder::default()
+            .length_sec(5.0)
+            .frequency(EFrequencyItem::Sawtooth {
+                frequency: C5_FLOAT as f64,
+            })
+            .oscillator_vibrato(Some(OscillatorVibrato {
+                period_scale_factor: 300.0,
+                periodic_frequency: 4.0,
+            }))
+            .intensity(0.25)
+            .build()
+            .unwrap();
+
         let fmt_setting = WaveFormatSetting {
             samples_per_sec: 44100,
             bits_per_sample: EBitsPerSample::Bits16,
         };
-        let sound_settings = EPSGSignal::Sawtooth {
-            length_time: Second(5.0),
-            frequency: C5_FLOAT as f64,
-            order: 100,
-            intensity: 0.1,
-        }
-        .apply()
-        .unwrap();
 
         WaveSoundBuilder {
             format: fmt_setting,
-            sound_settings,
-            oscillator_vibrator: Some(OscillatorVibrato {
-                initial_frequency: C5_FLOAT as f64,
-                period_scale_factor: 100.0,
-                periodic_frequency: 2.0,
-            }),
+            sound_settings: vec![setting],
         }
         .into_build()
     };

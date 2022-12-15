@@ -6,7 +6,6 @@ pub mod analyze;
 pub mod complex;
 pub mod container;
 pub mod filter;
-pub mod psg;
 pub mod sample;
 pub mod setting;
 pub mod time;
