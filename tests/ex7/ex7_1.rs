@@ -19,7 +19,7 @@ fn ex7_1() {
         WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
     };
     let new_container = EFilter::IIRLowPass {
-        edge_frequency: EEdgeFrequency::ChangeBySample(|sample_i, sample_count| {
+        edge_frequency: EEdgeFrequency::ChangeBySample(|sample_i, sample_count, _| {
             const BASE_EDGE_FREQUENCY: f64 = 10000.0;
             let sample_rate = (sample_i as f64) / (sample_count as f64);
 

@@ -15,7 +15,7 @@ pub struct FilterCommonSetting {
 #[derive(Debug, Clone)]
 pub enum EEdgeFrequency {
     Constant(f64),
-    ChangeBySample(fn(/* sample_i */ usize, /* samples_count */ usize) -> f64),
+    ChangeBySample(fn(/* sample_i */ usize, /* samples_count */ usize, /* samples_per_sec */ usize) -> f64),
 }
 
 /// フィルタリングの機能

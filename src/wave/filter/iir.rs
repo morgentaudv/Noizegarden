@@ -78,15 +78,16 @@ impl LowPassInternal {
         new_buffer.resize(read_buffer.len(), UniformedSample::default());
 
         let total_sample_count = new_buffer.len();
-        for i in 0..total_sample_count {
+        for sample_i in 0..total_sample_count {
             let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.edge_frequency {
-                let edge_frequency = compute_func(i, total_sample_count);
+                let edge_frequency =
+                    compute_func(sample_i, total_sample_count, common_setting.samples_per_second as usize);
                 Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
             } else {
                 constant_filter_asbs.clone().unwrap()
             };
 
-            compute_sample(i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
+            compute_sample(sample_i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
         }
 
         new_buffer
@@ -144,7 +145,7 @@ impl HighPassInternal {
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
             let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.edge_frequency {
-                let edge_frequency = compute_func(i, total_sample_count);
+                let edge_frequency = compute_func(i, total_sample_count, common_setting.samples_per_second as usize);
                 Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
             } else {
                 constant_filter_asbs.clone().unwrap()
@@ -209,7 +210,7 @@ impl BandPassInternal {
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
             let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.center_frequency {
-                let edge_frequency = compute_func(i, total_sample_count);
+                let edge_frequency = compute_func(i, total_sample_count, common_setting.samples_per_second as usize);
                 Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
             } else {
                 constant_filter_asbs.clone().unwrap()
@@ -274,7 +275,7 @@ impl BandEliminateInternal {
         let total_sample_count = new_buffer.len();
         for i in 0..total_sample_count {
             let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.center_frequency {
-                let edge_frequency = compute_func(i, total_sample_count);
+                let edge_frequency = compute_func(i, total_sample_count, common_setting.samples_per_second as usize);
                 Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
             } else {
                 constant_filter_asbs.clone().unwrap()
