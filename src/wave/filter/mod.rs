@@ -203,6 +203,15 @@ pub enum ESourceFilter {
         period_time_frequency: f64,
         source_samples_per_second: f64,
     },
+    /// Apply ADSR(Attack - Decay - Sustain - Release) to amplitude.
+    AmplitudeADSR {
+        attack_sample_len: usize,
+        decay_sample_len: usize,
+        sustain_intensity: f64,
+        release_sample_len: usize,
+        gate_sample_len: usize,
+        duration_sample_len: usize,
+    },
 }
 
 impl ESourceFilter {
@@ -226,6 +235,22 @@ impl ESourceFilter {
                 periodical_scale_factor: *periodical_scale_factor,
                 period_time_frequency: *period_time_frequency,
                 source_samples_per_second: *source_samples_per_second,
+            }
+            .apply(buffer),
+            ESourceFilter::AmplitudeADSR {
+                attack_sample_len,
+                decay_sample_len,
+                sustain_intensity,
+                release_sample_len,
+                gate_sample_len,
+                duration_sample_len,
+            } => other::AmplitudeADSRInternal {
+                attack_sample_len: *attack_sample_len,
+                decay_sample_len: *decay_sample_len,
+                sustain_intensity: *sustain_intensity,
+                release_sample_len: *release_sample_len,
+                gate_sample_len: *gate_sample_len,
+                duration_sample_len: *duration_sample_len,
             }
             .apply(buffer),
         }
