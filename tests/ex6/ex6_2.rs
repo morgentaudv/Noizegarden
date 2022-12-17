@@ -22,6 +22,7 @@ fn ex6_2() {
     let new_container = EFilter::IIRLowPass {
         edge_frequency: EEdgeFrequency::Constant(1000.0),
         quality_factor: 2f64.sqrt().recip(),
+        adsr: None,
     }
     .apply_to_wave_container(&wave_container);
 

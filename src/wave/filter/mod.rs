@@ -12,6 +12,52 @@ pub struct FilterCommonSetting {
     pub samples_per_second: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct FilterADSR {
+    pub attack_sample_len: usize,
+    pub decay_sample_len: usize,
+    pub sustain_intensity: f64,
+    pub release_sample_len: usize,
+    pub gate_sample_len: usize,
+    pub duration_sample_len: usize,
+    /// 元となる周波数とADSRの計算によるIntensityを処理して最終的に使う周波数を返す。
+    pub process_fn: fn(orig_freq: f64, adsr_intensity: f64) -> f64,
+}
+
+impl FilterADSR {
+    pub fn compute(&self, sample_i: usize) -> f64 {
+        assert!(self.gate_sample_len >= 1);
+        assert!(self.attack_sample_len + self.decay_sample_len <= self.gate_sample_len);
+        assert!(self.gate_sample_len <= self.duration_sample_len);
+
+        match sample_i {
+            x if (0..self.attack_sample_len).contains(&x) => match self.attack_sample_len {
+                0 => 1.0,
+                _ => 1.0 - (-5.0 * (sample_i as f64) / (self.attack_sample_len as f64)).exp(),
+            },
+            x if (self.attack_sample_len..self.gate_sample_len).contains(&x) => {
+                let s = self.sustain_intensity;
+                match self.decay_sample_len {
+                    0 => s,
+                    _ => {
+                        let off = sample_i - self.attack_sample_len;
+                        s + ((1.0 - s) * (-5.0 * (off as f64) / (self.decay_sample_len as f64)).exp())
+                    }
+                }
+            }
+            x if (self.gate_sample_len..self.duration_sample_len).contains(&x) => match self.release_sample_len {
+                0 => 0.0,
+                _ => {
+                    let e = self.compute(self.gate_sample_len - 1);
+                    let off = sample_i - self.gate_sample_len + 1;
+                    e * (-5.0 * (off as f64) / (self.release_sample_len as f64)).exp()
+                }
+            },
+            _ => 1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum EEdgeFrequency {
     Constant(f64),
@@ -34,6 +80,8 @@ pub enum EFilter {
         edge_frequency: EEdgeFrequency,
         /// クォリティファクタ
         quality_factor: f64,
+        /// 計算されたedge_frequencyにADSRの適用
+        adsr: Option<FilterADSR>,
     },
     /// IIR(Infinite Impulse Response)のHPF(High Pass Filter)
     IIRHighPass {
@@ -128,9 +176,11 @@ impl EFilter {
             EFilter::IIRLowPass {
                 edge_frequency,
                 quality_factor,
+                adsr,
             } => iir::LowPassInternal {
                 edge_frequency: edge_frequency.clone(),
                 quality_factor: *quality_factor,
+                adsr: *adsr,
             }
             .apply(common_setting, buffer),
             EFilter::IIRHighPass {

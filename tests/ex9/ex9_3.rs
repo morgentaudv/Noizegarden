@@ -52,6 +52,7 @@ fn test_ex9_3() {
             INITIAL_FREQUENCY + (SCALE * (PI * 2.0 * rel_time * FREQUENCY).sin())
         }),
         quality_factor: 5f64.sqrt().recip(),
+        adsr: None,
     }
     .apply_to_wave_container(&new_sound_container);
 

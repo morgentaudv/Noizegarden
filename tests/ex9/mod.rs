@@ -3,6 +3,7 @@ pub mod ex9_2;
 pub mod ex9_3;
 pub mod ex9_4_organ;
 pub mod ex9_5_violin;
+pub mod ex9_6_piano;
 
 const C4_FLOAT: f32 = 261.63;
 const D4_FLOAT: f32 = 293.66;

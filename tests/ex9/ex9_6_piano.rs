@@ -5,15 +5,15 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    filter::{EEdgeFrequency, EFilter, ESourceFilter, FilterCommonSetting},
+    filter::{self, EEdgeFrequency, EFilter, ESourceFilter, FilterCommonSetting},
     setting::{EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSoundBuilder, WaveSoundSettingBuilder},
 };
 
 use crate::ex9::C5_FLOAT;
 
 #[test]
-fn test_ex9_4_organ() {
-    const WRITE_FILE_PATH: &'static str = "assets/ex9/ex9_4_adsr_organ.wav";
+fn test_ex9_6_piano() {
+    const WRITE_FILE_PATH: &'static str = "assets/ex9/ex9_6_adsr_piano.wav";
 
     let vco_container = {
         let setting = WaveSoundSettingBuilder::default()
@@ -21,7 +21,7 @@ fn test_ex9_4_organ() {
             .frequency(EFrequencyItem::Sawtooth {
                 frequency: C5_FLOAT as f64,
             })
-            .intensity(0.225)
+            .intensity(0.15)
             .build()
             .unwrap();
 
@@ -39,10 +39,19 @@ fn test_ex9_4_organ() {
         WaveContainer::from_wavesound(&wave_sound).unwrap()
     };
 
+    let total_sample_len = vco_container.uniformed_sample_buffer().len();
     let vcf_buffer = EFilter::IIRLowPass {
-        edge_frequency: EEdgeFrequency::Constant(1500.0),
+        edge_frequency: EEdgeFrequency::Constant(500.0),
         quality_factor: 5.0,
-        adsr: None,
+        adsr: Some(filter::FilterADSR {
+            attack_sample_len: 0,
+            decay_sample_len: total_sample_len,
+            sustain_intensity: 0.0,
+            release_sample_len: 0,
+            gate_sample_len: total_sample_len,
+            duration_sample_len: total_sample_len,
+            process_fn: |orig_freq, adsr| orig_freq + (adsr * 500.0),
+        }),
     }
     .apply_to_buffer(
         &FilterCommonSetting {
@@ -54,11 +63,11 @@ fn test_ex9_4_organ() {
 
     let vca_buffer = ESourceFilter::AmplitudeADSR {
         attack_sample_len: 0,
-        decay_sample_len: 0,
-        sustain_intensity: 1.0,
+        decay_sample_len: total_sample_len,
+        sustain_intensity: 0.0,
         release_sample_len: 0,
-        gate_sample_len: vcf_buffer.len(),
-        duration_sample_len: vcf_buffer.len(),
+        gate_sample_len: total_sample_len,
+        duration_sample_len: total_sample_len,
     }
     .apply_to_buffer(&vcf_buffer);
 

@@ -42,6 +42,7 @@ fn test_ex9_5_violin() {
     let vcf_buffer = EFilter::IIRLowPass {
         edge_frequency: EEdgeFrequency::Constant(1500.0),
         quality_factor: 5.0,
+        adsr: None,
     }
     .apply_to_buffer(
         &FilterCommonSetting {

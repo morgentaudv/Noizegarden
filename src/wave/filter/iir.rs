@@ -2,7 +2,7 @@ use std::f64::consts::PI;
 
 use crate::wave::{sample::UniformedSample, PI2};
 
-use super::{EEdgeFrequency, FilterCommonSetting};
+use super::{EEdgeFrequency, FilterADSR, FilterCommonSetting};
 
 fn compute_sample(
     write_sample_i: usize,
@@ -37,6 +37,8 @@ pub(super) struct LowPassInternal {
     pub(super) edge_frequency: EEdgeFrequency,
     /// クォリティファクタ
     pub(super) quality_factor: f64,
+    /// 元となる周波数とADSRの計算によるIntensityを処理して最終的に使う周波数を返す。
+    pub(super) adsr: Option<FilterADSR>,
 }
 
 impl LowPassInternal {
@@ -54,6 +56,7 @@ impl LowPassInternal {
         ([1.0, a1, a2], [b1, b2, b3])
     }
 
+    /// フィルターを適用する。
     pub(super) fn apply(
         &self,
         common_setting: &FilterCommonSetting,
@@ -63,15 +66,6 @@ impl LowPassInternal {
         // デジタル周波数はアナログ周波数に変換して使う。
         let samples_per_sec = common_setting.samples_per_second as f64;
 
-        // もしEdgeFrequencyがサンプルによって動的に変わるのではなければ、LPFの伝達関数の各乗算器の係数を求める。
-        // まず共用の値を先に計算する。
-        let constant_filter_asbs = match self.edge_frequency {
-            EEdgeFrequency::Constant(freq) => {
-                Some(Self::compute_filter_asbs(freq, samples_per_sec, self.quality_factor))
-            }
-            EEdgeFrequency::ChangeBySample(_) => None,
-        };
-
         // 処理する。
         // -LPFではB側で遅延機が２個、A側で遅延にが２個。
         let mut new_buffer = vec![];
@@ -79,12 +73,23 @@ impl LowPassInternal {
 
         let total_sample_count = new_buffer.len();
         for sample_i in 0..total_sample_count {
-            let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.edge_frequency {
-                let edge_frequency =
-                    compute_func(sample_i, total_sample_count, common_setting.samples_per_second as usize);
-                Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
-            } else {
-                constant_filter_asbs.clone().unwrap()
+            // IIRの演算のための係数を計算する。
+            // もしADSRがついてあれば、ADSRを反映して計算する。
+            let (filter_as, filter_bs) = {
+                let mut freq = match self.edge_frequency {
+                    EEdgeFrequency::Constant(freq) => freq,
+                    EEdgeFrequency::ChangeBySample(compute_fn) => {
+                        compute_fn(sample_i, total_sample_count, common_setting.samples_per_second as usize)
+                    }
+                };
+
+                // ADSRがあれば、使う。
+                if let Some(adsr) = self.adsr.as_ref() {
+                    let intensity = adsr.compute(sample_i);
+                    freq = (adsr.process_fn)(freq, intensity);
+                }
+
+                Self::compute_filter_asbs(freq, samples_per_sec, self.quality_factor)
             };
 
             compute_sample(sample_i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);

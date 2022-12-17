@@ -26,6 +26,7 @@ fn ex7_1() {
             BASE_EDGE_FREQUENCY * (-5.0 * sample_rate).exp()
         }),
         quality_factor: 2f64.sqrt().recip(),
+        adsr: None,
     }
     .apply_to_wave_container(&wave_container);
 
