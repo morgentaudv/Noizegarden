@@ -1,8 +1,7 @@
 use derive_builder::Builder;
 use itertools::Itertools;
-use std::f64::consts::PI;
 
-use super::{sample::UniformedSample, PI2};
+use super::{filter::FilterADSR, sample::UniformedSample, PI2};
 
 /// 各サンプルの量子化レベルを表す。
 ///
@@ -125,11 +124,44 @@ pub enum EFrequencyItem {
     Constant { frequency: f64 },
     Chirp { start_frequency: f64, end_frequency: f64 },
     Sawtooth { frequency: f64 },
+    Triangle { frequency: f64 },
 }
 
 impl Default for EFrequencyItem {
     fn default() -> Self {
         Self::Constant { frequency: 0.0 }
+    }
+}
+
+///
+#[derive(Debug, Clone, Copy)]
+pub struct WaveSoundADSR {
+    pub attack_len_second: f64,
+    pub decay_len_second: f64,
+    pub sustain_intensity: f64,
+    pub release_len_second: f64,
+    pub gate_len_second: f64,
+    pub duration_len_second: f64,
+    /// 元となる周波数とADSRの計算によるIntensityを処理して最終的に使う周波数を返す。
+    pub process_fn: fn(orig_freq: f64, adsr_intensity: f64) -> f64,
+}
+
+impl WaveSoundADSR {
+    fn get_samples_len(len_second: f64, samples_per_second: usize) -> usize {
+        (len_second * (samples_per_second as f64)).floor() as usize
+    }
+
+    pub fn compute(&self, sample_i: usize, samples_per_second: usize) -> f64 {
+        FilterADSR {
+            attack_sample_len: Self::get_samples_len(self.attack_len_second, samples_per_second),
+            decay_sample_len: Self::get_samples_len(self.decay_len_second, samples_per_second),
+            sustain_intensity: self.sustain_intensity,
+            release_sample_len: Self::get_samples_len(self.release_len_second, samples_per_second),
+            gate_sample_len: Self::get_samples_len(self.gate_len_second, samples_per_second),
+            duration_sample_len: Self::get_samples_len(self.duration_len_second, samples_per_second),
+            process_fn: self.process_fn,
+        }
+        .compute(sample_i)
     }
 }
 
@@ -142,6 +174,7 @@ pub struct WaveSoundSetting {
     pub length_sec: f32,
     pub intensity: f64,
     pub oscillator_vibrato: Option<OscillatorVibrato>,
+    pub adsr: Option<WaveSoundADSR>,
     pub intensity_control_items: Vec<EIntensityControlItem>,
 }
 
@@ -254,11 +287,66 @@ impl SoundFragment {
                         None => {
                             for unittime in 0..samples_count.length {
                                 // 振幅と周波数のエンベロープのため相対時間を計算
-                                let relative_time = (unittime as f64) / (format.samples_per_sec as f64);
-
-                                let orig_intensity = 1.0 - (2.0 * (relative_time * frequency).fract());
+                                let rel_time = (unittime as f64) / (format.samples_per_sec as f64);
+                                let orig_intensity = 1.0 - (2.0 * (rel_time * frequency).fract());
                                 let sample = sound.intensity * orig_intensity;
 
+                                assert!(sample >= -1.0 && sample <= 1.0);
+                                samples.push(sample);
+                            }
+                        }
+                    }
+                }
+                EFrequencyItem::Triangle { frequency } => {
+                    let samples_per_sec = format.samples_per_sec as usize;
+                    let compute_intensity = |time_i: usize, samples_per_sec: usize, frequency: f64| {
+                        // 振幅と周波数のエンベロープのため相対時間を計算
+                        let rel_time = (time_i as f64) / (samples_per_sec as f64);
+                        let orig_time = rel_time * frequency;
+
+                        let coeff = orig_time.fract();
+                        if coeff < 0.5 {
+                            // [0, 0.5)の範囲
+                            (-1.0 + (4.0 * coeff), orig_time)
+                        } else {
+                            // [0.5, 1)の範囲
+                            (3.0 - (4.0 * coeff), orig_time)
+                        }
+                    };
+
+                    match sound.oscillator_vibrato.as_ref() {
+                        Some(vibrato) => {
+                            let mut unittime = 0usize;
+                            while unittime < samples_count.length {
+                                let frequency = vibrato.compute_frequency(*frequency, unittime, samples_per_sec);
+                                let frequency = match sound.adsr.as_ref() {
+                                    Some(adsr) => (adsr.process_fn)(frequency, adsr.compute(unittime, samples_per_sec)),
+                                    None => frequency,
+                                };
+
+                                for local_i in 0usize.. {
+                                    let (orig_intensity, orig_time) =
+                                        compute_intensity(local_i, samples_per_sec, frequency);
+                                    samples.push(sound.intensity * orig_intensity);
+
+                                    unittime += 1;
+                                    if orig_time >= 1.0 {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        None => {
+                            for unittime in 0..samples_count.length {
+                                let frequency = match sound.adsr.as_ref() {
+                                    Some(adsr) => {
+                                        (adsr.process_fn)(*frequency, adsr.compute(unittime, samples_per_sec))
+                                    }
+                                    None => *frequency,
+                                };
+
+                                let (orig_intensity, _) = compute_intensity(unittime, samples_per_sec, frequency);
+                                let sample = sound.intensity * orig_intensity;
                                 assert!(sample >= -1.0 && sample <= 1.0);
                                 samples.push(sample);
                             }
