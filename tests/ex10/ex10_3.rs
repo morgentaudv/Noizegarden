@@ -21,6 +21,8 @@ fn test_ex10_3_fm() {
                 carrier_freq: 500.0,
                 modulator_amp: 1.0,
                 freq_ratio: 3.5,
+                carrier_amp_adsr: None,
+                modulator_amp_adsr: None,
             })
             .intensity(0.5)
             .build()

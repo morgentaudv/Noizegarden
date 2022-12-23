@@ -5,12 +5,14 @@ use std::{
 
 use soundprog::wave::{
     container::WaveContainer,
-    setting::{EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSoundBuilder, WaveSoundSettingBuilder},
+    setting::{
+        EBitsPerSample, EFrequencyItem, WaveFormatSetting, WaveSoundADSR, WaveSoundBuilder, WaveSoundSettingBuilder,
+    },
 };
 
 #[test]
-fn test_ex10_1_fm() {
-    const WRITE_FILE_PATH: &'static str = "assets/ex10/ex10_1_fm.wav";
+fn test_ex10_4_fm_tubularbell() {
+    const WRITE_FILE_PATH: &'static str = "assets/ex10/ex10_4_fm_tubularbell.wav";
 
     let container = {
         let length: f64 = 2.0;
@@ -20,9 +22,25 @@ fn test_ex10_1_fm() {
                 carrier_amp: 1.0,
                 carrier_freq: 500.0,
                 modulator_amp: 1.0,
-                freq_ratio: 1.0,
-                carrier_amp_adsr: None,
-                modulator_amp_adsr: None,
+                freq_ratio: 3.5,
+                carrier_amp_adsr: Some(WaveSoundADSR {
+                    attack_len_second: 0.0,
+                    decay_len_second: length,
+                    sustain_intensity: 0.0,
+                    release_len_second: 0.0,
+                    gate_len_second: length,
+                    duration_len_second: length,
+                    process_fn: |orig, intensity| orig * intensity,
+                }),
+                modulator_amp_adsr: Some(WaveSoundADSR {
+                    attack_len_second: 0.0,
+                    decay_len_second: length * 0.5,
+                    sustain_intensity: 0.0,
+                    release_len_second: length * 0.5,
+                    gate_len_second: length,
+                    duration_len_second: length,
+                    process_fn: |orig, intensity| orig * intensity,
+                }),
             })
             .intensity(0.5)
             .build()

@@ -139,6 +139,8 @@ pub enum EFrequencyItem {
         carrier_freq: f64,
         modulator_amp: f64,
         freq_ratio: f64,
+        carrier_amp_adsr: Option<WaveSoundADSR>,
+        modulator_amp_adsr: Option<WaveSoundADSR>,
     },
 }
 
@@ -158,7 +160,7 @@ pub struct WaveSoundADSR {
     pub gate_len_second: f64,
     pub duration_len_second: f64,
     /// 元となる周波数とADSRの計算によるIntensityを処理して最終的に使う周波数を返す。
-    pub process_fn: fn(orig_freq: f64, adsr_intensity: f64) -> f64,
+    pub process_fn: fn(orig: f64, adsr_intensity: f64) -> f64,
 }
 
 impl WaveSoundADSR {
@@ -373,14 +375,29 @@ impl SoundFragment {
                     carrier_freq,
                     modulator_amp,
                     freq_ratio,
+                    carrier_amp_adsr,
+                    modulator_amp_adsr,
                 } => {
-                    let ca = *carrier_amp;
                     let cf = *carrier_freq;
-                    let ma = *modulator_amp;
                     let mf = cf * freq_ratio;
                     let samples_per_sec = format.samples_per_sec as f64;
 
-                    for unittime in 0..samples_count.length {
+                    for unittime in 0..(samples_count.length as usize) {
+                        // Calculate `carrier amp`.
+                        let ca = if let Some(adsr) = carrier_amp_adsr.as_ref() {
+                            let intensity = adsr.compute(unittime, format.samples_per_sec as usize);
+                            (adsr.process_fn)(*carrier_amp, intensity)
+                        } else {
+                            *carrier_amp
+                        };
+
+                        let ma = if let Some(adsr) = modulator_amp_adsr.as_ref() {
+                            let intensity = adsr.compute(unittime, format.samples_per_sec as usize);
+                            (adsr.process_fn)(*modulator_amp, intensity)
+                        } else {
+                            *modulator_amp
+                        };
+
                         // 振幅と周波数のエンベロープのため相対時間を計算
                         let unittime = unittime as f64;
                         let orig_intensity = ca
