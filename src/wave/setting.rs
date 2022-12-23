@@ -121,10 +121,25 @@ impl EIntensityControlItem {
 
 #[derive(Debug, Clone, Copy)]
 pub enum EFrequencyItem {
-    Constant { frequency: f64 },
-    Chirp { start_frequency: f64, end_frequency: f64 },
-    Sawtooth { frequency: f64 },
-    Triangle { frequency: f64 },
+    Constant {
+        frequency: f64,
+    },
+    Chirp {
+        start_frequency: f64,
+        end_frequency: f64,
+    },
+    Sawtooth {
+        frequency: f64,
+    },
+    Triangle {
+        frequency: f64,
+    },
+    FreqModulation {
+        carrier_amp: f64,
+        carrier_freq: f64,
+        modulator_amp: f64,
+        freq_ratio: f64,
+    },
 }
 
 impl Default for EFrequencyItem {
@@ -351,6 +366,31 @@ impl SoundFragment {
                                 samples.push(sample);
                             }
                         }
+                    }
+                }
+                EFrequencyItem::FreqModulation {
+                    carrier_amp,
+                    carrier_freq,
+                    modulator_amp,
+                    freq_ratio,
+                } => {
+                    let ca = *carrier_amp;
+                    let cf = *carrier_freq;
+                    let ma = *modulator_amp;
+                    let mf = cf * freq_ratio;
+                    let samples_per_sec = format.samples_per_sec as f64;
+
+                    for unittime in 0..samples_count.length {
+                        // 振幅と周波数のエンベロープのため相対時間を計算
+                        let unittime = unittime as f64;
+                        let orig_intensity = ca
+                            * ((PI2 * cf * unittime / samples_per_sec)
+                                + (ma * (PI2 * mf * unittime / samples_per_sec).sin()))
+                            .sin();
+
+                        let sample = sound.intensity * orig_intensity;
+                        assert!(sample >= -1.0 && sample <= 1.0);
+                        samples.push(sample);
                     }
                 }
             }
