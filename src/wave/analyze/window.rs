@@ -1,9 +1,10 @@
 use crate::wave::PI2;
 
 /// 窓関数（Windowing Function）の種類の値を持つ。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EWindowFunction {
     /// WindowFunctionを使わない。
+    #[default]
     None,
     /// ハン窓関数を適用する。
     Hann,
