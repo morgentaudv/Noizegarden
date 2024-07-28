@@ -5,6 +5,49 @@ use crate::wave::{complex::Complex, container::WaveContainer, sample::UniformedS
 
 use super::{sine_freq::SineFrequency, window::EWindowFunction, EAnalyzeMethod};
 
+/// AnalyzerV2。
+#[derive(Default, Debug, Clone, Copy, PartialEq, Builder)]
+#[builder(default)]
+pub struct FrequencyAnalyzerV2 {
+    /// 波形の分析モード。DFTまたはFFTか。
+    pub analyze_method: EAnalyzeMethod,
+    /// 分析する周波数のスタート。
+    /// 必ず0か正の数であるべき。
+    pub frequency_start: f64,
+    /// 分析する周波数の範囲、帯域幅。
+    /// 必ず0より大きい数値を入れるべき。
+    pub frequency_width: f64,
+    /// 分析する周波数帯域幅を分割する数。分析周波数ビンの数。
+    /// 必ず1以上いれるべき。
+    /// もしFFTなら、2のべき乗であって`WaveContainerSetting`の`samples_count`と一致すべき。
+    pub frequency_bin_count: u32,
+    /// 窓関数の指定。
+    pub window_function: EWindowFunction,
+}
+
+/// 波形コンテナ関連の設定を記載。
+pub struct WaveContainerSetting<'a> {
+    pub container: &'a WaveContainer,
+    pub start_sample_index: usize,
+    pub samples_count: usize,
+}
+
+impl FrequencyAnalyzerV2 {
+    pub fn analyze_container<'a>(&'a self, _container: &'a WaveContainerSetting) -> Option<Vec<SineFrequency>> {
+        None
+    }
+}
+
+// ----------------------------------------------------------------------------
+//
+// DEPRECATED DEPRECATED DEPRECATED DEPRECATED DEPRECATED
+// DEPRECATED DEPRECATED DEPRECATED DEPRECATED DEPRECATED
+// DEPRECATED DEPRECATED DEPRECATED DEPRECATED DEPRECATED
+// DEPRECATED DEPRECATED DEPRECATED DEPRECATED DEPRECATED
+// DEPRECATED DEPRECATED DEPRECATED DEPRECATED DEPRECATED
+//
+// ----------------------------------------------------------------------------
+
 ///
 #[derive(Debug, Default, Clone, Copy, Builder)]
 #[builder(default)]
