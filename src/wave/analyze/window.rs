@@ -3,6 +3,8 @@ use crate::wave::PI2;
 /// 窓関数（Windowing Function）の種類の値を持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EWindowFunction {
+    /// WindowFunctionを使わない。
+    None,
     /// ハン窓関数を適用する。
     Hann,
 }
@@ -21,6 +23,7 @@ impl EWindowFunction {
                 // 中央が一番高く、両端が0に収束する。
                 (1f64 - (PI2 * t).cos()) * 0.5f64
             }
+            EWindowFunction::None => 1.0,
         }
     }
 }
