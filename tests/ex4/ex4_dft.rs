@@ -6,6 +6,7 @@ use std::{
 use soundprog::wave::analyze::{
     analyzer::{FrequencyAnalyzer, FrequencyAnalyzerV2, WaveContainerSetting},
     method::EAnalyzeMethod,
+    transformer::EExportSampleCountMode,
 };
 use soundprog::wave::analyze::{transformer::FrequencyTransformer, window::EWindowFunction};
 use soundprog::wave::{
@@ -25,19 +26,20 @@ fn test_dft() {
 
         WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
     };
+    let samples_count = wave_container.uniformed_sample_buffer().len();
     let frequencies = {
         let analyzer = FrequencyAnalyzerV2 {
             analyze_method: EAnalyzeMethod::DFT,
             frequency_start: 0.0,
             frequency_width: 44100.0,
-            frequency_bin_count: 2048,
+            frequency_bin_count: 16384,
             window_function: EWindowFunction::None,
         };
 
         let setting = WaveContainerSetting {
             container: &wave_container,
             start_sample_index: 0,
-            samples_count: wave_container.uniformed_sample_buffer().len(),
+            samples_count,
         };
         analyzer.analyze_container(&setting).unwrap()
     };
@@ -45,6 +47,7 @@ fn test_dft() {
     // IDFTで音がちゃんと合成できるかを確認する。
     let uniformed_samples = FrequencyTransformer {
         transform_method: ETransformMethod::IDFT,
+        sample_count_mode: EExportSampleCountMode::Fixed(samples_count),
     }
     .transform_frequencies(&frequencies)
     .unwrap();
