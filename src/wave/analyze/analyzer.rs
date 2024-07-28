@@ -16,10 +16,12 @@ pub struct FrequencyAnalyzerV2 {
     pub frequency_start: f64,
     /// 分析する周波数の範囲、帯域幅。
     /// 必ず0より大きい数値を入れるべき。
+    /// ただし分析からの結果の周波数幅はこの値より半分になる。（対称となる右半分は捨てる）
     pub frequency_width: f64,
     /// 分析する周波数帯域幅を分割する数。分析周波数ビンの数。
     /// 必ず1以上いれるべき。
     /// もしFFTなら、2のべき乗であって`WaveContainerSetting`の`samples_count`と一致すべき。
+    /// ただし分析からの結果で得られる周波数の数はこの値より半分になる。（対称となる右半分は捨てる）
     pub frequency_bin_count: u32,
     /// 窓関数の指定。
     pub window_function: EWindowFunction,
@@ -33,8 +35,81 @@ pub struct WaveContainerSetting<'a> {
 }
 
 impl FrequencyAnalyzerV2 {
-    pub fn analyze_container<'a>(&'a self, _container: &'a WaveContainerSetting) -> Option<Vec<SineFrequency>> {
-        None
+    pub fn analyze_container<'a>(&'a self, setting: &'a WaveContainerSetting) -> Option<Vec<SineFrequency>> {
+        debug_assert!(self.frequency_start >= 0.0);
+        debug_assert!(self.frequency_width > 0.0);
+        debug_assert!(self.frequency_bin_count >= 1);
+        debug_assert!(setting.samples_count > 0);
+
+        // まず入れられた情報から範囲に収められそうなのかを確認する。
+        // sound_lengthはhalf-opened rangeなのかclosedなのかがいかがわしい模様。
+        {
+            let container = setting.container;
+            assert!(container.channel() == 1);
+        }
+
+        match self.analyze_method {
+            EAnalyzeMethod::DFT => Some(self.analyze_dft(&setting)),
+            EAnalyzeMethod::FFT => {
+                assert_eq!(self.frequency_bin_count as usize, setting.samples_count);
+                assert!(self.frequency_bin_count.is_power_of_two());
+
+                todo!("Not Implemented")
+            }
+        }
+    }
+
+    pub fn get_proceeding_frequency(&self) -> f64 {
+        debug_assert!(self.frequency_width > 0.0);
+        debug_assert!(self.frequency_bin_count >= 1);
+        (self.frequency_width - self.frequency_start) / (self.frequency_bin_count as f64)
+    }
+
+    /// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
+    /// 周波数特性を計算して返す。
+    fn analyze_dft<'a>(&'a self, setting: &'a WaveContainerSetting) -> Vec<SineFrequency> {
+        let proceed_frequency = self.get_proceeding_frequency();
+        let mut results = vec![];
+        let mut cursor_frequency = self.frequency_start;
+        let sample_buffer = setting.container.uniformed_sample_buffer();
+
+        // ナイキスト周波数の半分まで取る。
+        // またこのアルゴリズムではsamples_countとbin_countが一致すればO(N^2)。
+        let valid_sample_counts = self.frequency_bin_count >> 1;
+        for _ in 0..valid_sample_counts {
+            let mut frequency_response = Complex::<f64>::default();
+
+            for local_i in 0..setting.samples_count {
+                // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
+                // coeff_input = exp(-2pifn / N)
+                let time_factor = (local_i as f64) / (setting.samples_count as f64);
+                let coeff_input = PI2 * cursor_frequency * time_factor;
+                let coefficient = Complex::<f64>::from_exp(coeff_input * -1.0);
+
+                let adjusted_amplitude = {
+                    let sample_i = local_i + setting.start_sample_index;
+                    let amplitude = sample_buffer[sample_i].to_f64();
+                    // 第１引数で1が入る理由は、はtime_factorはいつも[0, 1]だから。
+                    let window_factor = self.get_window_fn_factor(1.0, time_factor);
+                    amplitude * window_factor
+                };
+
+                frequency_response += adjusted_amplitude * coefficient;
+            }
+
+            // PhaseやAmplitudeの計算は中でやってくれる。
+            results.push(SineFrequency::from_complex_f64(cursor_frequency, frequency_response));
+
+            // 周波数カーソルを進める。
+            cursor_frequency += proceed_frequency;
+        }
+
+        results
+    }
+
+    ///
+    fn get_window_fn_factor(&self, length: f64, time: f64) -> f64 {
+        self.window_function.get_factor(length, time)
     }
 }
 
