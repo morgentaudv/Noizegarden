@@ -1,42 +1,17 @@
 use derive_builder::Builder;
 use itertools::Itertools;
+use method::EAnalyzeMethod;
+use sine_freq::SineFrequency;
+use window::EWindowFunction;
 
 use super::complex::Complex;
 use super::container::WaveContainer;
 use super::sample::UniformedSample;
 use super::PI2;
 
-/// 窓関数（Windowing Function）の種類の値を持つ。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EWindowFunction {
-    /// ハン窓関数を適用する。
-    Hann,
-}
-
-impl EWindowFunction {
-    /// 掛け算数値を計算する。もし範囲外なら、0だけを返す。
-    pub fn get_factor(&self, length: f64, time: f64) -> f64 {
-        // もし範囲外なら0を返す。
-        if time < 0.0 || time > length {
-            return 0f64;
-        }
-
-        let t = (time / length).clamp(0.0, 1.0);
-        match self {
-            EWindowFunction::Hann => {
-                // 中央が一番高く、両端が0に収束する。
-                (1f64 - (PI2 * t).cos()) * 0.5f64
-            }
-        }
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EAnalyzeMethod {
-    #[default]
-    DFT,
-    FFT,
-}
+pub mod method;
+pub mod sine_freq;
+pub mod window;
 
 ///
 #[derive(Debug, Default, Clone, Copy, Builder)]
@@ -44,6 +19,7 @@ pub enum EAnalyzeMethod {
 pub struct FrequencyAnalyzer {
     pub start_sample_index: usize,
     pub frequency_start: f64,
+    pub sample_rate: u32,
     pub samples_count: usize,
     pub window_function: Option<EWindowFunction>,
     pub analyze_method: EAnalyzeMethod,
@@ -122,13 +98,19 @@ impl FrequencyAnalyzer {
 /// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
 /// 周波数特性を計算して返す。
 fn analyze_as_dft(analyzer: &FrequencyAnalyzer, sample_buffer: &[UniformedSample]) -> Vec<SineFrequency> {
-    let frequency_end = analyzer.frequency_start + (analyzer.samples_count as f64);
-    let freq_precision = 1.0;
+    assert!(analyzer.samples_count > 0);
+
+    let freq_precision = match analyzer.sample_rate {
+        0 => 1.0,
+        _ => (analyzer.sample_rate as f64) / (analyzer.samples_count as f64),
+    };
 
     let mut results = vec![];
     let mut cursor_frequency = analyzer.frequency_start;
+    let valid_sample_counts = analyzer.samples_count >> 1;
 
-    while cursor_frequency < frequency_end {
+    // ナイキスト周波数の半分まで取る。
+    for _ in 0..valid_sample_counts {
         let mut frequency_response = Complex::<f64>::default();
 
         for local_i in 0..analyzer.samples_count {
@@ -395,44 +377,4 @@ fn transform_as_ifft(frequencies: &[SineFrequency]) -> Vec<UniformedSample> {
         .into_iter()
         .map(|signal| UniformedSample::from_f64(signal.real))
         .collect_vec()
-}
-
-/// サイン波形の周波数の特性を表す。
-#[derive(Default, Debug, Clone, Copy)]
-pub struct SineFrequency {
-    pub frequency: f64,
-    pub amplitude: f64,
-    pub phase: f64,
-}
-
-impl SineFrequency {
-    pub fn from(frequency: f64, (freq_real, freq_imag): (f32, f32)) -> Self {
-        Self {
-            frequency,
-            amplitude: (freq_real.powi(2) + freq_imag.powi(2)).sqrt() as f64,
-            phase: (freq_imag / freq_real).atan() as f64,
-        }
-    }
-
-    pub fn from_complex_f32(frequency: f32, complex: Complex<f32>) -> Self {
-        Self {
-            frequency: frequency as f64,
-            amplitude: complex.absolute() as f64,
-            phase: complex.phase() as f64,
-        }
-    }
-
-    pub fn from_complex_f64(frequency: f64, complex: Complex<f64>) -> Self {
-        Self {
-            frequency,
-            amplitude: complex.absolute(),
-            phase: complex.phase(),
-        }
-    }
-
-    pub fn to_complex_f64(&self) -> Complex<f64> {
-        let real = self.phase.cos() * self.amplitude;
-        let imag = self.phase.sin() * self.amplitude;
-        Complex::<f64> { real, imag }
-    }
 }

@@ -1,7 +1,9 @@
 use itertools::Itertools;
 
 use crate::wave::{
-    analyze::{EAnalyzeMethod, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer, SineFrequency},
+    analyze::{
+        method::EAnalyzeMethod, sine_freq::SineFrequency, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer,
+    },
     filter::{compute_fir_lpf_filters_count, compute_fir_lpf_response},
     sample::UniformedSample,
 };
@@ -49,6 +51,7 @@ impl DFTLowPassInternal {
             samples_count: self.max_input_samples_count,
             window_function: None,
             analyze_method: EAnalyzeMethod::FFT,
+            ..Default::default()
         };
         let filter_analyzer = FrequencyAnalyzer {
             start_sample_index: 0,
@@ -56,6 +59,7 @@ impl DFTLowPassInternal {
             samples_count: self.max_input_samples_count,
             window_function: None,
             analyze_method: EAnalyzeMethod::FFT,
+            ..Default::default()
         };
         let common_transformer = FrequencyTransformer {
             transform_method: ETransformMethod::IFFT,
