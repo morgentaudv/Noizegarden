@@ -1,14 +1,27 @@
 use derive_builder::Builder;
 use itertools::Itertools;
 
-use crate::wave::{complex::Complex, sample::UniformedSample, PI2};
+use crate::wave::{
+    complex::Complex,
+    sample::{self, UniformedSample},
+    PI2,
+};
 
 use super::{sine_freq::SineFrequency, ETransformMethod};
+
+/// Transformerのサンプル出力数の設定モード
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EExportSampleCountMode {
+    #[default]
+    Automatic,
+    Fixed(usize),
+}
 
 #[derive(Debug, Default, Clone, Copy, Builder)]
 #[builder(default)]
 pub struct FrequencyTransformer {
     pub transform_method: ETransformMethod,
+    pub sample_count_mode: EExportSampleCountMode,
 }
 
 impl FrequencyTransformer {
@@ -20,44 +33,53 @@ impl FrequencyTransformer {
         }
 
         match self.transform_method {
-            ETransformMethod::IDFT => Some(transform_as_idft(frequencies)),
+            ETransformMethod::IDFT => Some(self.transform_as_idft(frequencies)),
             ETransformMethod::IFFT => Some(transform_as_ifft(frequencies)),
         }
     }
-}
 
-/// Inverse Discrete Fourier Transformを使って波形のサンプルリストに変換する。
-fn transform_as_idft(frequencies: &[SineFrequency]) -> Vec<UniformedSample> {
-    // まず0からtime_lengthまでのサンプルだけを収集する。
-    // time_lengthの間のサンプル数を全部求めて
-    //
-    // ただ、DFTでの時間計算が [0, 1]範囲となっていたので、IDFTも同じくする？
-    // とりあえずf64のサンプルに変換する。
-    let samples_count = frequencies.len();
+    /// Inverse Discrete Fourier Transformを使って波形のサンプルリストに変換する。
+    fn transform_as_idft(&self, frequencies: &[SineFrequency]) -> Vec<UniformedSample> {
+        // まず0からtime_lengthまでのサンプルだけを収集する。
+        // time_lengthの間のサンプル数を全部求めて
+        //
+        // ただ、DFTでの時間計算が [0, 1]範囲となっていたので、IDFTも同じくする？
+        // とりあえずf64のサンプルに変換する。
+        let samples_count = match self.sample_count_mode {
+            EExportSampleCountMode::Automatic => frequencies.len(),
+            EExportSampleCountMode::Fixed(v) => v,
+        };
+        if samples_count <= 0 {
+            return vec![];
+        }
 
-    let mut raw_samples = vec![];
-    for time_i in 0..samples_count {
-        let time_factor = (time_i as f64) / (samples_count as f64);
+        // 戻すこともO(N^2)
+        let mut raw_samples = vec![];
+        for time_i in 0..samples_count {
+            let time_factor = (time_i as f64) / (samples_count as f64);
 
-        // すべてのfrequency特性にイテレーションする。
-        // a(k) * cos(2pik * time + phase)
-        let summed: f64 = frequencies
-            .iter()
-            .map(|frequency| frequency.amplitude * ((PI2 * frequency.frequency * time_factor) + frequency.phase).cos())
-            .sum();
+            // すべてのfrequency特性にイテレーションする。
+            // a(k) * cos(2pik * time + phase)
+            let summed: f64 = frequencies
+                .iter()
+                .map(|frequency| {
+                    frequency.amplitude * ((PI2 * frequency.frequency * time_factor) + frequency.phase).cos()
+                })
+                .sum();
 
-        // 1 / N (sigma)
-        //let raw_sample = summed / analyzer.time_length;
-        let raw_sample = summed / (samples_count as f64);
-        raw_samples.push(raw_sample);
+            // 1 / N (sigma)
+            //let raw_sample = summed / analyzer.time_length;
+            let raw_sample = summed / (samples_count as f64);
+            raw_samples.push(raw_sample);
+        }
+
+        //for raw_samples in &raw_samples { println!("{:?}", raw_samples); }
+
+        raw_samples
+            .into_iter()
+            .map(|raw_sample| UniformedSample::from_f64(raw_sample))
+            .collect_vec()
     }
-
-    //for raw_samples in &raw_samples { println!("{:?}", raw_samples); }
-
-    raw_samples
-        .into_iter()
-        .map(|raw_sample| UniformedSample::from_f64(raw_sample))
-        .collect_vec()
 }
 
 /// Inverse Fast Fourier Transformを使って波形のサンプルリストに変換する。

@@ -62,6 +62,7 @@ impl DFTLowPassInternal {
         };
         let common_transformer = FrequencyTransformer {
             transform_method: ETransformMethod::IFFT,
+            ..Default::default()
         };
 
         // filter_responsesを用いて折りたたみを行う。
