@@ -1,9 +1,8 @@
 use itertools::Itertools;
 
+use crate::wave::analyze::transformer::FrequencyTransformer;
 use crate::wave::{
-    analyze::{
-        method::EAnalyzeMethod, sine_freq::SineFrequency, ETransformMethod, FrequencyAnalyzer, FrequencyTransformer,
-    },
+    analyze::{analyzer::FrequencyAnalyzer, method::*, sine_freq::SineFrequency},
     filter::{compute_fir_lpf_filters_count, compute_fir_lpf_response},
     sample::UniformedSample,
 };

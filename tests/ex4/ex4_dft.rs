@@ -3,8 +3,10 @@ use std::{
     io::{self, Write},
 };
 
+use soundprog::wave::analyze::analyzer::FrequencyAnalyzer;
+use soundprog::wave::analyze::transformer::FrequencyTransformer;
 use soundprog::wave::{
-    analyze::{ETransformMethod, FrequencyAnalyzer, FrequencyTransformer},
+    analyze::method::ETransformMethod,
     container::{WaveBuilder, WaveContainer},
 };
 
