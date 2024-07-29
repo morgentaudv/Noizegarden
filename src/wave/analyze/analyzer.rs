@@ -1,5 +1,6 @@
 use derive_builder::Builder;
 use itertools::Itertools;
+use rand::seq::index::sample;
 
 use crate::wave::{complex::Complex, container::WaveContainer, sample::UniformedSample, PI2};
 
@@ -53,8 +54,7 @@ impl FrequencyAnalyzerV2 {
             EAnalyzeMethod::FFT => {
                 assert_eq!(self.frequency_bin_count as usize, setting.samples_count);
                 assert!(self.frequency_bin_count.is_power_of_two());
-
-                todo!("Not Implemented")
+                Some(self.analayze_fft(&setting))
             }
         }
     }
@@ -63,6 +63,11 @@ impl FrequencyAnalyzerV2 {
         debug_assert!(self.frequency_width > 0.0);
         debug_assert!(self.frequency_bin_count >= 1);
         (self.frequency_width - self.frequency_start) / (self.frequency_bin_count as f64)
+    }
+
+    /// 窓関数の結果値を返す。
+    pub fn get_window_fn_factor(&self, length: f64, time: f64) -> f64 {
+        self.window_function.get_factor(length, time)
     }
 
     /// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
@@ -107,9 +112,102 @@ impl FrequencyAnalyzerV2 {
         results
     }
 
-    ///
-    fn get_window_fn_factor(&self, length: f64, time: f64) -> f64 {
-        self.window_function.get_factor(length, time)
+    /// [`Fast Fourier Transform`](https://en.wikipedia.org/wiki/Fast_Fourier_transform)（高速フーリエ変換）を行って
+    /// 周波数特性を計算して返す。
+    fn analayze_fft<'a>(&'a self, setting: &'a WaveContainerSetting) -> Vec<SineFrequency> {
+        debug_assert!(setting.samples_count == self.frequency_bin_count as usize);
+
+        // まず最後に求められる各Frequencyの情報をちゃんとした位置に入れるためのIndexルックアップテーブルを作る。
+        // たとえば、index_count = 8のときに1番目のFrequency情報は4番目に入れるべきなど…
+        let samples_count = setting.samples_count;
+        let lookup_table = {
+            // ビットリバーステクニックを使ってテーブルを作成。
+            let mut results = vec![0];
+            let mut addition_count = samples_count >> 1;
+            while addition_count > 0 {
+                results.append(&mut results.iter().map(|v| v + addition_count).collect_vec());
+                addition_count >>= 1;
+            }
+            results
+        };
+
+        // まず最後レベルの信号を計算する。index_count分作る。
+        let final_signals = {
+            let sample_buffer = setting.container.uniformed_sample_buffer();
+
+            let mut prev_signals: Vec<Complex<f64>> = vec![];
+            prev_signals.reserve(samples_count);
+
+            // 無限に伸びる周期波形をつくるよりは、すでに与えられた波形をもっと細かく刻んでサンプルしたほうが安定そう。
+            for local_i in 0..samples_count {
+                // アナログ波形に複素数の部分は存在しないので、Realパートだけ扱う。
+                let amplitude = {
+                    // もしバッファの枠が足りなければ、スタートからループさせる。
+                    let available_size = sample_buffer.len() - setting.start_sample_index;
+                    let sample_i = (local_i % available_size) + setting.start_sample_index;
+                    let signal = sample_buffer[sample_i].to_f64();
+
+                    let time_factor = (local_i as f64) / (samples_count as f64);
+                    let window_factor = self.get_window_fn_factor(1.0, time_factor);
+                    signal * window_factor
+                };
+
+                // 負の数のAmplitudeも可能。
+                prev_signals.push(Complex::<f64> {
+                    real: amplitude,
+                    imag: 0.0,
+                });
+            }
+
+            //
+            let mut next_signals: Vec<Complex<f64>> = vec![];
+            next_signals.resize(samples_count, <Complex<f64> as Default>::default());
+
+            let level = (samples_count as f64).log2().ceil() as usize;
+            for lv_i in 0..level {
+                let index_period = samples_count >> lv_i;
+                let half_index = index_period >> 1;
+
+                for period_i in (0..samples_count).step_by(index_period) {
+                    for local_i in 0..half_index {
+                        let lhs_i = period_i + local_i;
+                        let rhs_i = period_i + local_i + half_index;
+                        let prev_lhs_signal = prev_signals[lhs_i];
+                        let prev_rhs_signal = prev_signals[rhs_i];
+                        let coefficient =
+                            Complex::<f64>::from_exp(PI2 * (local_i as f64) / (index_period as f64)).conjugate();
+
+                        let new_lhs_signal = prev_lhs_signal + prev_rhs_signal;
+                        let new_rhs_signal = coefficient * (prev_lhs_signal - prev_rhs_signal);
+                        next_signals[lhs_i] = new_lhs_signal;
+                        next_signals[rhs_i] = new_rhs_signal;
+                    }
+                }
+
+                // 次のレベルでprev→nextをするためにswapする。
+                std::mem::swap(&mut prev_signals, &mut next_signals);
+            }
+
+            prev_signals
+        };
+
+        // 計算済みの`final_signals`はビットリバースのシグナルリストに１対１対応しているので
+        // このままルックアップテーブルから結果シグナルに入れて[`SineFrequency`]に変換して返す。
+        let mut results = vec![];
+        results.resize(samples_count, SineFrequency::default());
+
+        // ナイキスト周波数の半分まで取る。
+        // またこのアルゴリズムではsamples_countとbin_countが一致すればO(N^2)。
+        let valid_sample_counts = (self.frequency_bin_count >> 1) as usize;
+        let proceed_frequency = self.get_proceeding_frequency();
+        for freq_i in 0..valid_sample_counts {
+            let target_i = lookup_table[freq_i];
+            let frequency = self.frequency_start + (proceed_frequency * (target_i as f64));
+            let sine_freq = SineFrequency::from_complex_f64(frequency, final_signals[freq_i]);
+            results[target_i] = sine_freq;
+        }
+
+        results
     }
 }
 
