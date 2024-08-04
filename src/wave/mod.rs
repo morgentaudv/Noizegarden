@@ -8,6 +8,7 @@ pub mod container;
 pub mod filter;
 pub mod sample;
 pub mod setting;
+pub mod stretch;
 pub mod time;
 
 /// 2PIを示す。
