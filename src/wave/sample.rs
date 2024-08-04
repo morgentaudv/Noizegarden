@@ -1,12 +1,12 @@
 use std::ops::{Shl, Shr};
 
 /// 共通化したサンプルの振幅を表す。
-/// 0が一番低く、[`std::u32::MAX`]が一番大きい。
 ///
-/// 32ビットまでの各量子化ビットへの変換で精度を保つために[`u32`]に統一する。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+/// 値の絶対値の0が一番低く、1が大きい。(0dBFS)
+/// 値自体の範囲は [-1, 1]となる。
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
 #[repr(transparent)]
-pub struct UniformedSample(i32);
+pub struct UniformedSample(f64);
 
 impl std::ops::Add<Self> for UniformedSample {
     type Output = Self;
@@ -54,7 +54,7 @@ impl std::ops::Mul<Self> for UniformedSample {
 
 impl UniformedSample {
     ///
-    pub const MIN: UniformedSample = UniformedSample(0);
+    pub const MIN: UniformedSample = UniformedSample(0.0);
 
     /// 0から1まで（1は含まない）の範囲内の[`f64`]を変換する。
     ///
@@ -64,27 +64,27 @@ impl UniformedSample {
     /// # assert_eq!(sample, UniformedSample::MIN);
     /// ```
     pub fn from_f64(sample: f64) -> Self {
-        let scaled_sample = sample.clamp(-1.0, 1.0) * (i32::MAX as f64);
-        Self(scaled_sample.floor() as i32)
+        Self(sample.clamp(-1.0, 1.0))
     }
 
     /// `[-32768, 32767)`までの16Bits振幅[`i16`]を変換する。
-    ///
-    /// ```
-    /// ```
     pub fn from_16bits(sample: i16) -> Self {
-        Self((sample as i32).shl(16))
+        Self((sample as f64) / (i16::MAX as f64))
     }
 
     /// [`UniformedSample`]から量子化16ビットの[`i16`]に変換する。<br>
     /// [`i16`]で表現できない振幅値は削られて一番近い下の値に変換される。
     pub fn to_16bits(self) -> i16 {
-        let shifted = self.0.shr(16) as i32;
-        shifted as i16
+        (self.0 * (i16::MAX as f64)).clamp(i16::MIN as f64, i16::MAX as f64) as i16
     }
 
+    /// [`f64`]に変換する。
     pub fn to_f64(self) -> f64 {
-        let divided = (self.0 as f64) / (i32::MAX as f64);
-        divided.clamp(-1.0, 1.0)
+        self.0
+    }
+
+    /// [`f64`]に変換するが、[-1, 1]範囲外の値はクランプされる。
+    pub fn to_f64_clamped(self) -> f64 {
+        self.0.clamp(-1.0, 1.0)
     }
 }
