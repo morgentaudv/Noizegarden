@@ -79,6 +79,7 @@ impl UniformedSample {
     }
 
     /// [`f64`]に変換する。
+    #[inline]
     pub fn to_f64(self) -> f64 {
         self.0
     }
