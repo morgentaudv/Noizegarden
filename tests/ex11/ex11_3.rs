@@ -16,8 +16,7 @@ use soundprog::wave::{
 fn ex11_3() {
     //const READ_FILE_PATH: &'static str = "assets/ex11/sine_2s.wav";
     const READ_FILE_PATH: &'static str = "assets/ex6/drum.wav";
-    //const READ_FILE_PATH: &'static str = "assets/ex7/vocal.wav";
-    const WRITE_FILE_PATH: &'static str = "assets/ex11/ex11_3_output_2.wav";
+    const WRITE_FILE_PATH: &'static str = "assets/ex11/ex11_3_output.wav";
 
     let wave_container = {
         let source_file = fs::File::open(READ_FILE_PATH).expect(&format!("Could not find {}.", READ_FILE_PATH));
@@ -26,9 +25,10 @@ fn ex11_3() {
         WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
     };
 
-    let pitch_rate = 2.0;
+    let pitch_rate = 0.5;
     let stretch_rate = 1.0 / pitch_rate;
 
+    // Pitchを上げて
     let pitch_buffer = {
         let setting = PitchShifterBufferSetting {
             buffer: wave_container.uniformed_sample_buffer(),
@@ -44,6 +44,7 @@ fn ex11_3() {
             .unwrap()
     };
 
+    // 尺を戻す
     let time_buffer = {
         let setting = TimeStretcherBufferSetting { buffer: &pitch_buffer };
         let original_fs = wave_container.samples_per_second();
