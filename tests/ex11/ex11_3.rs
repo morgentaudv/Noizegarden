@@ -6,7 +6,10 @@ use std::{
 use soundprog::wave::{
     analyze::window::EWindowFunction,
     container::{WaveBuilder, WaveContainer},
-    stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
+    stretch::{
+        pitch::{self, PitchShifterBufferSetting, PitchShifterBuilder},
+        time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
+    },
 };
 
 #[test]
@@ -14,7 +17,7 @@ fn ex11_3() {
     //const READ_FILE_PATH: &'static str = "assets/ex11/sine_2s.wav";
     const READ_FILE_PATH: &'static str = "assets/ex6/drum.wav";
     //const READ_FILE_PATH: &'static str = "assets/ex7/vocal.wav";
-    const WRITE_FILE_PATH: &'static str = "assets/ex11/ex11_3_output.wav";
+    const WRITE_FILE_PATH: &'static str = "assets/ex11/ex11_3_output_2.wav";
 
     let wave_container = {
         let source_file = fs::File::open(READ_FILE_PATH).expect(&format!("Could not find {}.", READ_FILE_PATH));
@@ -23,25 +26,47 @@ fn ex11_3() {
         WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
     };
 
-    // まず音源から周期性を把握する。
-    let setting = PitchShifterBufferSetting {
-        buffer: wave_container.uniformed_sample_buffer(),
+    let pitch_rate = 2.0;
+    let stretch_rate = 1.0 / pitch_rate;
+
+    let pitch_buffer = {
+        let setting = PitchShifterBufferSetting {
+            buffer: wave_container.uniformed_sample_buffer(),
+        };
+
+        PitchShifterBuilder::default()
+            .pitch_rate(pitch_rate)
+            .window_size(128)
+            .window_function(EWindowFunction::None)
+            .build()
+            .unwrap()
+            .process_with_buffer(&setting)
+            .unwrap()
     };
 
-    let dst_buffer = PitchShifterBuilder::default()
-        .pitch_rate(0.87)
-        .window_size(128)
-        .window_function(EWindowFunction::None)
-        .build()
-        .unwrap()
-        .process_with_buffer(&setting)
-        .unwrap();
+    let time_buffer = {
+        let setting = TimeStretcherBufferSetting { buffer: &pitch_buffer };
+        let original_fs = wave_container.samples_per_second();
+        let template_size = (original_fs as f64 * 0.01) as usize;
+        let p_min = (original_fs as f64 * 0.005) as usize;
+        let p_max = (original_fs as f64 * 0.02) as usize;
+
+        TimeStretcherBuilder::default()
+            .template_size(template_size)
+            .shrink_rate(stretch_rate)
+            .sample_period_min(p_min)
+            .sample_period_length(p_max - p_min)
+            .build()
+            .unwrap()
+            .process_with_buffer(&setting)
+            .unwrap()
+    };
 
     let new_wave_container = WaveBuilder {
         samples_per_sec: wave_container.samples_per_second(),
         bits_per_sample: wave_container.bits_per_sample() as u16,
     }
-    .build_container(dst_buffer)
+    .build_container(time_buffer)
     .unwrap();
 
     {
