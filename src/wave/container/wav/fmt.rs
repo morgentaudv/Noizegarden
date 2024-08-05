@@ -26,23 +26,48 @@ pub(crate) struct LowWaveFormatHeader {
 
 const_assert_eq!(LowWaveFormatHeader::STRUCTURE_SIZE, 24usize);
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum EBuilder {
+    Normal { samples_per_sec: u32, bits_per_sample: u16 },
+    PCMU,
+}
+
 impl LowWaveFormatHeader {
     const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveFormatHeader>();
-    const CHUNK_SIZE: u32 = 16;
+    const NORMAL_CHUNK_SIZE: u32 = 16;
+    /// PCMU(u-law)のときのChunkSize。
+    const PCMU_CHUNK_SIZE: u32 = 18;
     const ID_SPECIFIER: [u8; 4] = ['f' as u8, 'm' as u8, 't' as u8, ' ' as u8];
 
-    pub(crate) fn from_builder(samples_per_sec: u32, bits_per_sample: u16) -> Self {
-        let block_size = (bits_per_sample >> 3) as u16;
-        let bytes_per_sec = (block_size as u32) * samples_per_sec;
-        Self {
-            fmt_chunk_id: Self::ID_SPECIFIER,
-            fmt_chunk_size: Self::CHUNK_SIZE,
-            wave_format_type: WAV_DATATYPE_LPCM,
-            channel: 1,
-            samples_per_sec,
-            bytes_per_sec,
-            block_size,
-            bits_per_sample,
+    pub(crate) fn from_builder(setting: EBuilder) -> Self {
+        match setting {
+            EBuilder::Normal {
+                samples_per_sec,
+                bits_per_sample,
+            } => {
+                let block_size = (bits_per_sample >> 3) as u16;
+                let bytes_per_sec = (block_size as u32) * samples_per_sec;
+                Self {
+                    fmt_chunk_id: Self::ID_SPECIFIER,
+                    fmt_chunk_size: Self::NORMAL_CHUNK_SIZE,
+                    wave_format_type: WAV_DATATYPE_LPCM,
+                    channel: 1,
+                    samples_per_sec,
+                    bytes_per_sec,
+                    block_size,
+                    bits_per_sample,
+                }
+            }
+            EBuilder::PCMU => Self {
+                fmt_chunk_id: Self::ID_SPECIFIER,
+                fmt_chunk_size: Self::PCMU_CHUNK_SIZE,
+                wave_format_type: WAV_DATATYPE_PCMU,
+                channel: 1,
+                samples_per_sec: 8000,
+                bytes_per_sec: 8000,
+                block_size: 1,
+                bits_per_sample: 8,
+            },
         }
     }
 
@@ -54,7 +79,7 @@ impl LowWaveFormatHeader {
 
         Self {
             fmt_chunk_id: Self::ID_SPECIFIER,
-            fmt_chunk_size: Self::CHUNK_SIZE,
+            fmt_chunk_size: Self::NORMAL_CHUNK_SIZE,
             wave_format_type: WAV_DATATYPE_LPCM,
             channel,
             samples_per_sec: sound.format.samples_per_sec,
@@ -82,7 +107,8 @@ impl LowWaveFormatHeader {
         }
         // fmt_chunk_sizeの確認。
         {
-            assert!(maybe_header.fmt_chunk_size == 16);
+            let maybe_size = maybe_header.fmt_chunk_size;
+            assert!(maybe_size == Self::NORMAL_CHUNK_SIZE || maybe_size == Self::PCMU_CHUNK_SIZE);
         }
 
         Some(maybe_header)

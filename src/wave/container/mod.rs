@@ -1,4 +1,9 @@
-use wav::{data::LowWaveDataChunk, fact::LowWaveFactChunk, fmt::LowWaveFormatHeader, riff::LowWaveRiffHeader};
+use wav::{
+    data::LowWaveDataChunk,
+    fact::LowWaveFactChunk,
+    fmt::{self, LowWaveFormatHeader},
+    riff::LowWaveRiffHeader,
+};
 
 use super::{sample::UniformedSample, setting::WaveSound};
 use std::{io, mem};
@@ -237,7 +242,11 @@ impl WaveBuilder {
 
         // 今はMONO、PCMで固定する。
         // ローレベルのヘッダーの情報などを作る。
-        let format_header = LowWaveFormatHeader::from_builder(self.samples_per_sec, self.bits_per_sample);
+        let builder = fmt::EBuilder::Normal {
+            samples_per_sec: self.samples_per_sec,
+            bits_per_sample: self.bits_per_sample,
+        };
+        let format_header = LowWaveFormatHeader::from_builder(builder);
         let data_chunk_size = (format_header.unit_block_size() * uniformed_samples.len()) as u32;
         let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size);
         let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
