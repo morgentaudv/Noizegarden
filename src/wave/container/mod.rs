@@ -1,313 +1,15 @@
+use wav::{data::LowWaveDataChunk, fact::LowWaveFactChunk, fmt::LowWaveFormatHeader, riff::LowWaveRiffHeader};
+
 use super::{sample::UniformedSample, setting::WaveSound};
 use std::{io, mem};
+
+pub mod wav;
 
 // ----------------------------------------------------------------------------
 //
 // LOW-LEVEL STRUCTURES
 //
 // ----------------------------------------------------------------------------
-
-///
-#[repr(C)]
-#[derive(Debug, Clone)]
-struct LowWaveRiffHeader {
-    riff_chunk_id: [u8; 4],
-    riff_chunk_size: u32,
-    file_format_type: [u8; 4],
-}
-
-const_assert_eq!(std::mem::size_of::<LowWaveRiffHeader>(), 12usize);
-
-impl LowWaveRiffHeader {
-    const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveRiffHeader>();
-    const CHUNK_MINIMUM_SIZE: u32 = 48;
-    const ID_SPECIFIER: [u8; 4] = ['R' as u8, 'I' as u8, 'F' as u8, 'F' as u8];
-    const TYPE_SPECIFIER: [u8; 4] = ['W' as u8, 'A' as u8, 'V' as u8, 'E' as u8];
-
-    /// [`LowWaveDataChunk`]の設定から[`LowWaveRiffHeader`]を生成する。
-    pub fn from_data_chunk(data: &LowWaveDataChunk) -> Self {
-        Self {
-            riff_chunk_id: Self::ID_SPECIFIER,
-            riff_chunk_size: data.data_chunk_size + Self::CHUNK_MINIMUM_SIZE,
-            file_format_type: Self::TYPE_SPECIFIER,
-        }
-    }
-
-    /// `io::Read + io::Seek`から`Self`の情報を取得して作る。
-    pub fn from_bufread<T>(reader: &mut T) -> Option<Self>
-    where
-        T: io::Read + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader.read(&mut buffer[..]).expect("Failed to read riff header.");
-
-        // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
-        let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-
-        // riff_idの確認。
-        {
-            let riff_id = std::str::from_utf8(&maybe_header.riff_chunk_id).unwrap();
-            assert!(riff_id == "RIFF");
-        }
-        // format_type_idの確認。
-        {
-            let type_id = std::str::from_utf8(&maybe_header.file_format_type).unwrap();
-            assert!(type_id == "WAVE");
-        }
-
-        Some(maybe_header)
-    }
-
-    /// [`LowWaveRiffHeader`]の情報を[`std::io::Write`]ストリームに書き込む。
-    /// `writer`は[`std::io::Write`]と[`std::io::Seek`]を実装していること。
-    pub fn write<T>(&self, writer: &mut T)
-    where
-        T: io::Write + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        unsafe {
-            let cloned = (*self).clone();
-            std::ptr::write(buffer.as_mut_ptr() as *mut _, cloned);
-        }
-        writer.write(&buffer).expect("Failed to write LowWaveRiffHeader to writer.");
-    }
-
-    /// ヘッダーからデータバッファーのサイズを返す。
-    pub fn data_chunk_size(&self) -> usize {
-        assert!(self.riff_chunk_size >= Self::CHUNK_MINIMUM_SIZE);
-        (self.riff_chunk_size - Self::CHUNK_MINIMUM_SIZE) as usize
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone)]
-struct LowWaveFormatHeader {
-    /// `"fmt "`と同様
-    fmt_chunk_id: [u8; 4],
-    /// [`LowWaveFormatHeader::CHUNK_SIZE`]と同様
-    fmt_chunk_size: u32,
-    wave_format_type: u16,
-    pub channel: u16,
-    samples_per_sec: u32,
-    ///
-    bytes_per_sec: u32,
-    /// チャンネルを含む各サンプルの総サイズ。
-    /// もしチャンネルを分離した本当の各サンプルのサイズが取得したい場合には
-    /// [`LowWaveFormatHeader::unit_block_size`]メソッドを使う。
-    block_size: u16,
-    bits_per_sample: u16,
-}
-
-const_assert_eq!(LowWaveFormatHeader::STRUCTURE_SIZE, 24usize);
-
-impl LowWaveFormatHeader {
-    const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveFormatHeader>();
-    const CHUNK_SIZE: u32 = 16;
-    const ID_SPECIFIER: [u8; 4] = ['f' as u8, 'm' as u8, 't' as u8, ' ' as u8];
-
-    fn from_builder(samples_per_sec: u32, bits_per_sample: u16) -> Self {
-        let block_size = (bits_per_sample >> 3) as u16;
-        let bytes_per_sec = (block_size as u32) * samples_per_sec;
-        Self {
-            fmt_chunk_id: Self::ID_SPECIFIER,
-            fmt_chunk_size: Self::CHUNK_SIZE,
-            wave_format_type: 1,
-            channel: 1,
-            samples_per_sec,
-            bytes_per_sec,
-            block_size,
-            bits_per_sample,
-        }
-    }
-
-    /// [`WaveSound`]から[`LowWaveFormatHeader`]を生成する。
-    pub fn from_wave_sound(sound: &WaveSound) -> Self {
-        let channel = 1;
-        let unit_block_size = sound.format.bits_per_sample.to_byte_size();
-        let block_size = (unit_block_size as u16) * channel;
-
-        Self {
-            fmt_chunk_id: Self::ID_SPECIFIER,
-            fmt_chunk_size: Self::CHUNK_SIZE,
-            wave_format_type: 1,
-            channel,
-            samples_per_sec: sound.format.samples_per_sec,
-            bytes_per_sec: (block_size as u32) * sound.format.samples_per_sec,
-            block_size,
-            bits_per_sample: sound.format.bits_per_sample.to_u32() as u16,
-        }
-    }
-
-    /// `io::Read + io::Seek`から`Self`の情報を取得して作る。
-    pub fn from_bufread<T>(reader: &mut T) -> Option<Self>
-    where
-        T: io::Read + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader.read(&mut buffer[..]).expect("Failed to read fmt header.");
-
-        // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
-        let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-
-        // fmt_idの確認。
-        {
-            let id = std::str::from_utf8(&maybe_header.fmt_chunk_id).unwrap();
-            assert!(id == "fmt ");
-        }
-        // fmt_chunk_sizeの確認。
-        {
-            assert!(maybe_header.fmt_chunk_size == 16);
-        }
-
-        Some(maybe_header)
-    }
-
-    /// [`LowWaveFormatHeader`]の情報を[`std::io::Write`]ストリームに書き込む。
-    /// `writer`は[`std::io::Write`]と[`std::io::Seek`]を実装していること。
-    pub fn write<T>(&self, writer: &mut T)
-    where
-        T: io::Write + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        unsafe {
-            std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
-        }
-        writer.write(&buffer).expect("Failed to write LowWaveFormatHeader to writer.");
-    }
-
-    /// １個のチャンネルのブロックサイズを返す。
-    pub fn unit_block_size(&self) -> usize {
-        let block_size = self.block_size as usize;
-        block_size / (self.channel as usize)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone)]
-struct LowWaveFactChunk {
-    fact_chunk_id: [u8; 4],
-    fact_chunk_size: u32,
-    sample_length: u32,
-}
-
-const_assert_eq!(LowWaveFactChunk::STRUCTURE_SIZE, 12usize);
-
-impl LowWaveFactChunk {
-    const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveFactChunk>();
-
-    /// `io::Read + io::Seek`から`Self`が読み取れるかを確認する。
-    pub fn can_be_chunk<T>(reader: &mut T) -> bool
-    where
-        T: io::Read + io::Seek,
-    {
-        let mut id_buffer = [0u8; 4];
-        let read_size = reader.read(&mut id_buffer[..]).expect("Failed to read fact header.");
-
-        let id = std::str::from_utf8(&id_buffer).unwrap();
-        let result = id == "fact";
-
-        let return_size = (read_size as i64) * -1i64;
-        reader.seek(io::SeekFrom::Current(return_size)).expect("Failed to see");
-
-        result
-    }
-
-    /// `io::Read + io::Seek`から`Self`の情報を取得して作る。
-    pub fn from_bufread<T>(reader: &mut T) -> Option<Self>
-    where
-        T: io::Read + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader.read(&mut buffer[..]).expect("Failed to read fact header.");
-
-        // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
-        let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-
-        // fact_idの確認。
-        {
-            let id = std::str::from_utf8(&maybe_header.fact_chunk_id).unwrap();
-            assert!(id == "fact");
-        }
-        // fact_chunk_sizeの確認。
-        {
-            assert!(maybe_header.fact_chunk_size == 4);
-        }
-
-        Some(maybe_header)
-    }
-
-    /// [`LowWaveFactChunk`]の情報を[`std::io::Write`]ストリームに書き込む。
-    /// `reader`は[`std::io::Write`]と[`std::io::Seek`]を実装していること。
-    pub fn write<T>(&self, writer: &mut T)
-    where
-        T: io::Write + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        unsafe {
-            std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
-        }
-        writer.write(&buffer).expect("Failed to write LowWaveFactChunk to writer.");
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone)]
-struct LowWaveDataChunk {
-    data_chunk_id: [u8; 4],
-    pub data_chunk_size: u32,
-}
-
-const_assert_eq!(LowWaveDataChunk::STRUCTURE_SIZE, 8usize);
-
-impl LowWaveDataChunk {
-    const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveDataChunk>();
-    const ID_SPECIFIER: [u8; 4] = ['d' as u8, 'a' as u8, 't' as u8, 'a' as u8];
-
-    /// [`WaveSound`]から[`LowWaveDataChunk`]を生成する。
-    pub fn from_wave_sound(sound: &WaveSound) -> Self {
-        let uniformed_unit_samples_count = sound.completed_samples_count() as u32;
-        let bytes_of_converted = sound.format.bits_per_sample.to_u32() / 8;
-        let data_chunk_size = uniformed_unit_samples_count * bytes_of_converted;
-
-        Self {
-            data_chunk_id: Self::ID_SPECIFIER,
-            data_chunk_size,
-        }
-    }
-
-    /// `io::Read + io::Seek`から`Self`の情報を取得して作る。
-    pub fn from_bufread<T>(reader: &mut T) -> Option<Self>
-    where
-        T: io::Read + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        reader.read(&mut buffer[..]).expect("Failed to read fact header.");
-
-        // ヘッダーがちゃんとしているかを確認してから返す。失敗したらそのまま終了。
-        let maybe_header: Self = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-
-        // chunk_idの確認。
-        {
-            let id = std::str::from_utf8(&maybe_header.data_chunk_id).unwrap();
-            assert!(id == "data");
-        }
-
-        Some(maybe_header)
-    }
-
-    /// [`LowWaveDataChunk`]の情報を[`std::io::Write`]ストリームに書き込む。
-    /// `writer`は[`std::io::Write`]と[`std::io::Seek`]を実装していること。
-    pub fn write<T>(&self, writer: &mut T)
-    where
-        T: io::Write + io::Seek,
-    {
-        let mut buffer = [0u8; Self::STRUCTURE_SIZE];
-        unsafe {
-            std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
-        }
-        writer.write(&buffer).expect("Failed to write LowWaveDataChunk to writer.");
-    }
-}
 
 /// 音源の情報を保持するコンテナ。
 /// wavファイルからの読み込みやwavファイルへの書き込み、その他簡単なフィルタリング機能ができる。
@@ -536,10 +238,8 @@ impl WaveBuilder {
         // 今はMONO、PCMで固定する。
         // ローレベルのヘッダーの情報などを作る。
         let format_header = LowWaveFormatHeader::from_builder(self.samples_per_sec, self.bits_per_sample);
-        let data_chunk = LowWaveDataChunk {
-            data_chunk_id: LowWaveDataChunk::ID_SPECIFIER,
-            data_chunk_size: (format_header.unit_block_size() * uniformed_samples.len()) as u32,
-        };
+        let data_chunk_size = (format_header.unit_block_size() * uniformed_samples.len()) as u32;
+        let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size);
         let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
 
         Some(WaveContainer {
@@ -549,5 +249,12 @@ impl WaveBuilder {
             data: data_chunk,
             uniformed_buffer: uniformed_samples,
         })
+    }
+
+    /// [u-law](https://en.wikipedia.org/wiki/%CE%9C-law_algorithm)のPCMU形式のコンテナに変換する。
+    pub fn from_container_to_ulaw(container: &WaveContainer) -> Option<WaveContainer> {
+        //let format_header = LowWaveFormatHeader::from_builder(self.samples_per_sec, self.bits_per_sample);
+        //container.
+        None
     }
 }
