@@ -1,16 +1,12 @@
 use std::{
-    f64::consts::PI,
     fs,
     io::{self, Write},
 };
 
-use soundprog::{
-    math::sinc,
-    wave::{
-        analyze::window::EWindowFunction,
-        container::{WaveBuilder, WaveContainer},
-        sample::UniformedSample,
-    },
+use soundprog::wave::{
+    analyze::window::EWindowFunction,
+    container::{WaveBuilder, WaveContainer},
+    stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
 };
 
 #[test]
@@ -28,46 +24,18 @@ fn ex11_3() {
     };
 
     // まず音源から周期性を把握する。
-    let pitch_rate = 0.87;
+    let setting = PitchShifterBufferSetting {
+        buffer: wave_container.uniformed_sample_buffer(),
+    };
 
-    let src_buffer = wave_container.uniformed_sample_buffer();
-    let window_size = 128usize;
-    let window_half = window_size >> 1;
-    let window_function = EWindowFunction::Hann;
-
-    let mut dst_buffer = vec![];
-    let dst_samples_size = ((src_buffer.len() as f64) / pitch_rate).ceil() as usize;
-    dst_buffer.resize(dst_samples_size, UniformedSample::default());
-
-    for n in 0..dst_samples_size {
-        let t = pitch_rate * (n as f64);
-        let ta = t.floor() as usize;
-
-        let mut tb = 0usize;
-        if t == (ta as f64) {
-            tb = ta;
-        } else {
-            tb = ta + 1;
-        }
-
-        let hann_src = (tb as isize) - (window_half as isize);
-        let hann_dst = (ta as isize) + (window_half as isize);
-        let hann_length = hann_dst - hann_src;
-
-        let window_src = if tb >= window_half { tb - window_half } else { 0 };
-        let window_dst = (ta + window_half).min(src_buffer.len());
-        if window_src < window_dst {
-            for m in window_src..window_dst {
-                // ここでConvolution。
-                // s_d(m)sinc(pi(t-m))
-
-                //let hann_value = window_function.get_factor(hann_length as f64, t - (m as f64));
-                let sinc_value = sinc((PI as f64) * (t - (m as f64)));
-                //dst_buffer[n] += (hann_value * sinc_value) * src_buffer[m];
-                dst_buffer[n] += sinc_value * src_buffer[m];
-            }
-        }
-    }
+    let dst_buffer = PitchShifterBuilder::default()
+        .pitch_rate(0.87)
+        .window_size(128)
+        .window_function(EWindowFunction::None)
+        .build()
+        .unwrap()
+        .process_with_buffer(&setting)
+        .unwrap();
 
     let new_wave_container = WaveBuilder {
         samples_per_sec: wave_container.samples_per_second(),
