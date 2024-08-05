@@ -30,7 +30,7 @@ impl TimeStretcher {
             return None;
         }
 
-        if shrink_rate < 0.5 || shrink_rate >= 100.0 {
+        if shrink_rate < 0.0 || shrink_rate >= 100.0 {
             return None;
         }
 
