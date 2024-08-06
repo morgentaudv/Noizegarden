@@ -1,3 +1,5 @@
+use itertools::Itertools;
+use num_traits::FromPrimitive;
 use wav::{
     data::LowWaveDataChunk,
     fact::LowWaveFactChunk,
@@ -137,28 +139,56 @@ impl WaveContainer {
         if self.fact.is_some() {
             self.fact.as_ref().unwrap().write(writer);
         }
+
         self.data.write(writer);
 
+        // `unit_block_size`は各ユニkットブロックのメモリ空間を、
+        // `bits_per_sample`は`UniformSample`からどのように数値に変換するかを表す。
+        let unit_block_size = self.unit_block_size();
         // そしてバッファーから量子化ビットとブロックサイズに合わせて別リストに変換し書き込ませる。
-        let converted_buffer: Vec<i16> = {
-            // `unit_block_size`は各ユニットブロックのメモリ空間を、
-            // `bits_per_sample`は`UniformSample`からどのように数値に変換するかを表す。
-            let unit_block_size = self.unit_block_size();
-            let bits_per_sample = self.bits_per_sample();
-            assert_eq!(bits_per_sample, 16);
-            assert_eq!(unit_block_size, 2);
+        let bits_per_sample = self.bits_per_sample();
+        match self.fmt.format_type() {
+            fmt::EWavFormatType::Unknown => unreachable!(),
+            fmt::EWavFormatType::LPCM => {
+                if bits_per_sample == 16 {
+                    assert_eq!(unit_block_size, 2);
 
-            self.uniformed_buffer.iter().map(|v| v.to_16bits()).collect()
-        };
+                    let converted_buffer: Vec<i16> = { self.uniformed_buffer.iter().map(|v| v.to_16bits()).collect() };
+                    let converted_buffer_slice = unsafe {
+                        let p_buffer = converted_buffer.as_ptr() as *const u8;
+                        std::slice::from_raw_parts(p_buffer, converted_buffer.len() * 2)
+                    };
 
-        let converted_buffer_slice = unsafe {
-            let p_buffer = converted_buffer.as_ptr() as *const u8;
-            std::slice::from_raw_parts(p_buffer, converted_buffer.len() * 2)
-        };
+                    writer
+                        .write(&converted_buffer_slice)
+                        .expect("Failed to write Buffer to writer.");
+                } else if bits_per_sample == 8 {
+                    assert_eq!(unit_block_size, 1);
 
-        writer
-            .write(&converted_buffer_slice)
-            .expect("Failed to write Buffer to writer.");
+                    let converted_buffer: Vec<u8> =
+                        { self.uniformed_buffer.iter().map(|v| v.to_unsigned_8bits()).collect() };
+                    let converted_buffer_slice = unsafe {
+                        let p_buffer = converted_buffer.as_ptr() as *const u8;
+                        std::slice::from_raw_parts(p_buffer, converted_buffer.len())
+                    };
+
+                    writer
+                        .write(&converted_buffer_slice)
+                        .expect("Failed to write Buffer to writer.");
+                }
+            }
+            fmt::EWavFormatType::PCMU => {
+                let converted_buffer: Vec<u8> = { self.uniformed_buffer.iter().map(|v| v.to_ulaw_8bits()).collect() };
+                let converted_buffer_slice = unsafe {
+                    let p_buffer = converted_buffer.as_ptr() as *const u8;
+                    std::slice::from_raw_parts(p_buffer, converted_buffer.len())
+                };
+
+                writer
+                    .write(&converted_buffer_slice)
+                    .expect("Failed to write Buffer to writer.");
+            }
+        }
     }
 }
 
@@ -262,8 +292,23 @@ impl WaveBuilder {
 
     /// [u-law](https://en.wikipedia.org/wiki/%CE%9C-law_algorithm)のPCMU形式のコンテナに変換する。
     pub fn from_container_to_ulaw(container: &WaveContainer) -> Option<WaveContainer> {
-        //let format_header = LowWaveFormatHeader::from_builder(self.samples_per_sec, self.bits_per_sample);
-        //container.
-        None
+        if container.channel() > 1 {
+            return None;
+        }
+
+        let src_container = container.uniformed_sample_buffer();
+        let format_header = LowWaveFormatHeader::from_builder(fmt::EBuilder::PCMU);
+        let data_chunk_size = (format_header.unit_block_size() * src_container.len()) as u32;
+        let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size + 2);
+        let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
+        let dst_container = src_container.iter().map(|v| v.into_ulaw_uniform_sample()).collect_vec();
+
+        Some(WaveContainer {
+            riff: riff_header,
+            fmt: format_header,
+            fact: None,
+            data: data_chunk,
+            uniformed_buffer: src_container.to_owned(),
+        })
     }
 }
