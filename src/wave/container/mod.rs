@@ -7,7 +7,11 @@ use wav::{
     riff::LowWaveRiffHeader,
 };
 
-use super::{sample::UniformedSample, setting::WaveSound};
+use super::{
+    sample::UniformedSample,
+    setting::WaveSound,
+    stretch::time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
+};
 use std::{io, mem};
 
 pub mod wav;
@@ -301,14 +305,38 @@ impl WaveBuilder {
         let data_chunk_size = (format_header.unit_block_size() * src_container.len()) as u32;
         let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size + 2);
         let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
-        let dst_container = src_container.iter().map(|v| v.into_ulaw_uniform_sample()).collect_vec();
+
+        let dst_container = {
+            let shrink_rate = (8000.0 / (container.samples_per_second() as f64)).recip();
+            if shrink_rate == 1.0 {
+                // F_sがそのままなのでOK
+                src_container.to_owned()
+            } else {
+                // TimeStrecherを使ってResamplingする。（精度はちゃんとしたアルゴリズムに比べたら落ちる）
+                let original_fs = container.samples_per_second();
+                let template_size = (original_fs as f64 * 0.01) as usize;
+                let p_min = (original_fs as f64 * 0.005) as usize;
+                let p_max = (original_fs as f64 * 0.02) as usize;
+                let setting = TimeStretcherBufferSetting { buffer: src_container };
+
+                TimeStretcherBuilder::default()
+                    .template_size(template_size)
+                    .shrink_rate(shrink_rate)
+                    .sample_period_min(p_min)
+                    .sample_period_length(p_max - p_min)
+                    .build()
+                    .unwrap()
+                    .process_with_buffer(&setting)
+                    .unwrap()
+            }
+        };
 
         Some(WaveContainer {
             riff: riff_header,
             fmt: format_header,
             fact: None,
             data: data_chunk,
-            uniformed_buffer: src_container.to_owned(),
+            uniformed_buffer: dst_container,
         })
     }
 }
