@@ -39,6 +39,8 @@ macro_rules! ulaw_impl {
 
 ulaw_impl!(f32, 255.0);
 ulaw_impl!(f64, 255.0);
+
+/// [-1, 1]までの値を連続的（Continuous）なu-lawの値に変換する。
 ///
 /// ```
 /// # use soundprog::math::to_ulaw_uniform_intensity;
