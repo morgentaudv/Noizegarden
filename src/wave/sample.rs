@@ -1,4 +1,9 @@
-use std::ops::{Shl, Shr};
+use std::{
+    i16,
+    ops::{Shl, Shr},
+};
+
+use crate::math;
 
 /// 共通化したサンプルの振幅を表す。
 ///
@@ -78,6 +83,51 @@ impl UniformedSample {
         (self.0 * (i16::MAX as f64)).clamp(i16::MIN as f64, i16::MAX as f64) as i16
     }
 
+    /// [`UniformedSample`]から量子化8ビットの[`u8`]に変換する。
+    /// [`u8`]で表現できない振幅値はクランプされ一番近い値にクリッピングされる。
+    ///
+    /// ```
+    /// # use soundprog::wave::sample::UniformedSample;
+    /// assert_eq!(UniformedSample::from_f64(0f64).to_unsigned_8bits(), 127u8);
+    /// assert_eq!(UniformedSample::from_f64(1f64).to_unsigned_8bits(), 254u8);
+    /// assert_eq!(UniformedSample::from_f64(-1f64).to_unsigned_8bits(), 0u8);
+    /// ```
+    pub fn to_unsigned_8bits(self) -> u8 {
+        ((self.0 * (i8::MAX as f64)) + (i8::MAX as f64))
+            .clamp(0.0, u8::MAX as f64)
+            .round() as u8
+    }
+
+    /// [`UniformedSample`]から量子化8ビットの[`u8`]に変換する。
+    /// ただしu-lawの離散量子化アルゴリズムを使う。
+    /// [`u8`]で表現できない振幅値はクランプされ一番近い値にクリッピングされる。
+    pub fn to_ulaw_8bits(self) -> u8 {
+        const LEVEL: [i16; 8] = [0x00FF, 0x01FF, 0x03FF, 0x07FF, 0x0FFF, 0x1FFF, 0x3FFF, 0x7FFF];
+
+        let s16v = self.to_16bits();
+        let mut abs16v = s16v.abs();
+        if i16::MAX - abs16v >= 0x84 {
+            abs16v += 0x84;
+        } else {
+            abs16v = i16::MAX;
+        }
+
+        let exponent = {
+            let mut v = 9u8;
+            for e in 0..8 {
+                if abs16v <= LEVEL[e] {
+                    v = e as u8;
+                    break;
+                }
+            }
+            v
+        };
+        let mantissa = ((abs16v >> (exponent + 3)) & 0x0F) as u8;
+        let i8v = ((exponent << 4) | mantissa) as i8 * (s16v.signum() as i8);
+
+        ((i8v as i16) + (i8::MAX as i16)) as u8
+    }
+
     /// [`f64`]に変換する。
     #[inline]
     pub fn to_f64(self) -> f64 {
@@ -87,5 +137,10 @@ impl UniformedSample {
     /// [`f64`]に変換するが、[-1, 1]範囲外の値はクランプされる。
     pub fn to_f64_clamped(self) -> f64 {
         self.0.clamp(-1.0, 1.0)
+    }
+
+    /// u-law準拠のUniformSampleに変換する。
+    pub fn into_ulaw_uniform_sample(self) -> Self {
+        Self::from_f64(math::to_ulaw_uniform_intensity(self.0))
     }
 }
