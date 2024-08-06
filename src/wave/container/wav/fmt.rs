@@ -125,6 +125,12 @@ impl LowWaveFormatHeader {
             std::ptr::write(buffer.as_mut_ptr() as *mut _, (*self).clone());
         }
         writer.write(&buffer).expect("Failed to write LowWaveFormatHeader to writer.");
+
+        if self.fmt_chunk_size > 16 {
+            // 拡張チャンクのサイズ指定。0Bytes
+            let buffer = [0u8; 2];
+            writer.write(&buffer).expect("Failed to write LowWaveFormatHeader to writer.");
+        }
     }
 
     /// １個のチャンネルのブロックサイズを返す。
