@@ -98,10 +98,10 @@ impl UniformedSample {
             .round() as u8
     }
 
-    /// [`UniformedSample`]から量子化8ビットの[`u8`]に変換する。
+    /// [`UniformedSample`]から量子化8ビットの[`i8`]に変換する。
     /// ただしu-lawの離散量子化アルゴリズムを使う。
     /// [`u8`]で表現できない振幅値はクランプされ一番近い値にクリッピングされる。
-    pub fn to_ulaw_8bits(self) -> u8 {
+    pub fn to_ulaw_8bits(self) -> i8 {
         const LEVEL: [i16; 8] = [0x00FF, 0x01FF, 0x03FF, 0x07FF, 0x0FFF, 0x1FFF, 0x3FFF, 0x7FFF];
 
         let s16v = self.to_16bits();
@@ -122,10 +122,12 @@ impl UniformedSample {
             }
             v
         };
-        let mantissa = ((abs16v >> (exponent + 3)) & 0x0F) as u8;
-        let i8v = ((exponent << 4) | mantissa) as i8 * (s16v.signum() as i8);
 
-        ((i8v as i16) + (i8::MAX as i16)) as u8
+        // 必ずORで値を組み合わせする。
+        let mantissa = ((abs16v >> (exponent + 3)) & 0x0F) as u8;
+        let sign = if s16v.is_positive() { 0x00 } else { 0x80u8 as i8 };
+        let i8v = ((exponent << 4) | mantissa) as i8 | sign;
+        !i8v
     }
 
     /// [`f64`]に変換する。

@@ -178,7 +178,7 @@ impl WaveContainer {
                 }
             }
             fmt::EWavFormatType::PCMU => {
-                let converted_buffer: Vec<u8> = { self.uniformed_buffer.iter().map(|v| v.to_ulaw_8bits()).collect() };
+                let converted_buffer = { self.uniformed_buffer.iter().map(|v| v.to_ulaw_8bits()).collect_vec() };
                 let converted_buffer_slice = unsafe {
                     let p_buffer = converted_buffer.as_ptr() as *const u8;
                     std::slice::from_raw_parts(p_buffer, converted_buffer.len())
