@@ -5,6 +5,13 @@ use crate::wave::setting::WaveSound;
 pub const WAV_DATATYPE_LPCM: u16 = 1;
 pub const WAV_DATATYPE_PCMU: u16 = 7;
 
+/// WAVファイルのチャンクフォーマットタイプを表す。
+pub(crate) enum EWavFormatType {
+    Unknown,
+    LPCM,
+    PCMU,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub(crate) struct LowWaveFormatHeader {
@@ -137,5 +144,13 @@ impl LowWaveFormatHeader {
     pub fn unit_block_size(&self) -> usize {
         let block_size = self.block_size as usize;
         block_size / (self.channel as usize)
+    }
+
+    pub fn format_type(&self) -> EWavFormatType {
+        match self.wave_format_type {
+            WAV_DATATYPE_LPCM => EWavFormatType::LPCM,
+            WAV_DATATYPE_PCMU => EWavFormatType::PCMU,
+            _ => EWavFormatType::Unknown,
+        }
     }
 }
