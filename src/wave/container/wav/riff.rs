@@ -15,6 +15,7 @@ const_assert_eq!(std::mem::size_of::<LowWaveRiffHeader>(), 12usize);
 impl LowWaveRiffHeader {
     const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveRiffHeader>();
     const CHUNK_MINIMUM_SIZE: u32 = 48;
+    const CHUNK_IMA_ADPCM_ADD_SIZE: u32 = 52;
     const ID_SPECIFIER: [u8; 4] = ['R' as u8, 'I' as u8, 'F' as u8, 'F' as u8];
     const TYPE_SPECIFIER: [u8; 4] = ['W' as u8, 'A' as u8, 'V' as u8, 'E' as u8];
 
@@ -23,6 +24,15 @@ impl LowWaveRiffHeader {
         Self {
             riff_chunk_id: Self::ID_SPECIFIER,
             riff_chunk_size: data.data_chunk_size + Self::CHUNK_MINIMUM_SIZE,
+            file_format_type: Self::TYPE_SPECIFIER,
+        }
+    }
+
+    /// [`Self::from_data_chunk`]と同じだが、IMA-ADPCM用のRIFFヘッダーを作る。
+    pub fn from_data_chunk_with_ima_adpcm(data: &LowWaveDataChunk) -> Self {
+        Self {
+            riff_chunk_id: Self::ID_SPECIFIER,
+            riff_chunk_size: data.data_chunk_size + Self::CHUNK_IMA_ADPCM_ADD_SIZE,
             file_format_type: Self::TYPE_SPECIFIER,
         }
     }

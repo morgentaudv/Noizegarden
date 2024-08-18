@@ -11,6 +11,8 @@ pub(crate) struct LowWaveFactChunk {
 const_assert_eq!(LowWaveFactChunk::STRUCTURE_SIZE, 12usize);
 
 impl LowWaveFactChunk {
+    const ID_SPECIFIER: [u8; 4] = ['f' as u8, 'a' as u8, 'c' as u8, 't' as u8];
+
     const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveFactChunk>();
 
     /// `io::Read + io::Seek`から`Self`が読み取れるかを確認する。
@@ -28,6 +30,15 @@ impl LowWaveFactChunk {
         reader.seek(io::SeekFrom::Current(return_size)).expect("Failed to see");
 
         result
+    }
+
+    /// @brief
+    pub fn from_sample_length(sample_length: u32) -> Self {
+        Self {
+            fact_chunk_id: Self::ID_SPECIFIER,
+            fact_chunk_size: 4,
+            sample_length,
+        }
     }
 
     /// `io::Read + io::Seek`から`Self`の情報を取得して作る。
