@@ -4,6 +4,9 @@ use crate::wave::setting::WaveSound;
 
 pub const WAV_DATATYPE_LPCM: u16 = 1;
 pub const WAV_DATATYPE_PCMU: u16 = 7;
+pub const WAV_DATATYPE_IMA_ADPCM: u16 = 17;
+pub const WAV_IMA_ADPCM_BLOCK_SIZE: u16 = 256;
+pub const WAV_IMA_ADPCM_SAMPLES_PER_BLOCK: u16 = (WAV_IMA_ADPCM_BLOCK_SIZE - 4) * 2 + 1;
 
 /// WAVファイルのチャンクフォーマットタイプを表す。
 pub(crate) enum EWavFormatType {
@@ -33,10 +36,12 @@ pub(crate) struct LowWaveFormatHeader {
 
 const_assert_eq!(LowWaveFormatHeader::STRUCTURE_SIZE, 24usize);
 
+/// @brief IMA-ADPCMへの変換は[`IMAADPCMWriter`]を使うこと。
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum EBuilder {
-    Normal { samples_per_sec: u32, bits_per_sample: u16 },
-    PCMU,
+pub enum EBuilder {
+    Normal { samples_per_sec: u32, bits_per_sample: u16 }, // Linear-PCM
+    PCMU,                                                  // u-lawの8kHz、8Bitsの特殊ビットスケールのPCM
+    IMA_ADPCM { samples_per_sec: u32 },
 }
 
 impl LowWaveFormatHeader {
@@ -44,6 +49,8 @@ impl LowWaveFormatHeader {
     const NORMAL_CHUNK_SIZE: u32 = 16;
     /// PCMU(u-law)のときのChunkSize。
     const PCMU_CHUNK_SIZE: u32 = 18;
+    /// IMA-ADPCMのときのChunkSize。
+    const IMA_ADPCM_CHUNK_SIZE: u32 = 20;
     const ID_SPECIFIER: [u8; 4] = ['f' as u8, 'm' as u8, 't' as u8, ' ' as u8];
 
     pub(crate) fn from_builder(setting: EBuilder) -> Self {
@@ -74,6 +81,18 @@ impl LowWaveFormatHeader {
                 bytes_per_sec: 8000,
                 block_size: 1,
                 bits_per_sample: 8,
+            },
+            EBuilder::IMA_ADPCM { samples_per_sec } => Self {
+                fmt_chunk_id: Self::ID_SPECIFIER,
+                fmt_chunk_size: Self::IMA_ADPCM_CHUNK_SIZE,
+                wave_format_type: WAV_DATATYPE_IMA_ADPCM,
+                channel: 1,
+                samples_per_sec,
+                bytes_per_sec: {
+                    (WAV_IMA_ADPCM_BLOCK_SIZE as u32) * samples_per_sec / (WAV_IMA_ADPCM_SAMPLES_PER_BLOCK as u32)
+                },
+                block_size: WAV_IMA_ADPCM_BLOCK_SIZE, // 252Bytes (504Samples) + 4Bytes (Headers)
+                bits_per_sample: 4,
             },
         }
     }
@@ -133,10 +152,13 @@ impl LowWaveFormatHeader {
         }
         writer.write(&buffer).expect("Failed to write LowWaveFormatHeader to writer.");
 
-        if self.fmt_chunk_size > 16 {
-            // 拡張チャンクのサイズ指定。0Bytes
-            let buffer = [0u8; 2];
-            writer.write(&buffer).expect("Failed to write LowWaveFormatHeader to writer.");
+        match self.format_type() {
+            EWavFormatType::Unknown | EWavFormatType::LPCM => {}
+            EWavFormatType::PCMU => {
+                // 拡張チャンクのサイズ指定。0Bytes
+                let buffer = [0u8; 2];
+                writer.write(&buffer).expect("Failed to write LowWaveFormatHeader to writer.");
+            }
         }
     }
 
@@ -146,6 +168,7 @@ impl LowWaveFormatHeader {
         block_size / (self.channel as usize)
     }
 
+    /// フォーマットタイプを返す。
     pub fn format_type(&self) -> EWavFormatType {
         match self.wave_format_type {
             WAV_DATATYPE_LPCM => EWavFormatType::LPCM,
