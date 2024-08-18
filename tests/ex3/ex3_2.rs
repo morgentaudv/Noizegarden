@@ -27,14 +27,14 @@ fn square_fragments(period: f32, frequency: f32, order_factor: u32) -> Option<Ve
             frequency: frequency as f64,
         })
         .length_sec(period)
-        .intensity(0.2f64);
+        .intensity(0.6f64);
     results.push(setting.build().unwrap());
 
     // 倍音を入れる。
     for i in 2..order_factor {
         let order = (2 * i) - 1;
         let overtone_frequency = frequency * (order as f32);
-        let intensity = 0.2f64 * (order as f64).recip();
+        let intensity = 0.6f64 * (order as f64).recip();
         results.push(
             setting
                 .frequency(EFrequencyItem::Constant {

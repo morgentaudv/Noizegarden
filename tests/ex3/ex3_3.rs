@@ -22,7 +22,7 @@ fn triangle_fragments(period: f32, frequency: f32, order_factor: u32) -> Option<
     let mut setting = WaveSoundSettingBuilder::default();
 
     // 基本音を入れる。
-    const BASE_INTENSITY: f64 = 0.2;
+    const BASE_INTENSITY: f64 = 0.5;
     setting
         .frequency(EFrequencyItem::Constant {
             frequency: frequency as f64,

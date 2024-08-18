@@ -45,8 +45,8 @@ fn sawtooth_fragments(period: f32, frequency: f32, order: u32) -> Option<Vec<Wav
                 .frequency(EFrequencyItem::Constant {
                     frequency: overtone_frequency as f64,
                 })
-                .intensity(intensity)
                 .length_sec(period)
+                .intensity(intensity)
                 .build()
                 .unwrap(),
         );
@@ -63,7 +63,7 @@ fn write_fromc4toc5() {
         samples_per_sec: 44100,
         bits_per_sample: EBitsPerSample::Bits16,
     };
-    let sound_settings = sawtooth_fragments(1f32, C5_FLOAT, 100).unwrap();
+    let sound_settings = sawtooth_fragments(1f32, A4_FLOAT, 50).unwrap();
 
     // 上の情報から波形を作る。
     // まず[0 ~ u32]までのu32値から量子化bitsに合う値として変換する。
