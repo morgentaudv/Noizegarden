@@ -61,6 +61,7 @@ impl DataBlock {
 struct DataBlockBuffer {
     // 252 * 2 = 504個。
     buffer: [u8; WAV_IMA_ADPCM_BLOCK_BUFFER_COUNT],
+    // bufferのインデックスではなく、差分データのインデックス。
     index: usize,
 }
 
@@ -74,10 +75,15 @@ impl Default for DataBlockBuffer {
 }
 
 impl DataBlockBuffer {
+    /// 差分データを追加。
     fn add_data(&mut self, data: u8) {
         let buffer_i = self.index >> 1;
         let is_low_bits = self.index % 2 == 0;
+        // チェック
+        debug_assert!(buffer_i < WAV_IMA_ADPCM_BLOCK_BUFFER_COUNT);
 
+        // 1Byteに2個のサンプル差分情報を保持する。
+        // 0bAAAA'BBBBのように…
         let target = &mut self.buffer[buffer_i];
         if is_low_bits {
             *target |= (data & 0xF);
@@ -92,6 +98,7 @@ impl DataBlockBuffer {
     where
         T: io::Write + io::Seek,
     {
+        // 書き込んだところだけまで記述する。
         let buffer_length = self.index >> 1;
         let slice = &self.buffer[0..buffer_length];
         if slice.is_empty() {
