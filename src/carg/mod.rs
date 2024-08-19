@@ -1,5 +1,7 @@
 use clap::{Parser, ValueEnum};
+use container::ENodeContainer;
 
+pub mod container;
 pub mod v1;
 
 #[derive(Parser, Debug)]
@@ -45,7 +47,7 @@ fn get_app_test_json(test_value: EAppTestCommands) -> String {
 }
 
 /// @brief コマンド引数をパーシングする。
-pub fn parse_command_arguments() -> anyhow::Result<()> {
+pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
     let cli = CommandArgs::parse();
     match cli.app_test {
         Some(test_value) => {
@@ -62,19 +64,19 @@ pub fn parse_command_arguments() -> anyhow::Result<()> {
                 let version = &parsed_info["version"];
                 assert!(version.as_i64().unwrap() == 1);
             }
-            println!("{}, {}", parsed_info["mode"], parsed_info["version"]);
 
             // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
             let input: v1::Input = serde_json::from_value(parsed_info["input"].clone())?;
             let setting: v1::Setting = serde_json::from_value(parsed_info["setting"].clone())?;
             let output: v1::Output = serde_json::from_value(parsed_info["output"].clone())?;
-            println!("{:?}", input);
-            println!("{:?}", setting);
-            println!("{:?}", output);
+
+            // まとめて出力。
+            let container = ENodeContainer::V1 { input, setting, output };
+            return Ok(container);
         }
         // DO NOTHING
         None => (),
     }
 
-    Ok(())
+    Ok(ENodeContainer::None)
 }

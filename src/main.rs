@@ -12,5 +12,8 @@ pub mod math;
 pub mod wave;
 
 fn main() -> anyhow::Result<()> {
-    parse_command_arguments()
+    let container = parse_command_arguments()?;
+    container.process()?;
+
+    Ok(())
 }
