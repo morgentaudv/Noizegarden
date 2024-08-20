@@ -28,7 +28,10 @@ const JSON_SINE_WAVE_0: &str = r#"
     "input": [
         {
             "type": "SineWave",
-            "default_freq": 440.0,
+            "default_freq": {
+                "type": "a440",
+                "value": "A4"
+            },
             "length": 3.0,
             "intensity": 1.0
         }
@@ -51,49 +54,49 @@ const JSON_SINE_WAVE_1: &str = r#"
     "input": [
         {
             "type": "SineWave",
-            "default_freq": 261.626,
+            "default_freq": { "type": "a440", "value": "C4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 293.665,
+            "default_freq": { "type": "a440", "value": "D4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 329.628,
+            "default_freq": { "type": "a440", "value": "E4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 349.228,
+            "default_freq": { "type": "a440", "value": "F4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 391.995,
+            "default_freq": { "type": "a440", "value": "G4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 440.000,
+            "default_freq": { "type": "a440", "value": "A4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 493.883,
+            "default_freq": { "type": "a440", "value": "B4" },
             "length": 0.5,
             "intensity": 1.0
         },
         {
             "type": "SineWave",
-            "default_freq": 523.251,
+            "default_freq": { "type": "a440", "value": "C5" },
             "length": 1.5,
             "intensity": 1.0
         }
