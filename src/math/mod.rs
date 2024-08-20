@@ -2,6 +2,8 @@ use std::ops::Mul;
 
 use num_traits::{Float, FromPrimitive};
 
+pub mod frequency;
+
 /// sinc関数。[`f32`]と[`f64`]のみサポート
 pub fn sinc<T>(v: T) -> T
 where
