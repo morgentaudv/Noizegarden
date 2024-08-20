@@ -18,6 +18,8 @@ enum EAppTestCommands {
     SineWave0,
     /// Output from C4 to C5 sine wave at 44.1kHz, 16Bits LPCM for 3 Seconds.
     SineWave1,
+    /// Output A4 sawtooth wave with 50 order at 44.1kHz, 16Bits LPCM for 3 seconds.
+    Sawtooth0,
 }
 
 /// [`EAppTestCommands::SineWave0`]のJson処理命令文
@@ -111,11 +113,38 @@ const JSON_SINE_WAVE_1: &str = r#"
 }
 "#;
 
+/// [`EAppTestCommands::Sawtooth0`]のJson処理命令文
+const JSON_SAWTOOTH_WAVE_0: &str = r#"
+{
+    "mode": "test",
+    "version": 1,
+    "input": [
+        {
+            "type": "Sawtooth",
+            "default_freq": {
+                "type": "a440",
+                "value": "A4"
+            },
+            "length": 3.0,
+            "intensity": 0.177
+        }
+    ],
+    "setting": {
+        "sample_rate": 44100,
+        "bit_depth": "linear-16"
+    },
+    "output": {
+        "file_name": "test_sawtooth_0.wav"
+    }
+}
+"#;
+
 /// @brief テストコマンドごとのテスト処理のためのjson文字列を返す。
 fn get_app_test_json(test_value: EAppTestCommands) -> String {
     match test_value {
         EAppTestCommands::SineWave0 => JSON_SINE_WAVE_0.to_owned(),
         EAppTestCommands::SineWave1 => JSON_SINE_WAVE_1.to_owned(),
+        EAppTestCommands::Sawtooth0 => JSON_SAWTOOTH_WAVE_0.to_owned(),
     }
 }
 

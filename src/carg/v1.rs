@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use soundprog::wave::setting::{WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder};
+use soundprog::wave::setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder};
 
 use crate::math::frequency::EFrequency;
 
@@ -8,6 +8,11 @@ use crate::math::frequency::EFrequency;
 #[serde(tag = "type")]
 pub enum Input {
     SineWave {
+        default_freq: EFrequency,
+        length: f64,
+        intensity: f64,
+    },
+    Sawtooth {
         default_freq: EFrequency,
         length: f64,
         intensity: f64,
@@ -22,7 +27,19 @@ impl Input {
                 length,
                 intensity,
             } => WaveSoundSettingBuilder::default()
-                .frequency(soundprog::wave::setting::EFrequencyItem::Constant {
+                .frequency(EFrequencyItem::Constant {
+                    frequency: default_freq.to_frequency(),
+                })
+                .length_sec(*length as f32)
+                .intensity(*intensity)
+                .build()
+                .unwrap(),
+            Input::Sawtooth {
+                default_freq,
+                length,
+                intensity,
+            } => WaveSoundSettingBuilder::default()
+                .frequency(EFrequencyItem::Sawtooth {
                     frequency: default_freq.to_frequency(),
                 })
                 .length_sec(*length as f32)
