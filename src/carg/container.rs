@@ -3,17 +3,21 @@ use std::{
     io::{self, Write},
 };
 
-use soundprog::wave::{container::WaveContainer, setting::WaveSound};
+use itertools::Itertools;
+use soundprog::wave::{
+    container::{WaveBuilder, WaveContainer},
+    setting::WaveSound,
+};
 
 use super::v1;
 
 /// @brief パーシングされたノードのコンテナ。
 /// これだけで一連の処理ができる。
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ENodeContainer {
     None,
     V1 {
-        input: v1::Input,
+        input: Vec<v1::Input>,
         setting: v1::Setting,
         output: v1::Output,
     },
@@ -25,10 +29,37 @@ impl ENodeContainer {
             ENodeContainer::None => Ok(()),
             ENodeContainer::V1 { input, setting, output } => {
                 let fmt_setting = setting.as_wave_format_setting();
-                let sound_setting = input.into_sound_setting();
 
-                let sound = WaveSound::from_setting(&fmt_setting, &sound_setting);
-                let container = WaveContainer::from_wavesound(&sound).unwrap();
+                let buffer = {
+                    let buffers = input
+                        .into_iter()
+                        .map(|v| {
+                            let sound_setting = v.into_sound_setting();
+                            let sound = WaveSound::from_setting(&fmt_setting, &sound_setting);
+
+                            let mut buffer = vec![];
+                            for mut fragment in sound.sound_fragments {
+                                buffer.append(&mut fragment.buffer);
+                            }
+                            buffer
+                        })
+                        .collect_vec();
+
+                    let mut new_buffer = vec![];
+                    for mut buffer in buffers {
+                        new_buffer.append(&mut buffer);
+                    }
+                    new_buffer
+                };
+
+                let container = WaveBuilder {
+                    samples_per_sec: fmt_setting.samples_per_sec,
+                    bits_per_sample: match fmt_setting.bits_per_sample {
+                        soundprog::wave::setting::EBitsPerSample::Bits16 => 16,
+                    },
+                }
+                .build_container(buffer)
+                .unwrap();
 
                 {
                     let dest_file = fs::File::create(&output.file_name).expect("Could not create 500hz.wav.");

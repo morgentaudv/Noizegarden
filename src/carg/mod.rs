@@ -23,12 +23,14 @@ const JSON_SINE_WAVE_0: &str = r#"
 {
     "mode": "test",
     "version": 1,
-    "input": {
-        "type": "SineWave",
-        "default_freq": 440.0,
-        "length": 3.0,
-        "intensity": 1.0
-    },
+    "input": [
+        {
+            "type": "SineWave",
+            "default_freq": 440.0,
+            "length": 3.0,
+            "intensity": 1.0
+        }
+    ],
     "setting": {
         "sample_rate": 44100,
         "bit_depth": "linear-16"
@@ -66,7 +68,7 @@ pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
             }
 
             // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
-            let input: v1::Input = serde_json::from_value(parsed_info["input"].clone())?;
+            let input: Vec<v1::Input> = serde_json::from_value(parsed_info["input"].clone())?;
             let setting: v1::Setting = serde_json::from_value(parsed_info["setting"].clone())?;
             let output: v1::Output = serde_json::from_value(parsed_info["output"].clone())?;
 
