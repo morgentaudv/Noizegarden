@@ -16,6 +16,8 @@ struct CommandArgs {
 enum EAppTestCommands {
     /// Output 440Hz sine wave at 44.1kHz, 16Bits LPCM for 3 Seconds.
     SineWave0,
+    /// Output from C4 to C5 sine wave at 44.1kHz, 16Bits LPCM for 3 Seconds.
+    SineWave1,
 }
 
 /// [`EAppTestCommands::SineWave0`]のJson処理命令文
@@ -41,10 +43,76 @@ const JSON_SINE_WAVE_0: &str = r#"
 }
 "#;
 
+/// [`EAppTestCommands::SineWave1`]のJson処理命令文
+const JSON_SINE_WAVE_1: &str = r#"
+{
+    "mode": "test",
+    "version": 1,
+    "input": [
+        {
+            "type": "SineWave",
+            "default_freq": 261.626,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 293.665,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 329.628,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 349.228,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 391.995,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 440.000,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 493.883,
+            "length": 0.5,
+            "intensity": 1.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": 523.251,
+            "length": 1.5,
+            "intensity": 1.0
+        }
+    ],
+    "setting": {
+        "sample_rate": 44100,
+        "bit_depth": "linear-16"
+    },
+    "output": {
+        "file_name": "test_sine_wave_1.wav"
+    }
+}
+"#;
+
 /// @brief テストコマンドごとのテスト処理のためのjson文字列を返す。
 fn get_app_test_json(test_value: EAppTestCommands) -> String {
     match test_value {
         EAppTestCommands::SineWave0 => JSON_SINE_WAVE_0.to_owned(),
+        EAppTestCommands::SineWave1 => JSON_SINE_WAVE_1.to_owned(),
     }
 }
 

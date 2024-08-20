@@ -102,17 +102,17 @@ fn write_fromc4toc5() {
         new_buffer
     };
 
-    //WaveContainer::from_uniformed_sample_buffer(original, buffer);
+    WaveContainer::from_uniformed_sample_buffer(original, buffer);
 
-    //let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
-    //// そして情報をまとめてWaveContainerに書く。
-    //let container = WaveContainer::from_wavesound(&sound).unwrap();
+    let sound = WaveSound::from_settings(&fmt_setting, &sound_settings);
+    // そして情報をまとめてWaveContainerに書く。
+    let container = WaveContainer::from_wavesound(&sound).unwrap();
 
-    //// ファイルの出力
-    //{
-    //    let dest_file = fs::File::create(WRITE_FILE_PATH).expect("Could not create 500hz.wav.");
-    //    let mut writer = io::BufWriter::new(dest_file);
-    //    container.write(&mut writer);
-    //    writer.flush().expect("Failed to flush writer.")
-    //}
+    // ファイルの出力
+    {
+        let dest_file = fs::File::create(WRITE_FILE_PATH).expect("Could not create 500hz.wav.");
+        let mut writer = io::BufWriter::new(dest_file);
+        container.write(&mut writer);
+        writer.flush().expect("Failed to flush writer.")
+    }
 }
