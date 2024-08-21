@@ -7,6 +7,7 @@ use itertools::Itertools;
 use soundprog::wave::{
     analyze::window::EWindowFunction,
     container::WaveBuilder,
+    sample::UniformedSample,
     setting::WaveSound,
     stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
 };
@@ -25,28 +26,59 @@ pub enum ENodeContainer {
     },
 }
 
+struct UniformedSampleBufferItem {
+    buffer: Vec<UniformedSample>,
+    start_index: usize,
+    length: usize,
+}
+
 fn process_v1(input: &Vec<v1::Input>, setting: &v1::Setting, output: &v1::Output) -> anyhow::Result<()> {
     let fmt_setting = setting.as_wave_format_setting();
 
     let buffer = {
+        let sample_rate = fmt_setting.samples_per_sec as u64;
+
+        // Inputそれぞれをバッファー化する。
+        let mut fallback_buffer_start_index = 0usize;
         let buffers = input
             .into_iter()
             .map(|v| {
                 let sound_setting = v.into_sound_setting();
-                let sound = WaveSound::from_setting(&fmt_setting, &sound_setting);
+                let sound = WaveSound::from_setting(&fmt_setting, &sound_setting.sound);
 
                 let mut buffer = vec![];
-                for mut fragment in sound.sound_fragments {
-                    buffer.append(&mut fragment.buffer);
+                for fragment in sound.sound_fragments {
+                    buffer.extend(&fragment.buffer);
                 }
-                buffer
+
+                let buffer_length = buffer.len();
+                let start_index = match sound_setting.explicit_buffer_start_index(sample_rate) {
+                    Some(i) => i,
+                    None => fallback_buffer_start_index,
+                };
+                let buffer_next_start_index = start_index + buffer_length;
+                fallback_buffer_start_index = buffer_next_start_index.max(fallback_buffer_start_index);
+
+                UniformedSampleBufferItem {
+                    buffer,
+                    start_index,
+                    length: buffer_length,
+                }
             })
             .collect_vec();
 
+        // 合わせる。
+        let buffer_length = buffers.iter().map(|v| v.start_index + v.length).max().unwrap();
         let mut new_buffer = vec![];
-        for mut buffer in buffers {
-            new_buffer.append(&mut buffer);
+        new_buffer.resize_with(buffer_length, Default::default);
+
+        for buffer in buffers {
+            for src_i in 0..buffer.length {
+                let dest_i = buffer.start_index + src_i;
+                new_buffer[dest_i] += buffer.buffer[src_i];
+            }
         }
+
         new_buffer
     };
 
