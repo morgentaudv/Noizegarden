@@ -18,6 +18,8 @@ enum EAppTestCommands {
     SineWave0,
     /// Output from C4 to C5 sine wave at 44.1kHz, 16Bits LPCM for 3 Seconds.
     SineWave1,
+    /// Output C4, E4, G4 (CMajor) sine wave together at 44.1kHz, 16Bits LPCM for 3 seconds.
+    SineWave2,
     /// Output A4 sawtooth wave with 50 order at 44.1kHz, 16Bits LPCM for 3 seconds.
     Sawtooth0,
 }
@@ -30,10 +32,7 @@ const JSON_SINE_WAVE_0: &str = r#"
     "input": [
         {
             "type": "SineWave",
-            "default_freq": {
-                "type": "a440",
-                "value": "A4"
-            },
+            "default_freq": { "type": "a440", "value": "A4" },
             "length": 3.0,
             "intensity": 1.0
         }
@@ -43,7 +42,13 @@ const JSON_SINE_WAVE_0: &str = r#"
         "bit_depth": "linear-16"
     },
     "output": {
-        "file_name": "test_sine_wave_0.wav"
+        "type": "file",
+        "value": {
+            "type": "wav",
+            "sample_rate": 44100,
+            "bit_depth": "linear-16",
+            "file_name": "test_sine_wave_0.wav"
+        }
     }
 }
 "#;
@@ -108,7 +113,57 @@ const JSON_SINE_WAVE_1: &str = r#"
         "bit_depth": "linear-16"
     },
     "output": {
-        "file_name": "test_sine_wave_1.wav"
+        "type": "file",
+        "value": {
+            "type": "wav",
+            "sample_rate": 44100,
+            "bit_depth": "linear-16",
+            "file_name": "test_sine_wave_1.wav"
+        }
+    }
+}
+"#;
+
+/// [`EAppTestCommands::SineWave2`]のJson処理命令文
+const JSON_SINE_WAVE_2: &str = r#"
+{
+    "mode": "test",
+    "version": 1,
+    "input": [
+        {
+            "type": "SineWave",
+            "default_freq": { "type": "a440", "value": "C4" },
+            "length": 3.0,
+            "intensity": 0.5,
+            "start_time": 0.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": { "type": "a440", "value": "E4" },
+            "length": 3.0,
+            "intensity": 0.5,
+            "start_time": 0.0
+        },
+        {
+            "type": "SineWave",
+            "default_freq": { "type": "a440", "value": "G4" },
+            "length": 3.0,
+            "intensity": 0.5,
+            "start_time": 0.0
+        }
+    ],
+    "setting": {
+        "sample_rate": 44100,
+        "bit_depth": "linear-16"
+    },
+    "output": {
+        "type": "file",
+        "value": {
+            "type": "wav",
+            "sample_rate": 44100,
+            "bit_depth": "linear-16",
+            "file_name": "test_sine_wave_2.wav"
+        }
     }
 }
 "#;
@@ -121,10 +176,7 @@ const JSON_SAWTOOTH_WAVE_0: &str = r#"
     "input": [
         {
             "type": "Sawtooth",
-            "default_freq": {
-                "type": "a440",
-                "value": "A4"
-            },
+            "default_freq": { "type": "a440", "value": "A4" },
             "length": 3.0,
             "intensity": 0.177
         }
@@ -134,7 +186,13 @@ const JSON_SAWTOOTH_WAVE_0: &str = r#"
         "bit_depth": "linear-16"
     },
     "output": {
-        "file_name": "test_sawtooth_0.wav"
+        "type": "file",
+        "value": {
+            "type": "wav",
+            "sample_rate": 44100,
+            "bit_depth": "linear-16",
+            "file_name": "test_sawtooth_0.wav"
+        }
     }
 }
 "#;
@@ -144,6 +202,7 @@ fn get_app_test_json(test_value: EAppTestCommands) -> String {
     match test_value {
         EAppTestCommands::SineWave0 => JSON_SINE_WAVE_0.to_owned(),
         EAppTestCommands::SineWave1 => JSON_SINE_WAVE_1.to_owned(),
+        EAppTestCommands::SineWave2 => JSON_SINE_WAVE_2.to_owned(),
         EAppTestCommands::Sawtooth0 => JSON_SAWTOOTH_WAVE_0.to_owned(),
     }
 }

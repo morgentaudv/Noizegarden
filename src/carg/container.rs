@@ -61,11 +61,26 @@ impl ENodeContainer {
                 .build_container(buffer)
                 .unwrap();
 
-                {
-                    let dest_file = fs::File::create(&output.file_name).expect("Could not create 500hz.wav.");
-                    let mut writer = io::BufWriter::new(dest_file);
-                    container.write(&mut writer);
-                    writer.flush().expect("Failed to flush writer.")
+                match output {
+                    v1::Output::File(data) => match data {
+                        v1::EOutputFile::Wav {
+                            sample_rate,
+                            bit_depth,
+                            file_name,
+                        } => {
+                            // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、
+                            // リサンプリングをしなきゃならない。
+                            assert_eq!(setting.sample_rate, *sample_rate);
+                            assert_eq!(setting.bit_depth, *bit_depth);
+
+                            {
+                                let dest_file = fs::File::create(&file_name).expect("Could not create 500hz.wav.");
+                                let mut writer = io::BufWriter::new(dest_file);
+                                container.write(&mut writer);
+                                writer.flush().expect("Failed to flush writer.")
+                            }
+                        }
+                    },
                 }
 
                 Ok(())
