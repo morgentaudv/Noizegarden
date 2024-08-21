@@ -79,17 +79,16 @@ impl Setting {
 #[serde(tag = "type", content = "value")]
 pub enum Output {
     #[serde(rename = "file")]
-    File(EOutputFile),
+    File {
+        format: EOutputFileFormat,
+        file_name: String,
+    },
 }
 
 /// ファイルとして出力するときのノード。
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
-pub enum EOutputFile {
-    #[serde(rename = "wav")]
-    Wav {
-        sample_rate: u64,
-        bit_depth: String,
-        file_name: String,
-    },
+pub enum EOutputFileFormat {
+    #[serde(rename = "wav_lpcm16")]
+    WavLPCM16 { sample_rate: u64 },
 }

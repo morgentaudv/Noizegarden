@@ -6,12 +6,9 @@ use std::{
 use itertools::Itertools;
 use soundprog::wave::{
     analyze::window::EWindowFunction,
-    container::{WaveBuilder, WaveContainer},
+    container::WaveBuilder,
     setting::WaveSound,
-    stretch::{
-        pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
-        time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
-    },
+    stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
 };
 
 use super::v1;
@@ -54,50 +51,49 @@ fn process_v1(input: &Vec<v1::Input>, setting: &v1::Setting, output: &v1::Output
     };
 
     match output {
-        v1::Output::File(data) => match data {
-            v1::EOutputFile::Wav {
-                sample_rate,
-                bit_depth,
-                file_name,
-            } => {
-                // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、
-                // リサンプリングをしなきゃならない。
-                let source_sample_rate = setting.sample_rate as f64;
-                let dest_sample_rate = *sample_rate as f64;
+        v1::Output::File { format, file_name } => {
+            let container = match format {
+                v1::EOutputFileFormat::WavLPCM16 { sample_rate } => {
+                    // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、
+                    // リサンプリングをしなきゃならない。
+                    let source_sample_rate = setting.sample_rate as f64;
+                    let dest_sample_rate = *sample_rate as f64;
 
-                let processed_container = {
-                    let pitch_rate = source_sample_rate / dest_sample_rate;
-                    if pitch_rate == 1.0 {
-                        buffer
-                    } else {
-                        PitchShifterBuilder::default()
-                            .pitch_rate(pitch_rate)
-                            .window_size(128)
-                            .window_function(EWindowFunction::None)
-                            .build()
-                            .unwrap()
-                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &buffer })
-                            .unwrap()
+                    let processed_container = {
+                        let pitch_rate = source_sample_rate / dest_sample_rate;
+                        if pitch_rate == 1.0 {
+                            buffer
+                        } else {
+                            PitchShifterBuilder::default()
+                                .pitch_rate(pitch_rate)
+                                .window_size(128)
+                                .window_function(EWindowFunction::None)
+                                .build()
+                                .unwrap()
+                                .process_with_buffer(&PitchShifterBufferSetting { buffer: &buffer })
+                                .unwrap()
+                        }
+                    };
+
+                    WaveBuilder {
+                        samples_per_sec: *sample_rate as u32,
+                        bits_per_sample: match fmt_setting.bits_per_sample {
+                            soundprog::wave::setting::EBitsPerSample::Bits16 => 16,
+                        },
                     }
-                };
-
-                let container = WaveBuilder {
-                    samples_per_sec: *sample_rate as u32,
-                    bits_per_sample: match fmt_setting.bits_per_sample {
-                        soundprog::wave::setting::EBitsPerSample::Bits16 => 16,
-                    },
+                    .build_container(processed_container)
+                    .unwrap()
                 }
-                .build_container(processed_container)
-                .unwrap();
+            };
 
-                {
-                    let dest_file = fs::File::create(&file_name).expect("Could not create 500hz.wav.");
-                    let mut writer = io::BufWriter::new(dest_file);
-                    container.write(&mut writer);
-                    writer.flush().expect("Failed to flush writer.")
-                }
+            // 書き込み。
+            {
+                let dest_file = fs::File::create(&file_name).expect("Could not create 500hz.wav.");
+                let mut writer = io::BufWriter::new(dest_file);
+                container.write(&mut writer);
+                writer.flush().expect("Failed to flush writer.")
             }
-        },
+        }
     }
 
     Ok(())
