@@ -189,9 +189,9 @@ const JSON_SAWTOOTH_WAVE_0: &str = r#"
         "type": "file",
         "value": {
             "type": "wav",
-            "sample_rate": 44100,
+            "sample_rate": 22050,
             "bit_depth": "linear-16",
-            "file_name": "test_sawtooth_0.wav"
+            "file_name": "test_sawtooth_0_22050.wav"
         }
     }
 }
