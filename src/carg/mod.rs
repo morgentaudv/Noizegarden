@@ -44,9 +44,10 @@ const JSON_SINE_WAVE_0: &str = r#"
     "output": {
         "type": "file",
         "value": {
-            "type": "wav",
-            "sample_rate": 44100,
-            "bit_depth": "linear-16",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
             "file_name": "test_sine_wave_0.wav"
         }
     }
@@ -115,9 +116,10 @@ const JSON_SINE_WAVE_1: &str = r#"
     "output": {
         "type": "file",
         "value": {
-            "type": "wav",
-            "sample_rate": 44100,
-            "bit_depth": "linear-16",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
             "file_name": "test_sine_wave_1.wav"
         }
     }
@@ -159,9 +161,10 @@ const JSON_SINE_WAVE_2: &str = r#"
     "output": {
         "type": "file",
         "value": {
-            "type": "wav",
-            "sample_rate": 44100,
-            "bit_depth": "linear-16",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
             "file_name": "test_sine_wave_2.wav"
         }
     }
@@ -188,10 +191,11 @@ const JSON_SAWTOOTH_WAVE_0: &str = r#"
     "output": {
         "type": "file",
         "value": {
-            "type": "wav",
-            "sample_rate": 44100,
-            "bit_depth": "linear-16",
-            "file_name": "test_sawtooth_0.wav"
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 22050
+            },
+            "file_name": "test_sawtooth_0_22050.wav"
         }
     }
 }
