@@ -136,21 +136,21 @@ const JSON_SINE_WAVE_2: &str = r#"
             "type": "SineWave",
             "default_freq": { "type": "a440", "value": "C4" },
             "length": 3.0,
-            "intensity": 0.5,
+            "intensity": 0.15,
             "start_time": 0.0
         },
         {
             "type": "SineWave",
             "default_freq": { "type": "a440", "value": "E4" },
             "length": 3.0,
-            "intensity": 0.5,
+            "intensity": 0.15,
             "start_time": 0.0
         },
         {
             "type": "SineWave",
             "default_freq": { "type": "a440", "value": "G4" },
             "length": 3.0,
-            "intensity": 0.5,
+            "intensity": 0.15,
             "start_time": 0.0
         }
     ],

@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use soundprog::wave::setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder};
+use soundprog::wave::{
+    sample,
+    setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder},
+};
 
 use crate::math::frequency::EFrequency;
 
@@ -21,35 +24,56 @@ pub enum Input {
     },
 }
 
+#[derive(Debug)]
+pub struct InputSoundSetting {
+    pub sound: WaveSoundSetting,
+    pub start_time: Option<f64>,
+}
+
+impl InputSoundSetting {
+    pub fn explicit_buffer_start_index(&self, sample_rate: u64) -> Option<usize> {
+        match self.start_time {
+            Some(v) => Some((v * (sample_rate as f64)).floor() as usize),
+            None => None,
+        }
+    }
+}
+
 impl Input {
-    pub fn into_sound_setting(&self) -> WaveSoundSetting {
+    pub fn into_sound_setting(&self) -> InputSoundSetting {
         match self {
             Input::SineWave {
                 default_freq,
                 length,
                 intensity,
                 start_time,
-            } => WaveSoundSettingBuilder::default()
-                .frequency(EFrequencyItem::Constant {
-                    frequency: default_freq.to_frequency(),
-                })
-                .length_sec(*length as f32)
-                .intensity(*intensity)
-                .build()
-                .unwrap(),
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::Constant {
+                        frequency: default_freq.to_frequency(),
+                    })
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
             Input::Sawtooth {
                 default_freq,
                 length,
                 intensity,
                 start_time,
-            } => WaveSoundSettingBuilder::default()
-                .frequency(EFrequencyItem::Sawtooth {
-                    frequency: default_freq.to_frequency(),
-                })
-                .length_sec(*length as f32)
-                .intensity(*intensity)
-                .build()
-                .unwrap(),
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::Sawtooth {
+                        frequency: default_freq.to_frequency(),
+                    })
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
         }
     }
 }
