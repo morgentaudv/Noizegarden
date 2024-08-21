@@ -4,7 +4,7 @@ use std::{
 };
 
 use soundprog::wave::analyze::{
-    analyzer::{FrequencyAnalyzer, FrequencyAnalyzerV2, WaveContainerSetting},
+    analyzer::{FrequencyAnalyzerV2, WaveContainerSetting},
     method::EAnalyzeMethod,
     transformer::EExportSampleCountMode,
 };
