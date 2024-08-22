@@ -134,6 +134,9 @@ pub enum EFrequencyItem {
     Triangle {
         frequency: f64,
     },
+    Square {
+        frequency: f64,
+    },
     FreqModulation {
         carrier_amp: f64,
         carrier_freq: f64,
@@ -406,6 +409,23 @@ impl SoundFragment {
                             .sin();
 
                         let sample = sound.intensity * orig_intensity;
+                        assert!(sample >= -1.0 && sample <= 1.0);
+                        samples.push(sample);
+                    }
+                }
+                EFrequencyItem::Square { frequency } => {
+                    for unittime in 0..samples_count.length {
+                        // 振幅と周波数のエンベロープのため相対時間を計算
+                        let unittime = unittime as f64;
+                        let sin_input = (coefficient * frequency * unittime) + (sound.phase as f64);
+
+                        let sample = sound.intensity * {
+                            if sin_input.sin() >= 0.0 {
+                                1.0
+                            } else {
+                                -1.0
+                            }
+                        };
                         assert!(sample >= -1.0 && sample <= 1.0);
                         samples.push(sample);
                     }

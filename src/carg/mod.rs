@@ -20,8 +20,12 @@ enum EAppTestCommands {
     SineWave1,
     /// Output C4, E4, G4 (CMajor) sine wave together at 44.1kHz, 16Bits LPCM for 3 seconds.
     SineWave2,
-    /// Output A4 sawtooth wave with 50 order at 44.1kHz, 16Bits LPCM for 3 seconds.
-    Sawtooth0,
+    /// Output A4 sawtooth wave at 44.1kHz, 16Bits LPCM for 3 seconds.
+    Sawtooth,
+    /// Output A4 triangle wave at 44.1kHz, 16Bits LPCM for 3 seconds.
+    Triangle,
+    /// Output A4 square wave at 44.1kHz, 16Bits LPCM for 3 seconds.
+    Square,
 }
 
 /// [`EAppTestCommands::SineWave0`]のJson処理命令文
@@ -171,8 +175,8 @@ const JSON_SINE_WAVE_2: &str = r#"
 }
 "#;
 
-/// [`EAppTestCommands::Sawtooth0`]のJson処理命令文
-const JSON_SAWTOOTH_WAVE_0: &str = r#"
+/// [`EAppTestCommands::Sawtooth`]のJson処理命令文
+const JSON_SAWTOOTH_WAVE: &str = r#"
 {
     "mode": "test",
     "version": 1,
@@ -201,13 +205,75 @@ const JSON_SAWTOOTH_WAVE_0: &str = r#"
 }
 "#;
 
+/// [`EAppTestCommands::Triangle`]のJson処理命令文
+const JSON_TRIANGLE_WAVE: &str = r#"
+{
+    "mode": "test",
+    "version": 1,
+    "input": [
+        {
+            "type": "Triangle",
+            "default_freq": { "type": "a440", "value": "A4" },
+            "length": 3.0,
+            "intensity": 0.177
+        }
+    ],
+    "setting": {
+        "sample_rate": 44100,
+        "bit_depth": "linear-16"
+    },
+    "output": {
+        "type": "file",
+        "value": {
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_triangle.wav"
+        }
+    }
+}
+"#;
+
+/// [`EAppTestCommands::Square`]のJson処理命令文
+const JSON_SQUARE_WAVE: &str = r#"
+{
+    "mode": "test",
+    "version": 1,
+    "input": [
+        {
+            "type": "Square",
+            "default_freq": { "type": "a440", "value": "A4" },
+            "length": 3.0,
+            "intensity": 0.177
+        }
+    ],
+    "setting": {
+        "sample_rate": 44100,
+        "bit_depth": "linear-16"
+    },
+    "output": {
+        "type": "file",
+        "value": {
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_square.wav"
+        }
+    }
+}
+"#;
+
 /// @brief テストコマンドごとのテスト処理のためのjson文字列を返す。
 fn get_app_test_json(test_value: EAppTestCommands) -> String {
     match test_value {
         EAppTestCommands::SineWave0 => JSON_SINE_WAVE_0.to_owned(),
         EAppTestCommands::SineWave1 => JSON_SINE_WAVE_1.to_owned(),
         EAppTestCommands::SineWave2 => JSON_SINE_WAVE_2.to_owned(),
-        EAppTestCommands::Sawtooth0 => JSON_SAWTOOTH_WAVE_0.to_owned(),
+        EAppTestCommands::Sawtooth => JSON_SAWTOOTH_WAVE.to_owned(),
+        EAppTestCommands::Triangle => JSON_TRIANGLE_WAVE.to_owned(),
+        EAppTestCommands::Square => JSON_SQUARE_WAVE.to_owned(),
     }
 }
 
