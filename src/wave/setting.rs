@@ -1,5 +1,6 @@
 use derive_builder::Builder;
 use itertools::Itertools;
+use rand::Rng;
 
 use super::{filter::FilterADSR, sample::UniformedSample, PI2};
 
@@ -137,6 +138,8 @@ pub enum EFrequencyItem {
     Square {
         frequency: f64,
     },
+    /// ホワイトノイズを出力する
+    WhiteNoise,
     FreqModulation {
         carrier_amp: f64,
         carrier_freq: f64,
@@ -428,6 +431,20 @@ impl SoundFragment {
                         };
                         assert!(sample >= -1.0 && sample <= 1.0);
                         samples.push(sample);
+                    }
+                }
+                // ホワイトノイズを出力する
+                EFrequencyItem::WhiteNoise => {
+                    // 正規分布からの乱数を使ってWhiteNoiseを生成する。
+                    // 中ではどんな方法を使っているかわからないが、一番速いのはZiggurat法。
+                    // https://andantesoft.hatenablog.com/entry/2023/04/30/183032
+                    let mut rng = rand::thread_rng();
+
+                    for _ in 0..samples_count.length {
+                        // [-1, 1]にする。
+                        let value: f64 = rng.sample(rand::distributions::Standard);
+                        let value = (value * 2.0) - 1.0;
+                        samples.push(value * sound.intensity);
                     }
                 }
             }

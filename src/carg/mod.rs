@@ -26,6 +26,8 @@ enum EAppTestCommands {
     Triangle,
     /// Output A4 square wave at 44.1kHz, 16Bits LPCM for 3 seconds.
     Square,
+    /// Output whitenoise wave at 44.1kHz, 16Bits LPCM for 3 seconds.
+    WhiteNoise,
 }
 
 /// [`EAppTestCommands::SineWave0`]のJson処理命令文
@@ -265,6 +267,26 @@ const JSON_SQUARE_WAVE: &str = r#"
 }
 "#;
 
+/// [`EAppTestCommands::WhiteNoise`]のJson処理命令文
+const JSON_WHITENOISE_WAVE: &str = r#"
+{
+    "mode": "test",
+    "version": 1,
+    "input": [ { "type": "WhiteNoise", "length": 3.0, "intensity": 0.177 } ],
+    "setting": {
+        "sample_rate": 44100,
+        "bit_depth": "linear-16"
+    },
+    "output": {
+        "type": "file",
+        "value": {
+            "format": { "type": "wav_lpcm16", "sample_rate": 44100 },
+            "file_name": "test_whitenoise.wav"
+        }
+    }
+}
+"#;
+
 /// @brief テストコマンドごとのテスト処理のためのjson文字列を返す。
 fn get_app_test_json(test_value: EAppTestCommands) -> String {
     match test_value {
@@ -274,6 +296,7 @@ fn get_app_test_json(test_value: EAppTestCommands) -> String {
         EAppTestCommands::Sawtooth => JSON_SAWTOOTH_WAVE.to_owned(),
         EAppTestCommands::Triangle => JSON_TRIANGLE_WAVE.to_owned(),
         EAppTestCommands::Square => JSON_SQUARE_WAVE.to_owned(),
+        EAppTestCommands::WhiteNoise => JSON_WHITENOISE_WAVE.to_owned(),
     }
 }
 

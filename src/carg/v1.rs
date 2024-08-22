@@ -35,6 +35,12 @@ pub enum Input {
         intensity: f64,
         start_time: Option<f64>,
     },
+    /// ホワイトノイズを出力する
+    WhiteNoise {
+        length: f64,
+        intensity: f64,
+        start_time: Option<f64>,
+    },
 }
 
 #[derive(Debug)]
@@ -113,6 +119,19 @@ impl Input {
                     .frequency(EFrequencyItem::Square {
                         frequency: default_freq.to_frequency(),
                     })
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
+            Input::WhiteNoise {
+                length,
+                intensity,
+                start_time,
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::WhiteNoise)
                     .length_sec(*length as f32)
                     .intensity(*intensity)
                     .build()
