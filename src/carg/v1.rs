@@ -1,8 +1,5 @@
 use serde::{Deserialize, Serialize};
-use soundprog::wave::{
-    sample,
-    setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder},
-};
+use soundprog::wave::setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder};
 
 use crate::math::frequency::EFrequency;
 
@@ -10,14 +7,42 @@ use crate::math::frequency::EFrequency;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum Input {
+    /// 正弦波で出力する
     SineWave {
         default_freq: EFrequency,
         length: f64,
         intensity: f64,
         start_time: Option<f64>,
     },
+    /// ノコギリ波形で出力する
     Sawtooth {
         default_freq: EFrequency,
+        length: f64,
+        intensity: f64,
+        start_time: Option<f64>,
+    },
+    /// 三角波形を出力する
+    Triangle {
+        default_freq: EFrequency,
+        length: f64,
+        intensity: f64,
+        start_time: Option<f64>,
+    },
+    /// 矩形波を出力する
+    Square {
+        default_freq: EFrequency,
+        length: f64,
+        intensity: f64,
+        start_time: Option<f64>,
+    },
+    /// ホワイトノイズを出力する
+    WhiteNoise {
+        length: f64,
+        intensity: f64,
+        start_time: Option<f64>,
+    },
+    /// ピンクノイズを出力する。
+    PinkNoise {
         length: f64,
         intensity: f64,
         start_time: Option<f64>,
@@ -68,6 +93,64 @@ impl Input {
                     .frequency(EFrequencyItem::Sawtooth {
                         frequency: default_freq.to_frequency(),
                     })
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
+            Input::Triangle {
+                default_freq,
+                length,
+                intensity,
+                start_time,
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::Triangle {
+                        frequency: default_freq.to_frequency(),
+                    })
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
+            Input::Square {
+                default_freq,
+                length,
+                intensity,
+                start_time,
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::Square {
+                        frequency: default_freq.to_frequency(),
+                    })
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
+            Input::WhiteNoise {
+                length,
+                intensity,
+                start_time,
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::WhiteNoise)
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
+            Input::PinkNoise {
+                length,
+                intensity,
+                start_time,
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::PinkNoise)
                     .length_sec(*length as f32)
                     .intensity(*intensity)
                     .build()
