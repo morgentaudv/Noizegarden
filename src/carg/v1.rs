@@ -41,6 +41,12 @@ pub enum Input {
         intensity: f64,
         start_time: Option<f64>,
     },
+    /// ピンクノイズを出力する。
+    PinkNoise {
+        length: f64,
+        intensity: f64,
+        start_time: Option<f64>,
+    },
 }
 
 #[derive(Debug)]
@@ -132,6 +138,19 @@ impl Input {
             } => InputSoundSetting {
                 sound: WaveSoundSettingBuilder::default()
                     .frequency(EFrequencyItem::WhiteNoise)
+                    .length_sec(*length as f32)
+                    .intensity(*intensity)
+                    .build()
+                    .unwrap(),
+                start_time: *start_time,
+            },
+            Input::PinkNoise {
+                length,
+                intensity,
+                start_time,
+            } => InputSoundSetting {
+                sound: WaveSoundSettingBuilder::default()
+                    .frequency(EFrequencyItem::PinkNoise)
                     .length_sec(*length as f32)
                     .intensity(*intensity)
                     .build()
