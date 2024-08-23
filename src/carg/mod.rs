@@ -1,3 +1,5 @@
+use std::{fs, io};
+
 use clap::{Parser, ValueEnum};
 use container::ENodeContainer;
 
@@ -10,6 +12,9 @@ struct CommandArgs {
     /// Application test option.
     #[arg(long, value_enum)]
     app_test: Option<EAppTestCommands>,
+    /// Raad setting json file as an input.
+    #[arg(long, short)]
+    input_file: Option<std::path::PathBuf>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum)]
@@ -352,6 +357,40 @@ pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
             return Ok(container);
         }
         // DO NOTHING
+        None => (),
+    }
+
+    // Inputがあれば、パスがあるかを確認し読み取って処理する。
+    match cli.input_file {
+        Some(path) => {
+            assert!(path.is_file());
+            assert!(fs::exists(&path).is_ok());
+
+            let parsed_info: serde_json::Value = {
+                let opened_file = fs::File::open(path.as_path()).expect("Failed to open file.");
+                let reader = io::BufReader::new(opened_file);
+                serde_json::from_reader(reader)?
+            };
+
+            // チェック。今はassertで。
+            {
+                let parsed_mode = &parsed_info["mode"];
+                assert!(parsed_mode.is_string() && parsed_mode.as_str().unwrap() == "test");
+            }
+            {
+                let version = &parsed_info["version"];
+                assert!(version.as_i64().unwrap() == 1);
+            }
+
+            // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
+            let input: Vec<v1::Input> = serde_json::from_value(parsed_info["input"].clone())?;
+            let setting: v1::Setting = serde_json::from_value(parsed_info["setting"].clone())?;
+            let output: v1::Output = serde_json::from_value(parsed_info["output"].clone())?;
+
+            // まとめて出力。
+            let container = ENodeContainer::V1 { input, setting, output };
+            return Ok(container);
+        }
         None => (),
     }
 
