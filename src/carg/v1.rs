@@ -3,6 +3,8 @@ use soundprog::wave::setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetti
 
 use crate::math::frequency::EFrequency;
 
+use super::container::ENodeContainer;
+
 /// 入力ノード
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
@@ -198,4 +200,16 @@ pub enum Output {
 pub enum EOutputFileFormat {
     #[serde(rename = "wav_lpcm16")]
     WavLPCM16 { sample_rate: u64 },
+}
+
+/// v1バージョンにパーシングする。
+pub fn parse_v1(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
+    // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
+    let input: Vec<Input> = serde_json::from_value(info["input"].clone())?;
+    let setting: Setting = serde_json::from_value(info["setting"].clone())?;
+    let output: Output = serde_json::from_value(info["output"].clone())?;
+
+    // まとめて出力。
+    let container = ENodeContainer::V1 { input, setting, output };
+    return Ok(container);
 }
