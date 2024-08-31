@@ -7,6 +7,7 @@ use container::ENodeContainer;
 pub mod app_test;
 pub mod container;
 pub mod v1;
+pub mod v2;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -18,6 +19,41 @@ struct CommandArgs {
     #[arg(long, short)]
     input_file: Option<std::path::PathBuf>,
 }
+
+const TEST_JSON_STRING: &str = r#"
+{
+    "version": 2,
+    "setting": {
+        "sample_rate": 44100
+    },
+    "node": {
+        "input": {
+            "type": "emitter-pinknoise",
+            "intensity": 0.5,
+            "range": {
+                "start": 0.0,
+                "length": 3.0
+            }
+        },
+        "output": {
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_pinknoise.wav"
+        }
+    },
+    "relation": [
+        {
+            "input": [
+                "input"
+            ],
+            "output": "output"
+        }
+    ]
+}
+"#;
 
 impl CommandArgs {
     ///
@@ -49,12 +85,18 @@ impl CommandArgs {
 
         Err(anyhow::anyhow!("Failed to parse"))
     }
+
+    fn try_test_parse_info() -> anyhow::Result<serde_json::Value> {
+        let info: serde_json::Value = serde_json::from_str(TEST_JSON_STRING)?;
+        Ok(info)
+    }
 }
 
 /// @brief コマンド引数をパーシングする。
 pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
-    let cli = CommandArgs::parse();
-    let parsed_info = cli.try_parse_info()?;
+    //let cli = CommandArgs::parse();
+    //let parsed_info = cli.try_parse_info()?;
+    let parsed_info = CommandArgs::try_test_parse_info()?;
 
     // チェック。
     let version = parsed_info["version"].as_i64().expect("version should be interger.");
@@ -62,7 +104,9 @@ pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
         1 => {
             return v1::parse_v1(&parsed_info);
         }
-        2 => {}
+        2 => {
+            return v2::parse_v2(&parsed_info);
+        }
         _ => (),
     }
 

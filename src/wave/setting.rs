@@ -49,6 +49,7 @@ impl EBitsPerSample {
 #[derive(Debug, Clone, Copy)]
 pub struct WaveFormatSetting {
     pub samples_per_sec: u32,
+    #[deprecated = "Deprecated."]
     pub bits_per_sample: EBitsPerSample,
 }
 
