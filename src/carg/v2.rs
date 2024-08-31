@@ -35,6 +35,7 @@ enum ENodeSpecifier {
     EmitterSineWave,
     EmitterSawtooth,
     EmitterTriangle,
+    EmitterSquare,
     OutputFile,
 }
 
@@ -47,6 +48,7 @@ impl ENodeSpecifier {
             ENode::EmitterSineWave { .. } => Self::EmitterSineWave,
             ENode::EmitterSawtooth { .. } => Self::EmitterSawtooth,
             ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
+            ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::OutputFile { .. } => Self::OutputFile,
         }
     }
@@ -58,6 +60,7 @@ impl ENodeSpecifier {
             Self::EmitterSineWave => true,
             Self::EmitterSawtooth => true,
             Self::EmitterTriangle => true,
+            Self::EmitterSquare => true,
             Self::OutputFile => false,
         }
     }
@@ -69,6 +72,7 @@ impl ENodeSpecifier {
             Self::EmitterSineWave => false,
             Self::EmitterSawtooth => false,
             Self::EmitterTriangle => false,
+            Self::EmitterSquare => false,
             Self::OutputFile => true,
         }
     }
@@ -82,6 +86,7 @@ impl ENodeSpecifier {
             Self::EmitterSineWave => false,
             Self::EmitterSawtooth => false,
             Self::EmitterTriangle => false,
+            Self::EmitterSquare => false,
             // trueになれる。
             Self::OutputFile => match self {
                 Self::EmitterPinkNoise => true,
@@ -89,6 +94,7 @@ impl ENodeSpecifier {
                 Self::EmitterSineWave => true,
                 Self::EmitterSawtooth => true,
                 Self::EmitterTriangle => true,
+                Self::EmitterSquare => true,
                 Self::OutputFile => false,
             },
         }
@@ -123,6 +129,14 @@ pub enum ENode {
     #[serde(rename = "emitter-triangle")]
     EmitterTriangle {
         frequency: EFrequency,
+        intensity: f64,
+        range: EmitterRange,
+    },
+    /// 矩形波を出力する。
+    #[serde(rename = "emitter-square")]
+    EmitterSquare {
+        frequency: EFrequency,
+        duty_rate: f64,
         intensity: f64,
         range: EmitterRange,
     },
@@ -452,6 +466,7 @@ impl ENodeProcessData {
             | ENode::EmitterWhiteNoise { .. }
             | ENode::EmitterSineWave { .. }
             | ENode::EmitterTriangle { .. }
+            | ENode::EmitterSquare { .. }
             | ENode::EmitterSawtooth { .. } => {
                 ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
@@ -624,18 +639,37 @@ impl SInputNoneOutputBuffer {
 
                 Rc::new(RefCell::new(item))
             }
+            ENode::EmitterSquare {
+                frequency,
+                duty_rate,
+                intensity,
+                range,
+            } => {
+                let item = SineWaveEmitterProcessData {
+                    common: ProcessControlItem::new(),
+                    emitter_type: ESineWaveEmitterType::Square { duty_rate: *duty_rate },
+                    intensity: *intensity,
+                    frequency: frequency.to_frequency(),
+                    range: *range,
+                    setting: setting.clone(),
+                    output: None,
+                };
+
+                Rc::new(RefCell::new(item))
+            }
             _ => unreachable!("Unexpected branch."),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ESineWaveEmitterType {
     PinkNoise,
     WhiteNoise,
     Sine,
     Saw,
     Triangle,
+    Square { duty_rate: f64 },
 }
 
 /// 正弦波を使って波形のバッファを作るための構造体
@@ -686,6 +720,10 @@ impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
             },
             ESineWaveEmitterType::Triangle => EFrequencyItem::Triangle {
                 frequency: self.frequency,
+            },
+            ESineWaveEmitterType::Square { duty_rate } => EFrequencyItem::Square {
+                frequency: self.frequency,
+                duty_rate,
             },
         };
         let sound_setting = WaveSoundSettingBuilder::default()

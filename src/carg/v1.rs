@@ -126,6 +126,7 @@ impl Input {
                 sound: WaveSoundSettingBuilder::default()
                     .frequency(EFrequencyItem::Square {
                         frequency: default_freq.to_frequency(),
+                        duty_rate: 0.5,
                     })
                     .length_sec(*length as f32)
                     .intensity(*intensity)

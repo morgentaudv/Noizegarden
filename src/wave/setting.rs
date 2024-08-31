@@ -138,6 +138,7 @@ pub enum EFrequencyItem {
         frequency: f64,
     },
     Square {
+        duty_rate: f64,
         frequency: f64,
     },
     /// ホワイトノイズを出力する
@@ -420,7 +421,7 @@ impl SoundFragment {
                         samples.push(sample);
                     }
                 }
-                EFrequencyItem::Square { frequency } => {
+                EFrequencyItem::Square { frequency, duty_rate } => {
                     for unittime in 0..samples_count.length {
                         // 振幅と周波数のエンベロープのため相対時間を計算
                         let unittime = unittime as f64;
