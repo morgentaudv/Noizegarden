@@ -94,9 +94,8 @@ impl CommandArgs {
 
 /// @brief コマンド引数をパーシングする。
 pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
-    //let cli = CommandArgs::parse();
-    //let parsed_info = cli.try_parse_info()?;
-    let parsed_info = CommandArgs::try_test_parse_info()?;
+    let cli = CommandArgs::parse();
+    let parsed_info = cli.try_parse_info()?;
 
     // チェック。
     let version = parsed_info["version"].as_i64().expect("version should be interger.");
