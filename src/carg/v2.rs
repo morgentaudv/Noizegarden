@@ -9,12 +9,15 @@ use std::{
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::wave::{
-    analyze::window::EWindowFunction,
-    container::WaveBuilder,
-    sample::UniformedSample,
-    setting::{EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
-    stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
+use crate::{
+    math::frequency::EFrequency,
+    wave::{
+        analyze::window::EWindowFunction,
+        container::WaveBuilder,
+        sample::UniformedSample,
+        setting::{EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
+        stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
+    },
 };
 
 use super::{container::ENodeContainer, v1::EOutputFileFormat};
@@ -29,6 +32,7 @@ pub struct Setting {
 enum ENodeSpecifier {
     EmitterPinkNoise,
     EmitterWhiteNoise,
+    EmitterSineWave,
     OutputFile,
 }
 
@@ -38,6 +42,7 @@ impl ENodeSpecifier {
         match node {
             ENode::EmitterPinkNoise { .. } => Self::EmitterPinkNoise,
             ENode::EmitterWhiteNoise { .. } => Self::EmitterWhiteNoise,
+            ENode::EmitterSineWave { .. } => Self::EmitterSineWave,
             ENode::OutputFile { .. } => Self::OutputFile,
         }
     }
@@ -46,6 +51,7 @@ impl ENodeSpecifier {
         match self {
             Self::EmitterPinkNoise => true,
             Self::EmitterWhiteNoise => true,
+            Self::EmitterSineWave => true,
             Self::OutputFile => false,
         }
     }
@@ -54,20 +60,24 @@ impl ENodeSpecifier {
         match self {
             Self::EmitterPinkNoise => false,
             Self::EmitterWhiteNoise => false,
+            Self::EmitterSineWave => false,
             Self::OutputFile => true,
         }
     }
 
+    /// 自分が`output`と互換性のあるノードなのか？
     pub fn is_supported_by(&self, output: &Self) -> bool {
         match *output {
             // falseしかできない。
-            ENodeSpecifier::EmitterPinkNoise => false,
-            ENodeSpecifier::EmitterWhiteNoise => false,
+            Self::EmitterPinkNoise => false,
+            Self::EmitterWhiteNoise => false,
+            Self::EmitterSineWave => false,
             // trueになれる。
-            ENodeSpecifier::OutputFile => match self {
-                ENodeSpecifier::EmitterPinkNoise => true,
-                ENodeSpecifier::EmitterWhiteNoise => true,
-                ENodeSpecifier::OutputFile => false,
+            Self::OutputFile => match self {
+                Self::EmitterPinkNoise => true,
+                Self::EmitterWhiteNoise => true,
+                Self::EmitterSineWave => true,
+                Self::OutputFile => false,
             },
         }
     }
@@ -83,6 +93,13 @@ pub enum ENode {
     /// ホワイトノイズを出力する。
     #[serde(rename = "emitter-whitenoise")]
     EmitterWhiteNoise { intensity: f64, range: EmitterRange },
+    /// サイン波形（正弦波）を出力する。
+    #[serde(rename = "emitter-sine")]
+    EmitterSineWave {
+        frequency: EFrequency,
+        intensity: f64,
+        range: EmitterRange,
+    },
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
     OutputFile {
@@ -405,7 +422,7 @@ impl ENodeProcessData {
     /// ノードから処理アイテムを生成する。
     pub fn create_from(node: &ENode, setting: &Setting) -> Self {
         match node {
-            ENode::EmitterPinkNoise { .. } | ENode::EmitterWhiteNoise { .. } => {
+            ENode::EmitterPinkNoise { .. } | ENode::EmitterWhiteNoise { .. } | ENode::EmitterSineWave { .. } => {
                 ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
             ENode::OutputFile { .. } => {
@@ -505,6 +522,7 @@ impl SInputNoneOutputBuffer {
                     common: ProcessControlItem::new(),
                     emitter_type: ESineWaveEmitterType::PinkNoise,
                     intensity: *intensity,
+                    frequency: 0.0,
                     range: *range,
                     setting: setting.clone(),
                     output: None,
@@ -517,6 +535,24 @@ impl SInputNoneOutputBuffer {
                     common: ProcessControlItem::new(),
                     emitter_type: ESineWaveEmitterType::WhiteNoise,
                     intensity: *intensity,
+                    frequency: 0.0,
+                    range: *range,
+                    setting: setting.clone(),
+                    output: None,
+                };
+
+                Rc::new(RefCell::new(item))
+            }
+            ENode::EmitterSineWave {
+                frequency,
+                intensity,
+                range,
+            } => {
+                let item = SineWaveEmitterProcessData {
+                    common: ProcessControlItem::new(),
+                    emitter_type: ESineWaveEmitterType::Sine,
+                    intensity: *intensity,
+                    frequency: frequency.to_frequency(),
                     range: *range,
                     setting: setting.clone(),
                     output: None,
@@ -533,6 +569,7 @@ impl SInputNoneOutputBuffer {
 pub enum ESineWaveEmitterType {
     PinkNoise,
     WhiteNoise,
+    Sine,
 }
 
 /// 正弦波を使って波形のバッファを作るための構造体
@@ -541,6 +578,7 @@ pub struct SineWaveEmitterProcessData {
     common: ProcessControlItem,
     emitter_type: ESineWaveEmitterType,
     intensity: f64,
+    frequency: f64,
     range: EmitterRange,
     setting: Setting,
     /// 処理後に出力情報が保存されるところ。
@@ -574,6 +612,9 @@ impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
         let frequency = match self.emitter_type {
             ESineWaveEmitterType::PinkNoise => EFrequencyItem::PinkNoise,
             ESineWaveEmitterType::WhiteNoise => EFrequencyItem::WhiteNoise,
+            ESineWaveEmitterType::Sine => EFrequencyItem::Constant {
+                frequency: self.frequency,
+            },
         };
         let sound_setting = WaveSoundSettingBuilder::default()
             .frequency(frequency)
