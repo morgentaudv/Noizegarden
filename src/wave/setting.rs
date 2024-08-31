@@ -422,19 +422,22 @@ impl SoundFragment {
                     }
                 }
                 EFrequencyItem::Square { frequency, duty_rate } => {
+                    let herz = coefficient * frequency;
+                    let duty_threshold = PI2 * duty_rate.clamp(0.0, 1.0);
+
                     for unittime in 0..samples_count.length {
                         // 振幅と周波数のエンベロープのため相対時間を計算
+                        // 正弦波形の周期を計算する。そこでduty_rateを反映する。
+                        // phaseは後に入れてSignを計算する。
                         let unittime = unittime as f64;
-                        let sin_input = (coefficient * frequency * unittime) + (sound.phase as f64);
-
+                        let input = (herz * unittime) + (sound.phase as f64);
                         let sample = sound.intensity * {
-                            if sin_input.sin() >= 0.0 {
+                            if (input % PI2) < duty_threshold {
                                 1.0
                             } else {
                                 -1.0
                             }
                         };
-                        assert!(sample >= -1.0 && sample <= 1.0);
                         samples.push(sample);
                     }
                 }
