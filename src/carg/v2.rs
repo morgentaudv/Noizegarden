@@ -33,6 +33,8 @@ enum ENodeSpecifier {
     EmitterPinkNoise,
     EmitterWhiteNoise,
     EmitterSineWave,
+    EmitterSawtooth,
+    EmitterTriangle,
     OutputFile,
 }
 
@@ -43,6 +45,8 @@ impl ENodeSpecifier {
             ENode::EmitterPinkNoise { .. } => Self::EmitterPinkNoise,
             ENode::EmitterWhiteNoise { .. } => Self::EmitterWhiteNoise,
             ENode::EmitterSineWave { .. } => Self::EmitterSineWave,
+            ENode::EmitterSawtooth { .. } => Self::EmitterSawtooth,
+            ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
             ENode::OutputFile { .. } => Self::OutputFile,
         }
     }
@@ -52,6 +56,8 @@ impl ENodeSpecifier {
             Self::EmitterPinkNoise => true,
             Self::EmitterWhiteNoise => true,
             Self::EmitterSineWave => true,
+            Self::EmitterSawtooth => true,
+            Self::EmitterTriangle => true,
             Self::OutputFile => false,
         }
     }
@@ -61,6 +67,8 @@ impl ENodeSpecifier {
             Self::EmitterPinkNoise => false,
             Self::EmitterWhiteNoise => false,
             Self::EmitterSineWave => false,
+            Self::EmitterSawtooth => false,
+            Self::EmitterTriangle => false,
             Self::OutputFile => true,
         }
     }
@@ -72,11 +80,15 @@ impl ENodeSpecifier {
             Self::EmitterPinkNoise => false,
             Self::EmitterWhiteNoise => false,
             Self::EmitterSineWave => false,
+            Self::EmitterSawtooth => false,
+            Self::EmitterTriangle => false,
             // trueになれる。
             Self::OutputFile => match self {
                 Self::EmitterPinkNoise => true,
                 Self::EmitterWhiteNoise => true,
                 Self::EmitterSineWave => true,
+                Self::EmitterSawtooth => true,
+                Self::EmitterTriangle => true,
                 Self::OutputFile => false,
             },
         }
@@ -96,6 +108,20 @@ pub enum ENode {
     /// サイン波形（正弦波）を出力する。
     #[serde(rename = "emitter-sine")]
     EmitterSineWave {
+        frequency: EFrequency,
+        intensity: f64,
+        range: EmitterRange,
+    },
+    /// ノコギリ波を出力する。
+    #[serde(rename = "emitter-saw")]
+    EmitterSawtooth {
+        frequency: EFrequency,
+        intensity: f64,
+        range: EmitterRange,
+    },
+    /// 三角波を出力する。
+    #[serde(rename = "emitter-triangle")]
+    EmitterTriangle {
         frequency: EFrequency,
         intensity: f64,
         range: EmitterRange,
@@ -422,7 +448,11 @@ impl ENodeProcessData {
     /// ノードから処理アイテムを生成する。
     pub fn create_from(node: &ENode, setting: &Setting) -> Self {
         match node {
-            ENode::EmitterPinkNoise { .. } | ENode::EmitterWhiteNoise { .. } | ENode::EmitterSineWave { .. } => {
+            ENode::EmitterPinkNoise { .. }
+            | ENode::EmitterWhiteNoise { .. }
+            | ENode::EmitterSineWave { .. }
+            | ENode::EmitterTriangle { .. }
+            | ENode::EmitterSawtooth { .. } => {
                 ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
             ENode::OutputFile { .. } => {
@@ -560,6 +590,40 @@ impl SInputNoneOutputBuffer {
 
                 Rc::new(RefCell::new(item))
             }
+            ENode::EmitterSawtooth {
+                frequency,
+                intensity,
+                range,
+            } => {
+                let item = SineWaveEmitterProcessData {
+                    common: ProcessControlItem::new(),
+                    emitter_type: ESineWaveEmitterType::Saw,
+                    intensity: *intensity,
+                    frequency: frequency.to_frequency(),
+                    range: *range,
+                    setting: setting.clone(),
+                    output: None,
+                };
+
+                Rc::new(RefCell::new(item))
+            }
+            ENode::EmitterTriangle {
+                frequency,
+                intensity,
+                range,
+            } => {
+                let item = SineWaveEmitterProcessData {
+                    common: ProcessControlItem::new(),
+                    emitter_type: ESineWaveEmitterType::Triangle,
+                    intensity: *intensity,
+                    frequency: frequency.to_frequency(),
+                    range: *range,
+                    setting: setting.clone(),
+                    output: None,
+                };
+
+                Rc::new(RefCell::new(item))
+            }
             _ => unreachable!("Unexpected branch."),
         }
     }
@@ -570,6 +634,8 @@ pub enum ESineWaveEmitterType {
     PinkNoise,
     WhiteNoise,
     Sine,
+    Saw,
+    Triangle,
 }
 
 /// 正弦波を使って波形のバッファを作るための構造体
@@ -613,6 +679,12 @@ impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
             ESineWaveEmitterType::PinkNoise => EFrequencyItem::PinkNoise,
             ESineWaveEmitterType::WhiteNoise => EFrequencyItem::WhiteNoise,
             ESineWaveEmitterType::Sine => EFrequencyItem::Constant {
+                frequency: self.frequency,
+            },
+            ESineWaveEmitterType::Saw => EFrequencyItem::Constant {
+                frequency: self.frequency,
+            },
+            ESineWaveEmitterType::Triangle => EFrequencyItem::Triangle {
                 frequency: self.frequency,
             },
         };
