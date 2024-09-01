@@ -1,29 +1,20 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
-    fs,
-    io::{self, Write},
     rc::Rc,
 };
 
+use adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use emitter::SineWaveEmitterProcessData;
 use itertools::Itertools;
 use output::{output_file::OutputFileProcessData, output_log::OutputLogProcessData};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    math::frequency::EFrequency,
-    wave::{
-        analyze::window::EWindowFunction,
-        container::WaveBuilder,
-        sample::UniformedSample,
-        setting::{EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
-        stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
-    },
-};
+use crate::{math::frequency::EFrequency, wave::sample::UniformedSample};
 
 use super::{container::ENodeContainer, v1::EOutputFileFormat};
 
+pub mod adapter;
 pub mod emitter;
 pub mod output;
 
@@ -41,6 +32,7 @@ enum ENodeSpecifier {
     EmitterSawtooth,
     EmitterTriangle,
     EmitterSquare,
+    AdapterEnvlopeAd,
     OutputFile,
     OutputLog,
 }
@@ -55,6 +47,7 @@ impl ENodeSpecifier {
             ENode::EmitterSawtooth { .. } => Self::EmitterSawtooth,
             ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
+            ENode::AdapterEnvlopeAd { .. } => Self::AdapterEnvlopeAd,
             ENode::OutputFile { .. } => Self::OutputFile,
             ENode::OutputLog { .. } => Self::OutputLog,
         }
@@ -67,7 +60,7 @@ impl ENodeSpecifier {
             Self::EmitterSineWave => true,
             Self::EmitterSawtooth => true,
             Self::EmitterTriangle => true,
-            Self::EmitterSquare => true,
+            Self::EmitterSquare | Self::AdapterEnvlopeAd => true,
             Self::OutputFile => false,
             Self::OutputLog => false,
         }
@@ -81,8 +74,7 @@ impl ENodeSpecifier {
             Self::EmitterSawtooth => false,
             Self::EmitterTriangle => false,
             Self::EmitterSquare => false,
-            Self::OutputFile => true,
-            Self::OutputLog => true,
+            Self::OutputFile | Self::OutputLog | Self::AdapterEnvlopeAd => true,
         }
     }
 
@@ -103,6 +95,7 @@ impl ENodeSpecifier {
                 | Self::EmitterSineWave
                 | Self::EmitterSawtooth
                 | Self::EmitterTriangle
+                | Self::AdapterEnvlopeAd
                 | Self::EmitterSquare => true,
                 Self::OutputFile | Self::OutputLog => false,
             },
@@ -112,6 +105,17 @@ impl ENodeSpecifier {
                 | Self::EmitterSineWave
                 | Self::EmitterSawtooth
                 | Self::EmitterTriangle
+                | Self::AdapterEnvlopeAd
+                | Self::EmitterSquare => true,
+                Self::OutputFile | Self::OutputLog => false,
+            },
+            Self::AdapterEnvlopeAd => match self {
+                Self::EmitterPinkNoise
+                | Self::EmitterWhiteNoise
+                | Self::EmitterSineWave
+                | Self::EmitterSawtooth
+                | Self::EmitterTriangle
+                | Self::AdapterEnvlopeAd
                 | Self::EmitterSquare => true,
                 Self::OutputFile | Self::OutputLog => false,
             },
@@ -158,6 +162,14 @@ pub enum ENode {
         intensity: f64,
         range: EmitterRange,
     },
+    /// 矩形波を出力する。
+    #[serde(rename = "adapter-envelope-ad")]
+    AdapterEnvlopeAd {
+        attack_time: f64,
+        decay_time: f64,
+        attack_curve: f64,
+        decay_curve: f64,
+    },
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
     OutputFile {
@@ -181,6 +193,14 @@ impl ENode {
     pub fn is_supported_by(&self, output: &ENode) -> bool {
         ENodeSpecifier::from_node(self).is_supported_by(&ENodeSpecifier::from_node(output))
     }
+}
+
+/// 発動条件を示す。
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type")]
+pub enum ETriggerCondition {
+    #[serde(rename = "time")]
+    Time { start: f64 },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
@@ -380,6 +400,7 @@ impl RelationTreeNode {
         match &mut self.processor {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().set_child_count(new_child_count),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().set_child_count(new_child_count),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().set_child_count(new_child_count),
         }
     }
 
@@ -482,6 +503,7 @@ pub enum EProcessState {
 pub enum ENodeProcessData {
     InputNoneOutputBuffer(InputNoneOutputBufferPtr),
     InputBufferOutputNone(InputBufferOutputNonePtr),
+    InputBufferOutputBuffer(InputBufferOutputBufferPtr),
 }
 
 impl ENodeProcessData {
@@ -496,6 +518,9 @@ impl ENodeProcessData {
             | ENode::EmitterSawtooth { .. } => {
                 ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
+            ENode::AdapterEnvlopeAd { .. } => {
+                ENodeProcessData::InputBufferOutputBuffer(SInputBufferOutputBuffer::create_from(node, setting))
+            }
             ENode::OutputLog { .. } | ENode::OutputFile { .. } => {
                 ENodeProcessData::InputBufferOutputNone(SInputBufferOutputNone::create_from(node, setting))
             }
@@ -507,6 +532,7 @@ impl ENodeProcessData {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().is_finished(),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow().is_finished(),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
         }
     }
 
@@ -515,6 +541,7 @@ impl ENodeProcessData {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().get_timestamp(),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow().get_timestamp(),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().get_timestamp(),
         }
     }
 
@@ -523,6 +550,7 @@ impl ENodeProcessData {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(),
         }
     }
 
@@ -531,6 +559,7 @@ impl ENodeProcessData {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(_) => unreachable!("Unexpected branch"),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().update_input(index, output),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().update_input(index, output),
         }
     }
 
@@ -539,6 +568,7 @@ impl ENodeProcessData {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
             ENodeProcessData::InputBufferOutputNone(_) => EProcessOutput::None,
+            ENodeProcessData::InputBufferOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
         }
     }
 }
@@ -677,6 +707,53 @@ impl SInputBufferOutputNone {
                 Rc::new(RefCell::new(OutputFileProcessData::new(format.clone(), file_name.clone())))
             }
             ENode::OutputLog { mode } => Rc::new(RefCell::new(OutputLogProcessData::new(*mode))),
+            _ => unreachable!("Unexpected branch."),
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// TInputBufferOutputBuffer
+// ----------------------------------------------------------------------------
+
+/// [`TInputBufferOutputBuffer`]を実装しているアイテムの外部表示タイプ
+pub type InputBufferOutputBufferPtr = Rc<RefCell<dyn TInputBufferOutputBuffer>>;
+
+/// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
+pub trait TInputBufferOutputBuffer: std::fmt::Debug {
+    /// データアイテムの処理が終わったか？
+    fn is_finished(&self) -> bool;
+
+    /// 自分のタイムスタンプを返す。
+    fn get_timestamp(&self) -> i64;
+
+    /// 処理結果を返す。
+    fn get_output(&self) -> ProcessOutputBuffer;
+
+    /// 中に`output`を更新する。
+    fn update_input(&mut self, index: usize, output: EProcessOutput);
+
+    fn set_child_count(&mut self, count: usize);
+
+    /// 処理してみる。
+    fn try_process(&mut self) -> EProcessResult;
+}
+
+struct SInputBufferOutputBuffer;
+impl SInputBufferOutputBuffer {
+    fn create_from(node: &ENode, _: &Setting) -> InputBufferOutputBufferPtr {
+        match node {
+            ENode::AdapterEnvlopeAd {
+                attack_time,
+                decay_time,
+                attack_curve,
+                decay_curve,
+            } => Rc::new(RefCell::new(AdapterEnvelopeAdProcessData::new(
+                *attack_time,
+                *decay_time,
+                *attack_curve,
+                *decay_curve,
+            ))),
             _ => unreachable!("Unexpected branch."),
         }
     }
