@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use adapter::envelope_ad::AdapterEnvelopeAdProcessData;
+use adapter::{envelope_ad::AdapterEnvelopeAdProcessData, envelope_adsr::AdapterEnvelopeAdsrProcessData};
 use emitter::SineWaveEmitterProcessData;
 use itertools::Itertools;
 use output::{output_file::OutputFileProcessData, output_log::OutputLogProcessData};
@@ -33,6 +33,7 @@ enum ENodeSpecifier {
     EmitterTriangle,
     EmitterSquare,
     AdapterEnvlopeAd,
+    AdapterEnvlopeAdsr,
     OutputFile,
     OutputLog,
 }
@@ -48,6 +49,7 @@ impl ENodeSpecifier {
             ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::AdapterEnvlopeAd { .. } => Self::AdapterEnvlopeAd,
+            ENode::AdapterEnvlopeAdsr { .. } => Self::AdapterEnvlopeAdsr,
             ENode::OutputFile { .. } => Self::OutputFile,
             ENode::OutputLog { .. } => Self::OutputLog,
         }
@@ -60,7 +62,7 @@ impl ENodeSpecifier {
             Self::EmitterSineWave => true,
             Self::EmitterSawtooth => true,
             Self::EmitterTriangle => true,
-            Self::EmitterSquare | Self::AdapterEnvlopeAd => true,
+            Self::EmitterSquare | Self::AdapterEnvlopeAd | Self::AdapterEnvlopeAdsr => true,
             Self::OutputFile => false,
             Self::OutputLog => false,
         }
@@ -74,7 +76,7 @@ impl ENodeSpecifier {
             Self::EmitterSawtooth => false,
             Self::EmitterTriangle => false,
             Self::EmitterSquare => false,
-            Self::OutputFile | Self::OutputLog | Self::AdapterEnvlopeAd => true,
+            Self::OutputFile | Self::OutputLog | Self::AdapterEnvlopeAd | Self::AdapterEnvlopeAdsr => true,
         }
     }
 
@@ -96,6 +98,7 @@ impl ENodeSpecifier {
                 | Self::EmitterSawtooth
                 | Self::EmitterTriangle
                 | Self::AdapterEnvlopeAd
+                | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
                 Self::OutputFile | Self::OutputLog => false,
             },
@@ -106,6 +109,7 @@ impl ENodeSpecifier {
                 | Self::EmitterSawtooth
                 | Self::EmitterTriangle
                 | Self::AdapterEnvlopeAd
+                | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
                 Self::OutputFile | Self::OutputLog => false,
             },
@@ -116,6 +120,18 @@ impl ENodeSpecifier {
                 | Self::EmitterSawtooth
                 | Self::EmitterTriangle
                 | Self::AdapterEnvlopeAd
+                | Self::AdapterEnvlopeAdsr
+                | Self::EmitterSquare => true,
+                Self::OutputFile | Self::OutputLog => false,
+            },
+            Self::AdapterEnvlopeAdsr => match self {
+                Self::EmitterPinkNoise
+                | Self::EmitterWhiteNoise
+                | Self::EmitterSineWave
+                | Self::EmitterSawtooth
+                | Self::EmitterTriangle
+                | Self::AdapterEnvlopeAd
+                | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
                 Self::OutputFile | Self::OutputLog => false,
             },
@@ -162,13 +178,26 @@ pub enum ENode {
         intensity: f64,
         range: EmitterRange,
     },
-    /// 矩形波を出力する。
+    /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-ad")]
     AdapterEnvlopeAd {
         attack_time: f64,
         decay_time: f64,
         attack_curve: f64,
         decay_curve: f64,
+    },
+    /// 振幅をADSR(Attack-Delay-Sustain-Release)Envelopeを使って調整する。
+    #[serde(rename = "adapter-envelope-adsr")]
+    AdapterEnvlopeAdsr {
+        attack_time: f64,
+        decay_time: f64,
+        sustain_time: f64,
+        release_time: f64,
+        attack_curve: f64,
+        decay_curve: f64,
+        release_curve: f64,
+        /// sustainで維持する振幅`[0, 1]`の値。
+        sustain_value: f64,
     },
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
@@ -518,7 +547,7 @@ impl ENodeProcessData {
             | ENode::EmitterSawtooth { .. } => {
                 ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
-            ENode::AdapterEnvlopeAd { .. } => {
+            ENode::AdapterEnvlopeAd { .. } | ENode::AdapterEnvlopeAdsr { .. } => {
                 ENodeProcessData::InputBufferOutputBuffer(SInputBufferOutputBuffer::create_from(node, setting))
             }
             ENode::OutputLog { .. } | ENode::OutputFile { .. } => {
@@ -753,6 +782,25 @@ impl SInputBufferOutputBuffer {
                 *decay_time,
                 *attack_curve,
                 *decay_curve,
+            ))),
+            ENode::AdapterEnvlopeAdsr {
+                attack_time,
+                decay_time,
+                sustain_time,
+                release_time,
+                attack_curve,
+                decay_curve,
+                release_curve,
+                sustain_value,
+            } => Rc::new(RefCell::new(AdapterEnvelopeAdsrProcessData::new(
+                *attack_time,
+                *decay_time,
+                *sustain_time,
+                *release_time,
+                *attack_curve,
+                *decay_curve,
+                *release_curve,
+                *sustain_value,
             ))),
             _ => unreachable!("Unexpected branch."),
         }
