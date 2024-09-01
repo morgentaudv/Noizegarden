@@ -6,7 +6,9 @@ use std::{
     rc::Rc,
 };
 
+use emitter::SineWaveEmitterProcessData;
 use itertools::Itertools;
+use output::{output_file::OutputFileProcessData, output_log::OutputLogProcessData};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -21,6 +23,9 @@ use crate::{
 };
 
 use super::{container::ENodeContainer, v1::EOutputFileFormat};
+
+pub mod emitter;
+pub mod output;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Setting {
@@ -37,6 +42,7 @@ enum ENodeSpecifier {
     EmitterTriangle,
     EmitterSquare,
     OutputFile,
+    OutputLog,
 }
 
 impl ENodeSpecifier {
@@ -50,6 +56,7 @@ impl ENodeSpecifier {
             ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::OutputFile { .. } => Self::OutputFile,
+            ENode::OutputLog { .. } => Self::OutputLog,
         }
     }
 
@@ -62,6 +69,7 @@ impl ENodeSpecifier {
             Self::EmitterTriangle => true,
             Self::EmitterSquare => true,
             Self::OutputFile => false,
+            Self::OutputLog => false,
         }
     }
 
@@ -74,6 +82,7 @@ impl ENodeSpecifier {
             Self::EmitterTriangle => false,
             Self::EmitterSquare => false,
             Self::OutputFile => true,
+            Self::OutputLog => true,
         }
     }
 
@@ -81,21 +90,30 @@ impl ENodeSpecifier {
     pub fn is_supported_by(&self, output: &Self) -> bool {
         match *output {
             // falseしかできない。
-            Self::EmitterPinkNoise => false,
-            Self::EmitterWhiteNoise => false,
-            Self::EmitterSineWave => false,
-            Self::EmitterSawtooth => false,
-            Self::EmitterTriangle => false,
-            Self::EmitterSquare => false,
+            Self::EmitterPinkNoise
+            | Self::EmitterWhiteNoise
+            | Self::EmitterSineWave
+            | Self::EmitterSawtooth
+            | Self::EmitterTriangle
+            | Self::EmitterSquare => false,
             // trueになれる。
             Self::OutputFile => match self {
-                Self::EmitterPinkNoise => true,
-                Self::EmitterWhiteNoise => true,
-                Self::EmitterSineWave => true,
-                Self::EmitterSawtooth => true,
-                Self::EmitterTriangle => true,
-                Self::EmitterSquare => true,
-                Self::OutputFile => false,
+                Self::EmitterPinkNoise
+                | Self::EmitterWhiteNoise
+                | Self::EmitterSineWave
+                | Self::EmitterSawtooth
+                | Self::EmitterTriangle
+                | Self::EmitterSquare => true,
+                Self::OutputFile | Self::OutputLog => false,
+            },
+            Self::OutputLog => match self {
+                Self::EmitterPinkNoise
+                | Self::EmitterWhiteNoise
+                | Self::EmitterSineWave
+                | Self::EmitterSawtooth
+                | Self::EmitterTriangle
+                | Self::EmitterSquare => true,
+                Self::OutputFile | Self::OutputLog => false,
             },
         }
     }
@@ -146,6 +164,8 @@ pub enum ENode {
         format: EOutputFileFormat,
         file_name: String,
     },
+    #[serde(rename = "output-log")]
+    OutputLog { mode: EParsedOutputLogMode },
 }
 
 impl ENode {
@@ -161,6 +181,12 @@ impl ENode {
     pub fn is_supported_by(&self, output: &ENode) -> bool {
         ENodeSpecifier::from_node(self).is_supported_by(&ENodeSpecifier::from_node(output))
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum EParsedOutputLogMode {
+    #[serde(rename = "print")]
+    Print,
 }
 
 ///
@@ -470,7 +496,7 @@ impl ENodeProcessData {
             | ENode::EmitterSawtooth { .. } => {
                 ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
-            ENode::OutputFile { .. } => {
+            ENode::OutputLog { .. } | ENode::OutputFile { .. } => {
                 ENodeProcessData::InputBufferOutputNone(SInputBufferOutputNone::create_from(node, setting))
             }
         }
@@ -563,29 +589,11 @@ impl SInputNoneOutputBuffer {
     fn create_from(node: &ENode, setting: &Setting) -> InputNoneOutputBufferPtr {
         match node {
             ENode::EmitterPinkNoise { intensity, range } => {
-                let item = SineWaveEmitterProcessData {
-                    common: ProcessControlItem::new(),
-                    emitter_type: ESineWaveEmitterType::PinkNoise,
-                    intensity: *intensity,
-                    frequency: 0.0,
-                    range: *range,
-                    setting: setting.clone(),
-                    output: None,
-                };
-
+                let item = SineWaveEmitterProcessData::new_pink(*intensity, *range, setting.clone());
                 Rc::new(RefCell::new(item))
             }
             ENode::EmitterWhiteNoise { intensity, range } => {
-                let item = SineWaveEmitterProcessData {
-                    common: ProcessControlItem::new(),
-                    emitter_type: ESineWaveEmitterType::WhiteNoise,
-                    intensity: *intensity,
-                    frequency: 0.0,
-                    range: *range,
-                    setting: setting.clone(),
-                    output: None,
-                };
-
+                let item = SineWaveEmitterProcessData::new_white(*intensity, *range, setting.clone());
                 Rc::new(RefCell::new(item))
             }
             ENode::EmitterSineWave {
@@ -593,16 +601,7 @@ impl SInputNoneOutputBuffer {
                 intensity,
                 range,
             } => {
-                let item = SineWaveEmitterProcessData {
-                    common: ProcessControlItem::new(),
-                    emitter_type: ESineWaveEmitterType::Sine,
-                    intensity: *intensity,
-                    frequency: frequency.to_frequency(),
-                    range: *range,
-                    setting: setting.clone(),
-                    output: None,
-                };
-
+                let item = SineWaveEmitterProcessData::new_sine(*frequency, *intensity, *range, setting.clone());
                 Rc::new(RefCell::new(item))
             }
             ENode::EmitterSawtooth {
@@ -610,16 +609,7 @@ impl SInputNoneOutputBuffer {
                 intensity,
                 range,
             } => {
-                let item = SineWaveEmitterProcessData {
-                    common: ProcessControlItem::new(),
-                    emitter_type: ESineWaveEmitterType::Saw,
-                    intensity: *intensity,
-                    frequency: frequency.to_frequency(),
-                    range: *range,
-                    setting: setting.clone(),
-                    output: None,
-                };
-
+                let item = SineWaveEmitterProcessData::new_saw(*frequency, *intensity, *range, setting.clone());
                 Rc::new(RefCell::new(item))
             }
             ENode::EmitterTriangle {
@@ -627,16 +617,7 @@ impl SInputNoneOutputBuffer {
                 intensity,
                 range,
             } => {
-                let item = SineWaveEmitterProcessData {
-                    common: ProcessControlItem::new(),
-                    emitter_type: ESineWaveEmitterType::Triangle,
-                    intensity: *intensity,
-                    frequency: frequency.to_frequency(),
-                    range: *range,
-                    setting: setting.clone(),
-                    output: None,
-                };
-
+                let item = SineWaveEmitterProcessData::new_triangle(*frequency, *intensity, *range, setting.clone());
                 Rc::new(RefCell::new(item))
             }
             ENode::EmitterSquare {
@@ -645,16 +626,8 @@ impl SInputNoneOutputBuffer {
                 intensity,
                 range,
             } => {
-                let item = SineWaveEmitterProcessData {
-                    common: ProcessControlItem::new(),
-                    emitter_type: ESineWaveEmitterType::Square { duty_rate: *duty_rate },
-                    intensity: *intensity,
-                    frequency: frequency.to_frequency(),
-                    range: *range,
-                    setting: setting.clone(),
-                    output: None,
-                };
-
+                let item =
+                    SineWaveEmitterProcessData::new_square(*frequency, *duty_rate, *intensity, *range, setting.clone());
                 Rc::new(RefCell::new(item))
             }
             _ => unreachable!("Unexpected branch."),
@@ -670,92 +643,6 @@ pub enum ESineWaveEmitterType {
     Saw,
     Triangle,
     Square { duty_rate: f64 },
-}
-
-/// 正弦波を使って波形のバッファを作るための構造体
-#[derive(Debug)]
-pub struct SineWaveEmitterProcessData {
-    common: ProcessControlItem,
-    emitter_type: ESineWaveEmitterType,
-    intensity: f64,
-    frequency: f64,
-    range: EmitterRange,
-    setting: Setting,
-    /// 処理後に出力情報が保存されるところ。
-    output: Option<ProcessOutputBuffer>,
-}
-
-impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
-    fn get_output(&self) -> ProcessOutputBuffer {
-        assert!(self.output.is_some());
-        self.output.as_ref().unwrap().clone()
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
-    }
-
-    fn try_process(&mut self) -> EProcessResult {
-        if self.common.state == EProcessState::Finished {
-            return EProcessResult::Finished;
-        }
-
-        let frequency = match self.emitter_type {
-            ESineWaveEmitterType::PinkNoise => EFrequencyItem::PinkNoise,
-            ESineWaveEmitterType::WhiteNoise => EFrequencyItem::WhiteNoise,
-            ESineWaveEmitterType::Sine => EFrequencyItem::Constant {
-                frequency: self.frequency,
-            },
-            ESineWaveEmitterType::Saw => EFrequencyItem::Constant {
-                frequency: self.frequency,
-            },
-            ESineWaveEmitterType::Triangle => EFrequencyItem::Triangle {
-                frequency: self.frequency,
-            },
-            ESineWaveEmitterType::Square { duty_rate } => EFrequencyItem::Square {
-                frequency: self.frequency,
-                duty_rate,
-            },
-        };
-        let sound_setting = WaveSoundSettingBuilder::default()
-            .frequency(frequency)
-            .length_sec(self.range.length as f32)
-            .intensity(self.intensity)
-            .build()
-            .unwrap();
-
-        let format = WaveFormatSetting {
-            samples_per_sec: self.setting.sample_rate as u32,
-            bits_per_sample: crate::wave::setting::EBitsPerSample::Bits16,
-        };
-        let sound = WaveSound::from_setting(&format, &sound_setting);
-
-        let mut buffer: Vec<UniformedSample> = vec![];
-        for fragment in sound.sound_fragments {
-            buffer.extend(&fragment.buffer);
-        }
-
-        // outputのどこかに保持する。
-        self.output = Some(ProcessOutputBuffer {
-            buffer,
-            setting: self.setting.clone(),
-            range: self.range,
-        });
-
-        // 状態変更。
-        self.common.state = EProcessState::Finished;
-        self.common.process_timestamp += 1;
-        return EProcessResult::Finished;
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -782,139 +669,14 @@ pub trait TInputBufferOutputNone: std::fmt::Debug {
     fn set_child_count(&mut self, count: usize);
 }
 
-#[derive(Debug)]
-pub struct OutputFileProcessData {
-    common: ProcessControlItem,
-    format: EOutputFileFormat,
-    file_name: String,
-    inputs: HashMap<usize, ProcessOutputBuffer>,
-}
-
-impl TInputBufferOutputNone for OutputFileProcessData {
-    /// データアイテムの処理が終わったか？
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
-    }
-
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        match output {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                self.inputs.insert(index, v);
-            }
-        }
-    }
-
-    fn try_process(&mut self) -> EProcessResult {
-        // Childrenが全部送信完了したら処理が行える。
-        // commonで初期Childrenの数を比較するだけでいいかも。
-        if self.inputs.len() < self.common.child_count {
-            return EProcessResult::Pending;
-        }
-        assert!(self.common.child_count > 0);
-
-        // inputsのサンプルレートが同じかを確認する。
-        let source_sample_rate = self.inputs.get(&0).unwrap().setting.sample_rate;
-        for (_, input) in self.inputs.iter().skip(1) {
-            assert!(input.setting.sample_rate == source_sample_rate);
-        }
-
-        // ここで各bufferを組み合わせて、一つにしてから書き込む。
-        let mut final_buffer_length = 0usize;
-        let ref_vec = self
-            .inputs
-            .iter()
-            .map(|(_, info)| {
-                let buffer_length = info.buffer.len();
-                let start_index = (info.range.start * (info.setting.sample_rate as f64)).floor() as usize;
-                let exclusive_end_index = start_index + buffer_length;
-
-                final_buffer_length = exclusive_end_index.max(final_buffer_length);
-
-                (info, start_index)
-            })
-            .collect_vec();
-
-        // 書き込み
-        let mut new_buffer = vec![];
-        new_buffer.resize(final_buffer_length, UniformedSample::default());
-        for (ref_buffer, start_index) in ref_vec {
-            for src_i in 0..ref_buffer.buffer.len() {
-                let dest_i = start_index + src_i;
-                new_buffer[dest_i] += ref_buffer.buffer[src_i];
-            }
-        }
-
-        let container = match self.format {
-            EOutputFileFormat::WavLPCM16 { sample_rate } => {
-                // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、
-                // リサンプリングをしなきゃならない。
-                let source_sample_rate = source_sample_rate as f64;
-                let dest_sample_rate = sample_rate as f64;
-
-                let processed_container = {
-                    let pitch_rate = source_sample_rate / dest_sample_rate;
-                    if pitch_rate == 1.0 {
-                        new_buffer
-                    } else {
-                        PitchShifterBuilder::default()
-                            .pitch_rate(pitch_rate)
-                            .window_size(128)
-                            .window_function(EWindowFunction::None)
-                            .build()
-                            .unwrap()
-                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &new_buffer })
-                            .unwrap()
-                    }
-                };
-
-                WaveBuilder {
-                    samples_per_sec: sample_rate as u32,
-                    bits_per_sample: 16,
-                }
-                .build_container(processed_container)
-                .unwrap()
-            }
-        };
-
-        // 書き込み。
-        {
-            let dest_file = fs::File::create(&self.file_name).expect("Could not create 500hz.wav.");
-            let mut writer = io::BufWriter::new(dest_file);
-            container.write(&mut writer);
-            writer.flush().expect("Failed to flush writer.")
-        }
-
-        // 状態変更。
-        self.common.state = EProcessState::Finished;
-        self.common.process_timestamp += 1;
-        return EProcessResult::Finished;
-    }
-}
-
 struct SInputBufferOutputNone;
 impl SInputBufferOutputNone {
     fn create_from(node: &ENode, _: &Setting) -> InputBufferOutputNonePtr {
         match node {
             ENode::OutputFile { format, file_name } => {
-                let item = OutputFileProcessData {
-                    common: ProcessControlItem::new(),
-                    format: format.clone(),
-                    file_name: file_name.clone(),
-                    inputs: HashMap::new(),
-                };
-
-                Rc::new(RefCell::new(item))
+                Rc::new(RefCell::new(OutputFileProcessData::new(format.clone(), file_name.clone())))
             }
+            ENode::OutputLog { mode } => Rc::new(RefCell::new(OutputLogProcessData::new(*mode))),
             _ => unreachable!("Unexpected branch."),
         }
     }
