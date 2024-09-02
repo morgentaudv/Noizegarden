@@ -4,8 +4,8 @@ use crate::{
 };
 
 use super::{
-    EProcessResult, EProcessState, ESineWaveEmitterType, EmitterRange, ProcessControlItem, ProcessInput,
-    ProcessOutputBuffer, Setting, TInputNoneOutputBuffer, TProcess,
+    EProcessResult, EProcessState, ESineWaveEmitterType, EmitterRange, ProcessControlItem, ProcessOutputBuffer,
+    ProcessProcessorInput, Setting, TInputNoneOutputBuffer, TProcess,
 };
 
 /// 正弦波を使って波形のバッファを作るための構造体
@@ -22,8 +22,6 @@ pub struct SineWaveEmitterProcessData {
     output: Option<ProcessOutputBuffer>,
     /// 波形を出力するEmitter。
     emitter: Option<SineUnitSampleEmitter>,
-    /// 経過した時間（秒単位）
-    elapsed_time: f64,
 }
 
 impl SineWaveEmitterProcessData {
@@ -38,7 +36,6 @@ impl SineWaveEmitterProcessData {
             setting: setting,
             output: None,
             emitter: None,
-            elapsed_time: 0.0,
         }
     }
 
@@ -53,7 +50,6 @@ impl SineWaveEmitterProcessData {
             setting: setting,
             output: None,
             emitter: None,
-            elapsed_time: 0.0,
         }
     }
 
@@ -68,7 +64,6 @@ impl SineWaveEmitterProcessData {
             setting: setting,
             output: None,
             emitter: None,
-            elapsed_time: 0.0,
         }
     }
 
@@ -83,7 +78,6 @@ impl SineWaveEmitterProcessData {
             setting: setting,
             output: None,
             emitter: None,
-            elapsed_time: 0.0,
         }
     }
 
@@ -98,7 +92,6 @@ impl SineWaveEmitterProcessData {
             setting: setting,
             output: None,
             emitter: None,
-            elapsed_time: 0.0,
         }
     }
 
@@ -118,14 +111,14 @@ impl SineWaveEmitterProcessData {
             range: range,
             setting: setting,
             output: None,
-            elapsed_time: 0.0,
             emitter: None,
         }
     }
 }
 
 impl SineWaveEmitterProcessData {
-    pub fn initialize(&mut self) {
+    /// 初期化する
+    fn initialize(&mut self) {
         let emitter = match self.emitter_type {
             ESineWaveEmitterType::PinkNoise => SineUnitSampleEmitter::new_pinknoise(self.intensity),
             ESineWaveEmitterType::WhiteNoise => SineUnitSampleEmitter::new_whitenoise(self.intensity),
@@ -156,18 +149,18 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    pub fn next_samples(&mut self, _input: &ProcessInput) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, _input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.emitter.is_some());
 
         // 設定のサンプル数ずつ吐き出す。
         // ただし今のと最終長さと比べて最終長さより長い分は0に埋める。
         let end_sample_index = {
             let ideal_add_time = self.setting.sample_count_frame as f64 / self.setting.sample_rate as f64;
-            let ideal_next_time = self.elapsed_time + ideal_add_time;
+            let ideal_next_time = self.common.elapsed_time + ideal_add_time;
 
             let mut add_time = ideal_add_time;
             if ideal_next_time > self.range.length {
-                add_time = self.range.length - self.elapsed_time;
+                add_time = self.range.length - self.common.elapsed_time;
             }
 
             let samples = (add_time * self.setting.sample_rate as f64).ceil() as usize;
@@ -184,6 +177,60 @@ impl SineWaveEmitterProcessData {
                 .for_each(|v| *v = UniformedSample::MIN);
         }
         samples
+    }
+
+    fn update_state_stopped(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+        // 初期化する。
+        self.initialize();
+        assert!(self.emitter.is_some());
+
+        // 初期化した情報から設定分のOutputを更新する。
+        // outputのどこかに保持する。
+        let buffer = self.next_samples(input);
+        let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
+        self.output = Some(ProcessOutputBuffer {
+            buffer,
+            setting: self.setting.clone(),
+            range: self.range,
+        });
+
+        // 時間更新
+        self.common.elapsed_time += elapsed_time;
+        self.common.process_timestamp += 1;
+
+        // 状態確認
+        if self.common.elapsed_time < self.range.length {
+            self.common.state = EProcessState::Playing;
+            return EProcessResult::Pending;
+        } else {
+            self.common.state = EProcessState::Finished;
+            return EProcessResult::Finished;
+        }
+    }
+
+    fn update_state_playing(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+        // 初期化した情報から設定分のOutputを更新する。
+        // outputのどこかに保持する。
+        let buffer = self.next_samples(input);
+        let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
+        self.output = Some(ProcessOutputBuffer {
+            buffer,
+            setting: self.setting.clone(),
+            range: self.range,
+        });
+
+        // 時間更新
+        self.common.elapsed_time += elapsed_time;
+        self.common.process_timestamp += 1;
+
+        // 状態確認
+        if self.common.elapsed_time < self.range.length {
+            self.common.state = EProcessState::Playing;
+            return EProcessResult::Pending;
+        } else {
+            self.common.state = EProcessState::Finished;
+            return EProcessResult::Finished;
+        }
     }
 }
 
@@ -208,60 +255,14 @@ impl TProcess for SineWaveEmitterProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
+    fn get_state(&self) -> EProcessState {
+        self.common.state
+    }
+
+    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
         match self.common.state {
-            EProcessState::Stopped => {
-                // 初期化する。
-                self.initialize();
-                assert!(self.emitter.is_some());
-
-                // 初期化した情報から設定分のOutputを更新する。
-                // outputのどこかに保持する。
-                let buffer = self.next_samples(input);
-                let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
-                self.output = Some(ProcessOutputBuffer {
-                    buffer,
-                    setting: self.setting.clone(),
-                    range: self.range,
-                });
-
-                // 時間更新
-                self.elapsed_time += elapsed_time;
-                self.common.process_timestamp += 1;
-
-                // 状態確認
-                if self.elapsed_time >= self.range.length {
-                    self.common.state = EProcessState::Playing;
-                    return EProcessResult::Pending;
-                } else {
-                    self.common.state = EProcessState::Finished;
-                    return EProcessResult::Finished;
-                }
-            }
-            EProcessState::Playing => {
-                // 初期化した情報から設定分のOutputを更新する。
-                // outputのどこかに保持する。
-                let buffer = self.next_samples(input);
-                let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
-                self.output = Some(ProcessOutputBuffer {
-                    buffer,
-                    setting: self.setting.clone(),
-                    range: self.range,
-                });
-
-                // 時間更新
-                self.elapsed_time += elapsed_time;
-                self.common.process_timestamp += 1;
-
-                // 状態確認
-                if self.elapsed_time >= self.range.length {
-                    self.common.state = EProcessState::Playing;
-                    return EProcessResult::Pending;
-                } else {
-                    self.common.state = EProcessState::Finished;
-                    return EProcessResult::Finished;
-                }
-            }
+            EProcessState::Stopped => self.update_state_stopped(input),
+            EProcessState::Playing => self.update_state_playing(input),
             EProcessState::Finished => {
                 return EProcessResult::Finished;
             }

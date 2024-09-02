@@ -46,7 +46,11 @@ impl TProcess for OutputLogProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn try_process(&mut self, input: &crate::carg::v2::ProcessInput) -> EProcessResult {
+    fn get_state(&self) -> EProcessState {
+        self.common.state
+    }
+
+    fn try_process(&mut self, input: &crate::carg::v2::ProcessProcessorInput) -> EProcessResult {
         if self.common.child_count == 0 {
             self.common.state = EProcessState::Finished;
             self.common.process_timestamp += 1;

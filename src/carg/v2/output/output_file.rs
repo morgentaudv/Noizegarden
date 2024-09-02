@@ -11,7 +11,7 @@ use crate::{
         v1::EOutputFileFormat,
         v2::{
             EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-            TInputBufferOutputNone, TProcess,
+            ProcessProcessorInput, TInputBufferOutputNone, TProcess,
         },
     },
     wave::{
@@ -27,7 +27,7 @@ pub struct OutputFileProcessData {
     common: ProcessControlItem,
     format: EOutputFileFormat,
     file_name: String,
-    inputs: HashMap<usize, ProcessOutputBuffer>,
+    inputs: HashMap<usize, Vec<ProcessOutputBuffer>>,
 }
 
 impl OutputFileProcessData {
@@ -41,59 +41,45 @@ impl OutputFileProcessData {
     }
 }
 
-impl TInputBufferOutputNone for OutputFileProcessData {
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
-    }
-
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        match output {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                self.inputs.insert(index, v);
-            }
-        }
-    }
-}
-
-impl TProcess for OutputFileProcessData {
-    /// データアイテムの処理が終わったか？
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
-    fn try_process(&mut self, input: &crate::carg::v2::ProcessInput) -> EProcessResult {
+impl OutputFileProcessData {
+    fn update_state_stopped(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
         // Childrenが全部送信完了したら処理が行える。
         // commonで初期Childrenの数を比較するだけでいいかも。
         if self.inputs.len() < self.common.child_count {
             return EProcessResult::Pending;
         }
+        if input.children_states.iter().any(|v| *v != EProcessState::Finished) {
+            return EProcessResult::Pending;
+        }
         assert!(self.common.child_count > 0);
 
         // inputsのサンプルレートが同じかを確認する。
-        let source_sample_rate = self.inputs.get(&0).unwrap().setting.sample_rate;
+        let source_sample_rate = self.inputs.get(&0).unwrap().first().unwrap().setting.sample_rate;
         for (_, input) in self.inputs.iter().skip(1) {
-            assert!(input.setting.sample_rate == source_sample_rate);
+            assert!(input.first().unwrap().setting.sample_rate == source_sample_rate);
         }
+
+        // inputsを全部合わせる。
+        let flattened_inputs = self
+            .inputs
+            .iter()
+            .map(|(_, v)| v.iter().map(|w| w.buffer.clone()).flatten().collect_vec())
+            .collect_vec();
+        let range_inputs = self.inputs.iter().map(|(_, v)| v.first().unwrap().range).collect_vec();
 
         // ここで各bufferを組み合わせて、一つにしてから書き込む。
         let mut final_buffer_length = 0usize;
-        let ref_vec = self
-            .inputs
+        let ref_vec = flattened_inputs
             .iter()
-            .map(|(_, info)| {
-                let buffer_length = info.buffer.len();
-                let start_index = (info.range.start * (info.setting.sample_rate as f64)).floor() as usize;
+            .zip(range_inputs.iter())
+            .map(|(buffer, range)| {
+                let buffer_length = buffer.len();
+                let start_index = (range.start * (source_sample_rate as f64)).floor() as usize;
                 let exclusive_end_index = start_index + buffer_length;
 
                 final_buffer_length = exclusive_end_index.max(final_buffer_length);
 
-                (info, start_index)
+                (buffer, start_index)
             })
             .collect_vec();
 
@@ -101,9 +87,9 @@ impl TProcess for OutputFileProcessData {
         let mut new_buffer = vec![];
         new_buffer.resize(final_buffer_length, UniformedSample::default());
         for (ref_buffer, start_index) in ref_vec {
-            for src_i in 0..ref_buffer.buffer.len() {
+            for src_i in 0..ref_buffer.len() {
                 let dest_i = start_index + src_i;
-                new_buffer[dest_i] += ref_buffer.buffer[src_i];
+                new_buffer[dest_i] += ref_buffer[src_i];
             }
         }
 
@@ -153,3 +139,52 @@ impl TProcess for OutputFileProcessData {
         return EProcessResult::Finished;
     }
 }
+
+impl TInputBufferOutputNone for OutputFileProcessData {
+    /// 自分のタイムスタンプを返す。
+    fn get_timestamp(&self) -> i64 {
+        self.common.process_timestamp
+    }
+
+    fn set_child_count(&mut self, count: usize) {
+        self.common.child_count = count;
+    }
+
+    fn update_input(&mut self, index: usize, output: EProcessOutput) {
+        match output {
+            EProcessOutput::None => unimplemented!("Unexpected branch."),
+            EProcessOutput::Buffer(v) => {
+                if !self.inputs.contains_key(&index) {
+                    self.inputs.insert(index, vec![]);
+                }
+
+                self.inputs.get_mut(&index).unwrap().push(v);
+            }
+        }
+    }
+}
+
+impl TProcess for OutputFileProcessData {
+    /// データアイテムの処理が終わったか？
+    fn is_finished(&self) -> bool {
+        self.common.state == EProcessState::Finished
+    }
+
+    fn get_state(&self) -> EProcessState {
+        self.common.state
+    }
+
+    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+        match self.common.state {
+            EProcessState::Stopped => self.update_state_stopped(input),
+            EProcessState::Finished => {
+                return EProcessResult::Finished;
+            }
+            _ => unreachable!("Unexpected branch"),
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

@@ -403,9 +403,15 @@ pub fn get_end_node_names(nodes: &HashMap<String, ENode>, relations: &[Relation]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ProcessInput {
+pub struct ProcessCommonInput {
     /// 前のフレーム処理から何秒経ったか
-    elapsed_time: f64,
+    pub elapsed_time: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessProcessorInput {
+    pub common: ProcessCommonInput,
+    pub children_states: Vec<EProcessState>,
 }
 
 pub type RelationTreeNodePtr = Rc<RefCell<RelationTreeNode>>;
@@ -452,7 +458,7 @@ impl RelationTreeNode {
         }
     }
 
-    pub fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
+    pub fn try_process(&mut self, input: &ProcessCommonInput) -> EProcessResult {
         assert_eq!(self.children.len(), self.sync_timestamps.len());
 
         // まずinputの形式が何かを取得する。
@@ -460,12 +466,14 @@ impl RelationTreeNode {
         //
         // 子ノードの終わる時間または更新時間はそれぞれ異なるはずなので、
         // それぞれのタイムスタンプが更新されていて、自分のタイムスタンプが遅れていれば子ノードからinputを取得する。
+        let mut children_states = vec![];
+        children_states.reserve(self.children.len());
+
         for (child_i, (child, sync_timestamp)) in self.children.iter().zip(&mut self.sync_timestamps).enumerate() {
             let borrowed_child = child.borrow();
-            if !borrowed_child.processor.is_finished() {
-                return EProcessResult::Pending;
-            }
+            children_states.push(borrowed_child.get_state());
 
+            // 24-09-03 フレームごとにインプットし続ける。
             let child_time_stamp = borrowed_child.get_timestamp();
             if *sync_timestamp >= child_time_stamp {
                 continue;
@@ -481,7 +489,11 @@ impl RelationTreeNode {
             *sync_timestamp = child_time_stamp;
         }
 
-        self.processor.try_process(input)
+        let process_input = ProcessProcessorInput {
+            common: *input,
+            children_states,
+        };
+        self.processor.try_process(&process_input)
     }
 
     /// 処理が終わっていない子ノードだけを名前としてリストに返す。
@@ -505,6 +517,10 @@ impl RelationTreeNode {
     /// 処理した後の出力を返す。
     pub fn get_output(&self) -> EProcessOutput {
         self.processor.get_output()
+    }
+
+    pub fn get_state(&self) -> EProcessState {
+        self.processor.get_state()
     }
 
     /// ノードの処理活動が終わったか？
@@ -536,6 +552,8 @@ pub struct ProcessControlItem {
     pub process_timestamp: i64,
     /// アイテムを持つノードからつながっている子アイテムの数
     pub child_count: usize,
+    /// 経過した時間（秒単位）
+    pub elapsed_time: f64,
 }
 
 impl ProcessControlItem {
@@ -544,6 +562,7 @@ impl ProcessControlItem {
             state: EProcessState::Stopped,
             process_timestamp: 0i64,
             child_count: 0usize,
+            elapsed_time: 0.0,
         }
     }
 }
@@ -608,7 +627,7 @@ impl ENodeProcessData {
     }
 
     /// 処理してみる。
-    pub fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
+    pub fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(input),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(input),
@@ -631,6 +650,14 @@ impl ENodeProcessData {
             ENodeProcessData::InputNoneOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
             ENodeProcessData::InputBufferOutputNone(_) => EProcessOutput::None,
             ENodeProcessData::InputBufferOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
+        }
+    }
+
+    pub fn get_state(&self) -> EProcessState {
+        match self {
+            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().get_state(),
+            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().get_state(),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().get_state(),
         }
     }
 }
@@ -656,7 +683,9 @@ pub trait TProcess {
     /// データアイテムの処理が終わったか？
     fn is_finished(&self) -> bool;
 
-    fn try_process(&mut self, input: &ProcessInput) -> EProcessResult;
+    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult;
+
+    fn get_state(&self) -> EProcessState;
 }
 
 // ----------------------------------------------------------------------------
@@ -902,7 +931,7 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
         let second = duration.as_secs_f64();
 
         // 共通で使う処理時の入力。
-        let input = ProcessInput { elapsed_time: second };
+        let input = ProcessCommonInput { elapsed_time: second };
 
         //
         for output_root in &mut output_tree {
@@ -922,13 +951,12 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
                             let item = stack.last_mut().unwrap();
                             item.borrow().try_get_unfinished_children_names()
                         };
-                        if children.is_empty() {
-                            println!("Children nodes must be exist when pending nodes.");
-                            continue;
+                        if !children.is_empty() {
+                            let next_node = tree_node_map.get(&children.pop().unwrap()).unwrap().clone();
+                            stack.push(next_node);
+                        } else {
+                            let _ = stack.pop().unwrap();
                         }
-
-                        let next_node = tree_node_map.get(&children.pop().unwrap()).unwrap().clone();
-                        stack.push(next_node);
                     }
                 }
             }

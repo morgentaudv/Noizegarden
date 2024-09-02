@@ -78,7 +78,7 @@ impl TProcess for AdapterEnvelopeAdProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn try_process(&mut self, input: &crate::carg::v2::ProcessInput) -> EProcessResult {
+    fn try_process(&mut self, input: &crate::carg::v2::ProcessProcessorInput) -> EProcessResult {
         if self.common.state == EProcessState::Finished {
             return EProcessResult::Finished;
         }
@@ -135,5 +135,9 @@ impl TProcess for AdapterEnvelopeAdProcessData {
         self.common.state = EProcessState::Finished;
         self.common.process_timestamp += 1;
         return EProcessResult::Finished;
+    }
+
+    fn get_state(&self) -> EProcessState {
+        self.common.state
     }
 }
