@@ -77,6 +77,7 @@ impl LowWaveRiffHeader {
     }
 
     /// ヘッダーからデータバッファーのサイズを返す。
+    #[allow(dead_code)]
     pub fn data_chunk_size(&self) -> usize {
         assert!(self.riff_chunk_size >= Self::CHUNK_MINIMUM_SIZE);
         (self.riff_chunk_size - Self::CHUNK_MINIMUM_SIZE) as usize

@@ -73,7 +73,7 @@ impl EIntensityControlItem {
     const DEFAULT_FACTOR: f64 = 1.0;
 
     ///
-    pub fn calculate_factor(&self, relative_time: f64, sound_setting: &WaveSoundSetting) -> f64 {
+    pub fn calculate_factor(&self, relative_time: f64, _: &WaveSoundSetting) -> f64 {
         match self {
             EIntensityControlItem::ConstantMultifly(v) => *v,
             EIntensityControlItem::Fade {

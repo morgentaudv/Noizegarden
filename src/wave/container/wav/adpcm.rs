@@ -86,7 +86,7 @@ impl DataBlockBuffer {
         // 0bAAAA'BBBBのように…
         let target = &mut self.buffer[buffer_i];
         if is_low_bits {
-            *target |= (data & 0xF);
+            *target |= data & 0xF;
         } else {
             *target |= (data & 0xF) << 4;
         }
@@ -132,7 +132,7 @@ impl<'a> IMAADPCMWriter<'a> {
         // IMA-ADPCMで使うサンプルブロックの数を求める。
         let source_buffer = container.uniformed_sample_buffer();
         let block_size = WAV_IMA_ADPCM_BLOCK_SIZE;
-        let samples_per_block = (WAV_IMA_ADPCM_SAMPLES_PER_BLOCK as usize);
+        let samples_per_block = WAV_IMA_ADPCM_SAMPLES_PER_BLOCK as usize;
         let blocks_count = source_buffer.len() / samples_per_block;
 
         let chunk_size = (block_size as u32) * (blocks_count as u32);

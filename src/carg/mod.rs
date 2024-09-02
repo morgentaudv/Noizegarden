@@ -1,7 +1,7 @@
 use std::{fs, io};
 
 use app_test::EAppTestCommands;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use container::ENodeContainer;
 
 pub mod app_test;
@@ -20,6 +20,7 @@ struct CommandArgs {
     input_file: Option<std::path::PathBuf>,
 }
 
+#[allow(dead_code)]
 const TEST_JSON_STRING: &str = r#"
 {
     "version": 2,
@@ -86,6 +87,7 @@ impl CommandArgs {
         Err(anyhow::anyhow!("Failed to parse"))
     }
 
+    #[allow(dead_code)]
     fn try_test_parse_info() -> anyhow::Result<serde_json::Value> {
         let info: serde_json::Value = serde_json::from_str(TEST_JSON_STRING)?;
         Ok(info)

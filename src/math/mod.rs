@@ -16,10 +16,12 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub(crate) trait ULawConstant: Sized + Mul<Self, Output = Self> {
     fn ulaw_constant() -> Self;
 }
 
+#[allow(dead_code)]
 pub(crate) trait ConstUlawConstant: ULawConstant {
     const ULAW_CONSTANT: Self;
 }
@@ -41,17 +43,3 @@ macro_rules! ulaw_impl {
 
 ulaw_impl!(f32, 255.0);
 ulaw_impl!(f64, 255.0);
-
-/// [-1, 1]までの値を連続的（Continuous）なu-lawの値に変換する。
-///
-/// ```
-/// # use soundprog::math::to_ulaw_uniform_intensity;
-/// assert_eq!(to_ulaw_uniform_intensity(1.0), 1.0);
-/// assert_eq!(to_ulaw_uniform_intensity(-1.0), -1.0);
-/// ```
-pub fn to_ulaw_uniform_intensity<T>(v: T) -> T
-where
-    T: Float + FromPrimitive + ULawConstant,
-{
-    v.signum() * (T::one() + (T::ulaw_constant() * v.abs())).ln() * (T::one() + T::ulaw_constant()).ln().recip()
-}

@@ -1,6 +1,5 @@
 use derive_builder::Builder;
 use itertools::Itertools;
-use rand::seq::index::sample;
 
 use crate::wave::{complex::Complex, container::WaveContainer, sample::UniformedSample, PI2};
 

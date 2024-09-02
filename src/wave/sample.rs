@@ -1,10 +1,3 @@
-use std::{
-    i16,
-    ops::{Shl, Shr},
-};
-
-use crate::math;
-
 /// 共通化したサンプルの振幅を表す。
 ///
 /// 値の絶対値の0が一番低く、1が大きい。(0dBFS)
@@ -139,10 +132,5 @@ impl UniformedSample {
     /// [`f64`]に変換するが、[-1, 1]範囲外の値はクランプされる。
     pub fn to_f64_clamped(self) -> f64 {
         self.0.clamp(-1.0, 1.0)
-    }
-
-    /// u-law準拠のUniformSampleに変換する。
-    pub fn into_ulaw_uniform_sample(self) -> Self {
-        Self::from_f64(math::to_ulaw_uniform_intensity(self.0))
     }
 }

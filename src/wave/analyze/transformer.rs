@@ -1,11 +1,7 @@
 use derive_builder::Builder;
 use itertools::Itertools;
 
-use crate::wave::{
-    complex::Complex,
-    sample::{self, UniformedSample},
-    PI2,
-};
+use crate::wave::{complex::Complex, sample::UniformedSample, PI2};
 
 use super::{sine_freq::SineFrequency, ETransformMethod};
 
