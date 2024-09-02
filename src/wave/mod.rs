@@ -7,7 +7,7 @@ pub mod complex;
 pub mod container;
 pub mod filter;
 pub mod sample;
-pub mod setting;
+pub mod sine;
 pub mod stretch;
 pub mod time;
 

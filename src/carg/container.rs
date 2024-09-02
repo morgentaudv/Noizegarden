@@ -4,14 +4,14 @@ use std::{
     io::{self, Write},
 };
 
-use itertools::Itertools;
-use soundprog::wave::{
+use crate::wave::{
     analyze::window::EWindowFunction,
     container::WaveBuilder,
     sample::UniformedSample,
-    setting::WaveSound,
+    sine::setting::{EBitsPerSample, WaveSound},
     stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
 };
+use itertools::Itertools;
 
 use super::{
     v1,
@@ -133,7 +133,7 @@ fn process_v1(input: &Vec<v1::Input>, setting: &v1::Setting, output: &v1::Output
                     WaveBuilder {
                         samples_per_sec: *sample_rate as u32,
                         bits_per_sample: match fmt_setting.bits_per_sample {
-                            soundprog::wave::setting::EBitsPerSample::Bits16 => 16,
+                            EBitsPerSample::Bits16 => 16,
                         },
                     }
                     .build_container(processed_container)

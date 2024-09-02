@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::wave::setting::WaveSound;
+use crate::wave::sine::setting::WaveSound;
 
 #[repr(C)]
 #[derive(Debug, Clone)]

@@ -3,7 +3,9 @@ use itertools::Itertools;
 use num_traits::PrimInt;
 use rand::Rng;
 
-use super::{filter::FilterADSR, sample::UniformedSample, PI2};
+use crate::wave::{filter::FilterADSR, sample::UniformedSample, PI2};
+
+use super::emitter::SineUnitSampleEmitter;
 
 /// 各サンプルの量子化レベルを表す。
 ///
@@ -257,15 +259,18 @@ impl SoundFragment {
 
             match &sound.frequency {
                 EFrequencyItem::Constant { frequency } => {
-                    for unittime in 0..samples_count.length {
-                        // 振幅と周波数のエンベロープのため相対時間を計算
-                        let unittime = unittime as f64;
-                        let sin_input = (coefficient * frequency * unittime) + (sound.phase as f64);
+                    let mut emitter = SineUnitSampleEmitter::new_sine(
+                        *frequency,
+                        sound.phase as f64,
+                        sound.intensity as f64,
+                        format.samples_per_sec as usize,
+                    );
 
-                        let sample = sound.intensity * sin_input.sin();
-                        assert!(sample >= -1.0 && sample <= 1.0);
-                        samples.push(sample);
-                    }
+                    samples = emitter
+                        .next_samples(samples_count.length)
+                        .into_iter()
+                        .map(|v| v.to_f64())
+                        .collect_vec()
                 }
                 EFrequencyItem::Chirp {
                     start_frequency,
@@ -290,60 +295,61 @@ impl SoundFragment {
                         samples.push(sample);
                     }
                 }
-                EFrequencyItem::Sawtooth { frequency } => {
-                    match sound.oscillator_vibrato.as_ref() {
-                        Some(vibrato) => {
-                            let mut unittime = 0usize;
-                            while unittime < samples_count.length {
-                                let target_frequency =
-                                    vibrato.compute_frequency(*frequency, unittime, format.samples_per_sec as usize);
+                EFrequencyItem::Sawtooth { frequency } => match sound.oscillator_vibrato.as_ref() {
+                    Some(vibrato) => {
+                        let mut unittime = 0usize;
+                        while unittime < samples_count.length {
+                            let target_frequency =
+                                vibrato.compute_frequency(*frequency, unittime, format.samples_per_sec as usize);
 
-                                for local_i in 0usize.. {
-                                    let rel_time = (local_i as f64) / (format.samples_per_sec as f64);
-                                    let rate = rel_time * target_frequency;
+                            for local_i in 0usize.. {
+                                let rel_time = (local_i as f64) / (format.samples_per_sec as f64);
+                                let rate = rel_time * target_frequency;
 
-                                    let orig_intensity = 1.0 - (2.0 * rate.fract());
-                                    samples.push(sound.intensity * orig_intensity);
+                                let orig_intensity = 1.0 - (2.0 * rate.fract());
+                                samples.push(sound.intensity * orig_intensity);
 
-                                    unittime += 1;
-                                    if rate >= 1.0 {
-                                        break;
-                                    }
+                                unittime += 1;
+                                if rate >= 1.0 {
+                                    break;
                                 }
                             }
                         }
-                        None => {
-                            for unittime in 0..samples_count.length {
-                                // 振幅と周波数のエンベロープのため相対時間を計算
-                                let rel_time = (unittime as f64) / (format.samples_per_sec as f64);
-                                let orig_intensity = 1.0 - (2.0 * (rel_time * frequency).fract());
-                                let sample = sound.intensity * orig_intensity;
-
-                                assert!(sample >= -1.0 && sample <= 1.0);
-                                samples.push(sample);
-                            }
-                        }
                     }
-                }
+                    None => {
+                        let mut emitter = SineUnitSampleEmitter::new_sawtooth(
+                            *frequency,
+                            sound.phase as f64,
+                            sound.intensity as f64,
+                            format.samples_per_sec as usize,
+                        );
+
+                        samples = emitter
+                            .next_samples(samples_count.length)
+                            .into_iter()
+                            .map(|v| v.to_f64())
+                            .collect_vec();
+                    }
+                },
                 EFrequencyItem::Triangle { frequency } => {
-                    let samples_per_sec = format.samples_per_sec as usize;
-                    let compute_intensity = |time_i: usize, samples_per_sec: usize, frequency: f64| {
-                        // 振幅と周波数のエンベロープのため相対時間を計算
-                        let rel_time = (time_i as f64) / (samples_per_sec as f64);
-                        let orig_time = rel_time * frequency;
-
-                        let coeff = orig_time.fract();
-                        if coeff < 0.5 {
-                            // [0, 0.5)の範囲
-                            (-1.0 + (4.0 * coeff), orig_time)
-                        } else {
-                            // [0.5, 1)の範囲
-                            (3.0 - (4.0 * coeff), orig_time)
-                        }
-                    };
-
                     match sound.oscillator_vibrato.as_ref() {
                         Some(vibrato) => {
+                            let samples_per_sec = format.samples_per_sec as usize;
+                            let compute_intensity = |time_i: usize, samples_per_sec: usize, frequency: f64| {
+                                // 振幅と周波数のエンベロープのため相対時間を計算
+                                let rel_time = (time_i as f64) / (samples_per_sec as f64);
+                                let orig_time = rel_time * frequency;
+
+                                let coeff = orig_time.fract();
+                                if coeff < 0.5 {
+                                    // [0, 0.5)の範囲
+                                    (-1.0 + (4.0 * coeff), orig_time)
+                                } else {
+                                    // [0.5, 1)の範囲
+                                    (3.0 - (4.0 * coeff), orig_time)
+                                }
+                            };
+
                             let mut unittime = 0usize;
                             while unittime < samples_count.length {
                                 let frequency = vibrato.compute_frequency(*frequency, unittime, samples_per_sec);
@@ -365,19 +371,18 @@ impl SoundFragment {
                             }
                         }
                         None => {
-                            for unittime in 0..samples_count.length {
-                                let frequency = match sound.adsr.as_ref() {
-                                    Some(adsr) => {
-                                        (adsr.process_fn)(*frequency, adsr.compute(unittime, samples_per_sec))
-                                    }
-                                    None => *frequency,
-                                };
+                            let mut emitter = SineUnitSampleEmitter::new_triangle(
+                                *frequency,
+                                sound.phase as f64,
+                                sound.intensity as f64,
+                                format.samples_per_sec as usize,
+                            );
 
-                                let (orig_intensity, _) = compute_intensity(unittime, samples_per_sec, frequency);
-                                let sample = sound.intensity * orig_intensity;
-                                assert!(sample >= -1.0 && sample <= 1.0);
-                                samples.push(sample);
-                            }
+                            samples = emitter
+                                .next_samples(samples_count.length)
+                                .into_iter()
+                                .map(|v| v.to_f64())
+                                .collect_vec();
                         }
                     }
                 }
@@ -422,89 +427,36 @@ impl SoundFragment {
                     }
                 }
                 EFrequencyItem::Square { frequency, duty_rate } => {
-                    let herz = coefficient * frequency;
-                    let duty_threshold = PI2 * duty_rate.clamp(0.0, 1.0);
+                    let mut emitter = SineUnitSampleEmitter::new_square(
+                        *frequency,
+                        *duty_rate,
+                        sound.phase as f64,
+                        sound.intensity as f64,
+                        format.samples_per_sec as usize,
+                    );
 
-                    for unittime in 0..samples_count.length {
-                        // 振幅と周波数のエンベロープのため相対時間を計算
-                        // 正弦波形の周期を計算する。そこでduty_rateを反映する。
-                        // phaseは後に入れてSignを計算する。
-                        let unittime = unittime as f64;
-                        let input = (herz * unittime) + (sound.phase as f64);
-                        let sample = sound.intensity * {
-                            if (input % PI2) < duty_threshold {
-                                1.0
-                            } else {
-                                -1.0
-                            }
-                        };
-                        samples.push(sample);
-                    }
+                    samples = emitter
+                        .next_samples(samples_count.length)
+                        .into_iter()
+                        .map(|v| v.to_f64())
+                        .collect_vec();
                 }
                 // ホワイトノイズを出力する
                 EFrequencyItem::WhiteNoise => {
-                    // 正規分布からの乱数を使ってWhiteNoiseを生成する。
-                    // 中ではどんな方法を使っているかわからないが、一番速いのはZiggurat法。
-                    // https://andantesoft.hatenablog.com/entry/2023/04/30/183032
-                    let mut rng = rand::thread_rng();
-
-                    for _ in 0..samples_count.length {
-                        // [-1, 1]にする。
-                        let value: f64 = rng.sample(rand::distributions::Standard);
-                        let value = (value * 2.0) - 1.0;
-                        samples.push(value * sound.intensity);
-                    }
+                    samples = SineUnitSampleEmitter::new_whitenoise(sound.intensity as f64)
+                        .next_samples(samples_count.length)
+                        .into_iter()
+                        .map(|v| v.to_f64())
+                        .collect_vec();
                 }
                 // ピンクノイズを出力する
                 // https://www.firstpr.com.au/dsp/pink-noise/#Voss-McCartney を参考
                 EFrequencyItem::PinkNoise => {
-                    // 実装アルゴリズムを見た感じでは、
-                    // 多段階のRowをSumしたのがサンプルの値とみなす形式で進めているので
-                    // 例えば時間軸で進むとしたらLSBからビットが1になるまでの0の数を見て
-                    // 1 * * * * * * * * * * * * * * * *
-                    // 2  *   *   *   *   *   *   *   *
-                    // 3    *       *       *       *
-                    // 4        *               *
-                    // 5                *
-                    // のように扱って各Rowに乱数の値を保持して計算することができる。（これがコスト的に安い）
-                    let mut rng = rand::thread_rng();
-
-                    let row_nums = 12;
-                    let pmax = 1.0 * ((row_nums + 1) as f64);
-                    let pink_scalar = pmax.recip();
-
-                    let mut rows = vec![];
-                    rows.resize(row_nums, 0.0);
-
-                    let mut pink_i = 0;
-                    let mut running_sum = 0.0;
-                    for _ in 0..samples_count.length {
-                        // 更新するpink_iから0の数を数えることで更新するrowsの番地を探す。
-                        // もしかして0なら、何もしないのがお決まり。
-                        pink_i = (pink_i + 1) & ((1 << row_nums) - 1);
-                        if pink_i != 0 {
-                            let row_i = pink_i.trailing_zeros() as usize;
-
-                            // running_sumから前の値を抜いて、新しい正規乱数を入れる。
-                            running_sum -= rows[row_i];
-
-                            // [-1, 1]にする。
-                            let rng_v: f64 = rng.sample(rand::distributions::Standard);
-                            let value = (rng_v * 2.0) - 1.0;
-
-                            // 新しい正規乱数を足して再指定する。
-                            running_sum += value;
-                            rows[row_i] = value;
-                        }
-
-                        // 段階が低くてもPinkNoise感を出すために（またランダム性をもたせるために）
-                        // 正規乱数を入れてサンプル値にする。[-1, 1]にする。
-                        let rng_v: f64 = rng.sample(rand::distributions::Standard);
-                        let value = (rng_v * 2.0) - 1.0;
-                        let sum = running_sum + value;
-                        let sample_value = pink_scalar * sum;
-                        samples.push((sample_value * sound.intensity).clamp(-1.0, 1.0));
-                    }
+                    samples = SineUnitSampleEmitter::new_pinknoise(sound.intensity as f64)
+                        .next_samples(samples_count.length)
+                        .into_iter()
+                        .map(|v| v.to_f64())
+                        .collect_vec();
                 }
             }
 

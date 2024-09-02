@@ -9,7 +9,7 @@ use wav::{
 
 use super::{
     sample::UniformedSample,
-    setting::WaveSound,
+    sine::setting::WaveSound,
     stretch::time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
 };
 use std::{io, mem};

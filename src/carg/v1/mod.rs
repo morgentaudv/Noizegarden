@@ -1,7 +1,7 @@
+use crate::wave::sine::setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder};
 use serde::{Deserialize, Serialize};
-use soundprog::wave::setting::{EFrequencyItem, WaveFormatSetting, WaveSoundSetting, WaveSoundSettingBuilder};
 
-use crate::math::frequency::EFrequency;
+use crate::{math::frequency::EFrequency, wave::sine::setting::EBitsPerSample};
 
 use super::container::ENodeContainer;
 
@@ -178,7 +178,7 @@ impl Setting {
             samples_per_sec: self.sample_rate as u32,
             bits_per_sample: {
                 assert!(self.bit_depth == "linear-16");
-                soundprog::wave::setting::EBitsPerSample::Bits16
+                EBitsPerSample::Bits16
             },
         }
     }

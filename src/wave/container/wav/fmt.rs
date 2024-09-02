@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::wave::setting::WaveSound;
+use crate::wave::sine::setting::WaveSound;
 
 pub const WAV_DATATYPE_LPCM: u16 = 1;
 pub const WAV_DATATYPE_PCMU: u16 = 7;

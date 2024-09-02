@@ -2,7 +2,7 @@ use crate::{
     math::frequency::EFrequency,
     wave::{
         sample::UniformedSample,
-        setting::{EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
+        sine::setting::{EFrequencyItem, WaveFormatSetting, WaveSound, WaveSoundSettingBuilder},
     },
 };
 
@@ -14,17 +14,19 @@ use super::{
 /// 正弦波を使って波形のバッファを作るための構造体
 #[derive(Debug)]
 pub struct SineWaveEmitterProcessData {
+    setting: Setting,
     common: ProcessControlItem,
     emitter_type: ESineWaveEmitterType,
+    /// `[0, 1]`まで
     intensity: f64,
     frequency: f64,
     range: EmitterRange,
-    setting: Setting,
     /// 処理後に出力情報が保存されるところ。
     output: Option<ProcessOutputBuffer>,
 }
 
 impl SineWaveEmitterProcessData {
+    /// ピンクノイズの生成
     pub fn new_pink(intensity: f64, range: EmitterRange, setting: Setting) -> Self {
         Self {
             common: ProcessControlItem::new(),
@@ -37,6 +39,7 @@ impl SineWaveEmitterProcessData {
         }
     }
 
+    /// ホワイトノイズの生成
     pub fn new_white(intensity: f64, range: EmitterRange, setting: Setting) -> Self {
         Self {
             common: ProcessControlItem::new(),
@@ -49,6 +52,7 @@ impl SineWaveEmitterProcessData {
         }
     }
 
+    /// サイン波形の生成
     pub fn new_sine(frequency: EFrequency, intensity: f64, range: EmitterRange, setting: Setting) -> Self {
         Self {
             common: ProcessControlItem::new(),
@@ -61,6 +65,7 @@ impl SineWaveEmitterProcessData {
         }
     }
 
+    /// ノコギリ波形の生成
     pub fn new_saw(frequency: EFrequency, intensity: f64, range: EmitterRange, setting: Setting) -> Self {
         Self {
             common: ProcessControlItem::new(),
@@ -73,6 +78,7 @@ impl SineWaveEmitterProcessData {
         }
     }
 
+    /// 三角波形の生成
     pub fn new_triangle(frequency: EFrequency, intensity: f64, range: EmitterRange, setting: Setting) -> Self {
         Self {
             common: ProcessControlItem::new(),
@@ -85,6 +91,7 @@ impl SineWaveEmitterProcessData {
         }
     }
 
+    /// 矩形波の生成
     pub fn new_square(
         frequency: EFrequency,
         duty_rate: f64,
@@ -101,6 +108,28 @@ impl SineWaveEmitterProcessData {
             setting: setting,
             output: None,
         }
+    }
+}
+
+impl SineWaveEmitterProcessData {
+    pub fn initialize(&mut self) {
+        let frequency = match self.emitter_type {
+            ESineWaveEmitterType::PinkNoise => EFrequencyItem::PinkNoise,
+            ESineWaveEmitterType::WhiteNoise => EFrequencyItem::WhiteNoise,
+            ESineWaveEmitterType::Sine => EFrequencyItem::Constant {
+                frequency: self.frequency,
+            },
+            ESineWaveEmitterType::Saw => EFrequencyItem::Constant {
+                frequency: self.frequency,
+            },
+            ESineWaveEmitterType::Triangle => EFrequencyItem::Triangle {
+                frequency: self.frequency,
+            },
+            ESineWaveEmitterType::Square { duty_rate } => EFrequencyItem::Square {
+                frequency: self.frequency,
+                duty_rate,
+            },
+        };
     }
 }
 
@@ -126,9 +155,17 @@ impl TProcess for SineWaveEmitterProcessData {
     }
 
     fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
-        if self.common.state == EProcessState::Finished {
-            return EProcessResult::Finished;
-        }
+        //match self.common.state {
+        //    EProcessState::Stopped => {
+        //        // 初期化する。
+        //        self.initialize();
+
+        //        // 初期化した情報から設定分のOutputを更新する。
+        //
+        //    },
+        //    EProcessState::Playing => todo!(),
+        //    EProcessState::Finished => EProcessState::Finished,
+        //}
 
         let frequency = match self.emitter_type {
             ESineWaveEmitterType::PinkNoise => EFrequencyItem::PinkNoise,
@@ -156,7 +193,7 @@ impl TProcess for SineWaveEmitterProcessData {
 
         let format = WaveFormatSetting {
             samples_per_sec: self.setting.sample_rate as u32,
-            bits_per_sample: crate::wave::setting::EBitsPerSample::Bits16,
+            bits_per_sample: crate::wave::sine::setting::EBitsPerSample::Bits16,
         };
         let sound = WaveSound::from_setting(&format, &sound_setting);
 
