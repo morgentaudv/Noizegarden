@@ -402,6 +402,12 @@ pub fn get_end_node_names(nodes: &HashMap<String, ENode>, relations: &[Relation]
     end_nodes
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProcessInput {
+    /// 前のフレーム処理から何秒経ったか
+    elapsed_time: f64,
+}
+
 pub type RelationTreeNodePtr = Rc<RefCell<RelationTreeNode>>;
 
 /// 木のノードアイテム。
@@ -446,7 +452,7 @@ impl RelationTreeNode {
         }
     }
 
-    pub fn try_process(&mut self) -> EProcessResult {
+    pub fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
         assert_eq!(self.children.len(), self.sync_timestamps.len());
 
         // まずinputの形式が何かを取得する。
@@ -466,11 +472,16 @@ impl RelationTreeNode {
             }
 
             // 更新する必要があれば、取得する。
-            self.processor.update_input(child_i, borrowed_child.get_output());
+            // 24-09-02 今は子ノード全部何かを処理して結果を返すということで。
+            // ただしoutputを返さないこともありえる。（`EProcessOutput::None`の時）
+            match borrowed_child.get_output() {
+                EProcessOutput::None => (),
+                v => self.processor.update_input(child_i, v),
+            }
             *sync_timestamp = child_time_stamp;
         }
 
-        self.processor.try_process()
+        self.processor.try_process(input)
     }
 
     /// 処理が終わっていない子ノードだけを名前としてリストに返す。
@@ -597,11 +608,11 @@ impl ENodeProcessData {
     }
 
     /// 処理してみる。
-    pub fn try_process(&mut self) -> EProcessResult {
+    pub fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
         match self {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(),
+            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(input),
+            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(input),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(input),
         }
     }
 
@@ -641,6 +652,13 @@ pub struct ProcessOutputBuffer {
     setting: Setting,
 }
 
+pub trait TProcess {
+    /// データアイテムの処理が終わったか？
+    fn is_finished(&self) -> bool;
+
+    fn try_process(&mut self, input: &ProcessInput) -> EProcessResult;
+}
+
 // ----------------------------------------------------------------------------
 // TInputNoneOutputBuffer
 // ----------------------------------------------------------------------------
@@ -649,17 +667,12 @@ pub struct ProcessOutputBuffer {
 pub type InputNoneOutputBufferPtr = Rc<RefCell<dyn TInputNoneOutputBuffer>>;
 
 /// 処理からOutputでバッファを返すためのTrait。
-pub trait TInputNoneOutputBuffer: std::fmt::Debug {
-    /// データアイテムの処理が終わったか？
-    fn is_finished(&self) -> bool;
-
+pub trait TInputNoneOutputBuffer: std::fmt::Debug + TProcess {
     /// 自分のタイムスタンプを返す。
     fn get_timestamp(&self) -> i64;
 
     /// 処理結果を返す。
     fn get_output(&self) -> ProcessOutputBuffer;
-
-    fn try_process(&mut self) -> EProcessResult;
 
     fn set_child_count(&mut self, count: usize);
 }
@@ -734,15 +747,9 @@ pub enum ESineWaveEmitterType {
 pub type InputBufferOutputNonePtr = Rc<RefCell<dyn TInputBufferOutputNone>>;
 
 /// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
-pub trait TInputBufferOutputNone: std::fmt::Debug {
-    /// データアイテムの処理が終わったか？
-    fn is_finished(&self) -> bool;
-
+pub trait TInputBufferOutputNone: std::fmt::Debug + TProcess {
     /// 自分のタイムスタンプを返す。
     fn get_timestamp(&self) -> i64;
-
-    /// 処理してみる。
-    fn try_process(&mut self) -> EProcessResult;
 
     /// 中に`output`を更新する。
     fn update_input(&mut self, index: usize, output: EProcessOutput);
@@ -771,10 +778,7 @@ impl SInputBufferOutputNone {
 pub type InputBufferOutputBufferPtr = Rc<RefCell<dyn TInputBufferOutputBuffer>>;
 
 /// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
-pub trait TInputBufferOutputBuffer: std::fmt::Debug {
-    /// データアイテムの処理が終わったか？
-    fn is_finished(&self) -> bool;
-
+pub trait TInputBufferOutputBuffer: std::fmt::Debug + TProcess {
     /// 自分のタイムスタンプを返す。
     fn get_timestamp(&self) -> i64;
 
@@ -785,9 +789,6 @@ pub trait TInputBufferOutputBuffer: std::fmt::Debug {
     fn update_input(&mut self, index: usize, output: EProcessOutput);
 
     fn set_child_count(&mut self, count: usize);
-
-    /// 処理してみる。
-    fn try_process(&mut self) -> EProcessResult;
 }
 
 struct SInputBufferOutputBuffer;
@@ -897,10 +898,11 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
     // 終了条件は、すべてのノードが終わった時。
     // つまり、`output_root`のルートノードがすべて終わった時？
     loop {
-        let all_output_finished = output_tree.iter().all(|v| v.borrow().is_finished());
-        if all_output_finished {
-            break;
-        }
+        let duration = tick_timer.tick();
+        let second = duration.as_secs_f64();
+
+        // 共通で使う処理時の入力。
+        let input = ProcessInput { elapsed_time: second };
 
         //
         for output_root in &mut output_tree {
@@ -908,7 +910,7 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
             stack.push(output_root.clone());
 
             while !stack.is_empty() {
-                let result = stack.last_mut().unwrap().borrow_mut().try_process();
+                let result = stack.last_mut().unwrap().borrow_mut().try_process(&input);
 
                 match result {
                     EProcessResult::Finished => {
@@ -930,6 +932,11 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
                     }
                 }
             }
+        }
+
+        let all_output_finished = output_tree.iter().all(|v| v.borrow().is_finished());
+        if all_output_finished {
+            break;
         }
     }
 

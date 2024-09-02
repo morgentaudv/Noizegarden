@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::carg::v2::{
     EParsedOutputLogMode, EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-    TInputBufferOutputNone,
+    TInputBufferOutputNone, TProcess,
 };
 
 #[derive(Debug)]
@@ -23,15 +23,30 @@ impl OutputLogProcessData {
 }
 
 impl TInputBufferOutputNone for OutputLogProcessData {
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
     fn get_timestamp(&self) -> i64 {
         self.common.process_timestamp
     }
 
-    fn try_process(&mut self) -> EProcessResult {
+    fn update_input(&mut self, index: usize, output: EProcessOutput) {
+        match output {
+            EProcessOutput::None => unimplemented!("Unexpected branch."),
+            EProcessOutput::Buffer(v) => {
+                self.inputs.insert(index, v);
+            }
+        }
+    }
+
+    fn set_child_count(&mut self, count: usize) {
+        self.common.child_count = count;
+    }
+}
+
+impl TProcess for OutputLogProcessData {
+    fn is_finished(&self) -> bool {
+        self.common.state == EProcessState::Finished
+    }
+
+    fn try_process(&mut self, input: &crate::carg::v2::ProcessInput) -> EProcessResult {
         if self.common.child_count == 0 {
             self.common.state = EProcessState::Finished;
             self.common.process_timestamp += 1;
@@ -59,18 +74,5 @@ impl TInputBufferOutputNone for OutputLogProcessData {
         self.common.state = EProcessState::Finished;
         self.common.process_timestamp += 1;
         return EProcessResult::Finished;
-    }
-
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        match output {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                self.inputs.insert(index, v);
-            }
-        }
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
     }
 }

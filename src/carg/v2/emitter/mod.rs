@@ -7,8 +7,8 @@ use crate::{
 };
 
 use super::{
-    EProcessResult, EProcessState, ESineWaveEmitterType, EmitterRange, ProcessControlItem, ProcessOutputBuffer,
-    Setting, TInputNoneOutputBuffer,
+    EProcessResult, EProcessState, ESineWaveEmitterType, EmitterRange, ProcessControlItem, ProcessInput,
+    ProcessOutputBuffer, Setting, TInputNoneOutputBuffer, TProcess,
 };
 
 /// 正弦波を使って波形のバッファを作るための構造体
@@ -105,10 +105,6 @@ impl SineWaveEmitterProcessData {
 }
 
 impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
     /// 自分のタイムスタンプを返す。
     fn get_timestamp(&self) -> i64 {
         self.common.process_timestamp
@@ -122,8 +118,14 @@ impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
     fn set_child_count(&mut self, count: usize) {
         self.common.child_count = count;
     }
+}
 
-    fn try_process(&mut self) -> EProcessResult {
+impl TProcess for SineWaveEmitterProcessData {
+    fn is_finished(&self) -> bool {
+        self.common.state == EProcessState::Finished
+    }
+
+    fn try_process(&mut self, input: &ProcessInput) -> EProcessResult {
         if self.common.state == EProcessState::Finished {
             return EProcessResult::Finished;
         }
@@ -176,3 +178,7 @@ impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
         return EProcessResult::Finished;
     }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

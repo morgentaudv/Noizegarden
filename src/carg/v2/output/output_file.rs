@@ -11,7 +11,7 @@ use crate::{
         v1::EOutputFileFormat,
         v2::{
             EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-            TInputBufferOutputNone,
+            TInputBufferOutputNone, TProcess,
         },
     },
     wave::{
@@ -42,11 +42,6 @@ impl OutputFileProcessData {
 }
 
 impl TInputBufferOutputNone for OutputFileProcessData {
-    /// データアイテムの処理が終わったか？
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
     /// 自分のタイムスタンプを返す。
     fn get_timestamp(&self) -> i64 {
         self.common.process_timestamp
@@ -64,8 +59,15 @@ impl TInputBufferOutputNone for OutputFileProcessData {
             }
         }
     }
+}
 
-    fn try_process(&mut self) -> EProcessResult {
+impl TProcess for OutputFileProcessData {
+    /// データアイテムの処理が終わったか？
+    fn is_finished(&self) -> bool {
+        self.common.state == EProcessState::Finished
+    }
+
+    fn try_process(&mut self, input: &crate::carg::v2::ProcessInput) -> EProcessResult {
         // Childrenが全部送信完了したら処理が行える。
         // commonで初期Childrenの数を比較するだけでいいかも。
         if self.inputs.len() < self.common.child_count {

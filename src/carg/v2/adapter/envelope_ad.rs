@@ -3,7 +3,7 @@ use num_traits::Pow;
 use crate::{
     carg::v2::{
         EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-        TInputBufferOutputBuffer,
+        TInputBufferOutputBuffer, TProcess,
     },
     wave::sample::UniformedSample,
 };
@@ -49,10 +49,6 @@ impl TInputBufferOutputBuffer for AdapterEnvelopeAdProcessData {
         self.common.child_count = count;
     }
 
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
     fn get_timestamp(&self) -> i64 {
         self.common.process_timestamp
     }
@@ -75,8 +71,14 @@ impl TInputBufferOutputBuffer for AdapterEnvelopeAdProcessData {
             }
         }
     }
+}
 
-    fn try_process(&mut self) -> EProcessResult {
+impl TProcess for AdapterEnvelopeAdProcessData {
+    fn is_finished(&self) -> bool {
+        self.common.state == EProcessState::Finished
+    }
+
+    fn try_process(&mut self, input: &crate::carg::v2::ProcessInput) -> EProcessResult {
         if self.common.state == EProcessState::Finished {
             return EProcessResult::Finished;
         }
