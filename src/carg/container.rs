@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     fs,
     io::{self, Write},
 };
@@ -15,7 +15,7 @@ use soundprog::wave::{
 
 use super::{
     v1,
-    v2::{self, Relation, RelationTreeNode},
+    v2::{self},
 };
 
 /// @brief パーシングされたノードのコンテナ。
@@ -44,7 +44,7 @@ impl ENodeContainer {
                 setting,
                 nodes,
                 relations,
-            } => process_v2(setting, nodes, relations),
+            } => v2::process_v2(setting, nodes, relations),
         }
     }
 }
@@ -147,100 +147,6 @@ fn process_v1(input: &Vec<v1::Input>, setting: &v1::Setting, output: &v1::Output
                 let mut writer = io::BufWriter::new(dest_file);
                 container.write(&mut writer);
                 writer.flush().expect("Failed to flush writer.")
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn process_v2(setting: &v2::Setting, nodes: &HashMap<String, v2::ENode>, relations: &[Relation]) -> anyhow::Result<()> {
-    v2::validate_node_relations(nodes, &relations)?;
-
-    // チェックができたので(validation)、relationを元にGraphを生成する。
-    // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
-    // outputがinputとして使われているものは一つの独立したツリーとして構成しない。
-    let mut output_tree = vec![];
-    let mut tree_node_map = HashMap::new();
-    {
-        // 各ノードから処理に使うためのアイテムを全部生成しておく。
-        let mut process_datas = HashMap::new();
-        for (node_name, node) in nodes {
-            process_datas.insert(node_name, v2::ENodeProcessData::create_from(node, setting));
-        }
-
-        for (node_name, processor) in process_datas.into_iter() {
-            let node = RelationTreeNode::new_item(&node_name, &processor);
-            tree_node_map.insert(node_name.clone(), node);
-        }
-    }
-
-    for node_name in v2::get_end_node_names(nodes, &relations).into_iter() {
-        // root_nodeをqueueより寿命を長くする。
-        let root_node = tree_node_map.get(&node_name).unwrap().clone();
-        let mut pending_node_queue = VecDeque::new();
-        pending_node_queue.push_back(root_node.clone());
-
-        {
-            while !pending_node_queue.is_empty() {
-                let pending_node = pending_node_queue.pop_front().unwrap();
-
-                for relation in relations {
-                    let is_output = relation.output == *pending_node.borrow().name;
-                    if !is_output {
-                        continue;
-                    }
-
-                    // outputなrelationなので、inputを全部入れる。
-                    let children = relation
-                        .input
-                        .iter()
-                        .map(|name| tree_node_map.get(name).unwrap().clone())
-                        .collect_vec();
-                    pending_node.borrow_mut().append_children(children.clone());
-
-                    // Queueにも入れる。
-                    for child in children {
-                        pending_node_queue.push_back(child);
-                    }
-                }
-            }
-        }
-
-        // Outputのツリー
-        output_tree.push(root_node);
-    }
-    if output_tree.is_empty() {
-        return Ok(());
-    }
-
-    // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
-    // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
-    for output_root in &mut output_tree {
-        let mut stack = vec![];
-        stack.push(output_root.clone());
-
-        while !stack.is_empty() {
-            let result = stack.last_mut().unwrap().borrow_mut().try_process();
-
-            match result {
-                v2::EProcessResult::Finished => {
-                    let _ = stack.pop().unwrap();
-                }
-                v2::EProcessResult::Pending => {
-                    // reverseしてpop()するのがめんどくさいので、一旦これで。
-                    let mut children = {
-                        let item = stack.last_mut().unwrap();
-                        item.borrow().try_get_unfinished_children_names()
-                    };
-                    if children.is_empty() {
-                        println!("Children nodes must be exist when pending nodes.");
-                        continue;
-                    }
-
-                    let next_node = tree_node_map.get(&children.pop().unwrap()).unwrap().clone();
-                    stack.push(next_node);
-                }
             }
         }
     }
