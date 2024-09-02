@@ -10,7 +10,10 @@ use itertools::Itertools;
 use output::{output_file::OutputFileProcessData, output_log::OutputLogProcessData};
 use serde::{Deserialize, Serialize};
 
-use crate::{math::frequency::EFrequency, wave::sample::UniformedSample};
+use crate::{
+    math::{frequency::EFrequency, timer::Timer},
+    wave::sample::UniformedSample,
+};
 
 use super::{container::ENodeContainer, v1::EOutputFileFormat};
 
@@ -492,6 +495,15 @@ impl RelationTreeNode {
     pub fn get_output(&self) -> EProcessOutput {
         self.processor.get_output()
     }
+
+    /// ノードの処理活動が終わったか？
+    pub fn is_finished(&self) -> bool {
+        match &self.processor {
+            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().is_finished(),
+            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().is_finished(),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -879,35 +891,50 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
 
     // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
     // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
+    let tick_threshold = (setting.sample_count_frame as f64) / (setting.sample_rate as f64);
+    let mut tick_timer = Timer::from_second(tick_threshold);
 
-    for output_root in &mut output_tree {
-        let mut stack = vec![];
-        stack.push(output_root.clone());
+    // 終了条件は、すべてのノードが終わった時。
+    // つまり、`output_root`のルートノードがすべて終わった時？
+    loop {
+        let all_output_finished = output_tree.iter().all(|v| v.borrow().is_finished());
+        if all_output_finished {
+            break;
+        }
 
-        while !stack.is_empty() {
-            let result = stack.last_mut().unwrap().borrow_mut().try_process();
+        //
+        for output_root in &mut output_tree {
+            let mut stack = vec![];
+            stack.push(output_root.clone());
 
-            match result {
-                EProcessResult::Finished => {
-                    let _ = stack.pop().unwrap();
-                }
-                EProcessResult::Pending => {
-                    // reverseしてpop()するのがめんどくさいので、一旦これで。
-                    let mut children = {
-                        let item = stack.last_mut().unwrap();
-                        item.borrow().try_get_unfinished_children_names()
-                    };
-                    if children.is_empty() {
-                        println!("Children nodes must be exist when pending nodes.");
-                        continue;
+            while !stack.is_empty() {
+                let result = stack.last_mut().unwrap().borrow_mut().try_process();
+
+                match result {
+                    EProcessResult::Finished => {
+                        let _ = stack.pop().unwrap();
                     }
+                    EProcessResult::Pending => {
+                        // reverseしてpop()するのがめんどくさいので、一旦これで。
+                        let mut children = {
+                            let item = stack.last_mut().unwrap();
+                            item.borrow().try_get_unfinished_children_names()
+                        };
+                        if children.is_empty() {
+                            println!("Children nodes must be exist when pending nodes.");
+                            continue;
+                        }
 
-                    let next_node = tree_node_map.get(&children.pop().unwrap()).unwrap().clone();
-                    stack.push(next_node);
+                        let next_node = tree_node_map.get(&children.pop().unwrap()).unwrap().clone();
+                        stack.push(next_node);
+                    }
                 }
             }
         }
     }
+
+    let duration = tick_timer.tick();
+    println!("{:?}", duration);
 
     Ok(())
 }
