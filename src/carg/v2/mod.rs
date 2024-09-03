@@ -87,6 +87,14 @@ impl ENodeSpecifier {
         }
     }
 
+    /// ノード1個だけでも処理できるものなのか？
+    pub fn is_standalone(&self) -> bool {
+        match self {
+            Self::OutputFile | Self::OutputLog | Self::AdapterEnvlopeAd | Self::AdapterEnvlopeAdsr => false,
+            _ => true,
+        }
+    }
+
     /// 自分が`output`と互換性のあるノードなのか？
     pub fn is_supported_by(&self, output: &Self) -> bool {
         match *output {
@@ -531,6 +539,16 @@ impl RelationTreeNode {
             ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
         }
     }
+
+    /// ノード1個だけでも処理できるものなのか？
+    pub fn is_standalone(&self) -> bool {
+        self.processor.is_standalone()
+    }
+
+    /// このノードからの子ノードの数を返す。
+    pub fn get_children_count(&self) -> usize {
+        self.children.len()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -605,6 +623,15 @@ impl ENodeProcessData {
             ENode::OutputLog { .. } | ENode::OutputFile { .. } => {
                 ENodeProcessData::InputBufferOutputNone(SInputBufferOutputNone::create_from(node, setting))
             }
+        }
+    }
+
+    /// ノード1個だけでも処理できるものなのか？
+    pub fn is_standalone(&self) -> bool {
+        match self {
+            ENodeProcessData::InputNoneOutputBuffer(_) => true,
+            ENodeProcessData::InputBufferOutputBuffer(_) => false,
+            ENodeProcessData::InputBufferOutputNone(_) => false,
         }
     }
 
@@ -910,6 +937,15 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
                     }
                 }
             }
+        }
+
+        // もしroot_nodeがstandaloneでなくて、childrenがなければ無視する。
+        let can_process = {
+            let borrowed = root_node.borrow();
+            borrowed.is_standalone() || borrowed.get_children_count() > 0
+        };
+        if !can_process {
+            continue;
         }
 
         // Outputのツリー
