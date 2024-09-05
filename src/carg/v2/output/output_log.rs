@@ -112,7 +112,7 @@ impl TInputBufferOutputNone for OutputLogProcessData {
 
 impl TProcess for OutputLogProcessData {
     fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
+        true
     }
 
     fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {

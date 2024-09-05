@@ -1,7 +1,6 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
-    os::windows::process,
     rc::Rc,
 };
 
@@ -34,7 +33,7 @@ pub struct Setting {
 
 /// 内部識別処理に使うEnum。
 #[derive(Debug, Clone, Copy)]
-enum ENodeSpecifier {
+pub enum ENodeSpecifier {
     InternalStartPin,
     EmitterPinkNoise,
     EmitterWhiteNoise,
@@ -437,8 +436,6 @@ pub struct RelationTreeNode {
     prev_nodes: HashMap<String, RelationTreeNodePtr>,
     /// 次に伝播するノードのマップ
     next_nodes: HashMap<String, RelationTreeNodePtr>,
-    /// 子ノードのインプットを取得するためのタイムスタンプのリスト。[`Self::children`]と同じ数であること。
-    sync_timestamps: Vec<i64>,
     /// このノードから処理するアイテム
     processor: ENodeProcessData,
 }
@@ -451,7 +448,6 @@ impl RelationTreeNode {
             specifier,
             prev_nodes: HashMap::new(),
             next_nodes: HashMap::new(),
-            sync_timestamps: vec![],
             processor: processor.clone(),
         })
     }
