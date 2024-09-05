@@ -27,7 +27,7 @@ pub struct OutputFileProcessData {
     common: ProcessControlItem,
     format: EOutputFileFormat,
     file_name: String,
-    inputs: HashMap<usize, Vec<ProcessOutputBuffer>>,
+    inputs: HashMap<String, Vec<ProcessOutputBuffer>>,
 }
 
 impl OutputFileProcessData {
@@ -45,16 +45,15 @@ impl OutputFileProcessData {
     fn update_state_stopped(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
         // Childrenが全部送信完了したら処理が行える。
         // commonで初期Childrenの数を比較するだけでいいかも。
-        if self.inputs.len() < self.common.child_count {
+        if self.inputs.is_empty() {
             return EProcessResult::Pending;
         }
-        if input.children_states.iter().any(|v| *v != EProcessState::Finished) {
+        if !input.is_children_all_finished() {
             return EProcessResult::Pending;
         }
-        assert!(self.common.child_count > 0);
 
         // inputsのサンプルレートが同じかを確認する。
-        let source_sample_rate = self.inputs.get(&0).unwrap().first().unwrap().setting.sample_rate;
+        let source_sample_rate = self.inputs.iter().next().unwrap().1.first().unwrap().setting.sample_rate;
         for (_, input) in self.inputs.iter().skip(1) {
             assert!(input.first().unwrap().setting.sample_rate == source_sample_rate);
         }
@@ -133,6 +132,8 @@ impl OutputFileProcessData {
             writer.flush().expect("Failed to flush writer.")
         }
 
+        self.inputs.clear();
+
         // 状態変更。
         self.common.state = EProcessState::Finished;
         self.common.process_timestamp += 1;
@@ -141,24 +142,16 @@ impl OutputFileProcessData {
 }
 
 impl TInputBufferOutputNone for OutputFileProcessData {
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
-    }
-
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        match output {
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
+        match input {
             EProcessOutput::None => unimplemented!("Unexpected branch."),
             EProcessOutput::Buffer(v) => {
-                if !self.inputs.contains_key(&index) {
-                    self.inputs.insert(index, vec![]);
+                if !self.inputs.contains_key(node_name) {
+                    self.inputs.insert(node_name.to_owned(), vec![]);
                 }
 
-                self.inputs.get_mut(&index).unwrap().push(v);
+                self.inputs.get_mut(node_name).unwrap().push(v.clone());
             }
         }
     }
@@ -170,10 +163,6 @@ impl TProcess for OutputFileProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn get_state(&self) -> EProcessState {
-        self.common.state
-    }
-
     fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
         match self.common.state {
             EProcessState::Stopped => self.update_state_stopped(input),
@@ -182,6 +171,10 @@ impl TProcess for OutputFileProcessData {
             }
             _ => unreachable!("Unexpected branch"),
         }
+    }
+
+    fn can_process(&self) -> bool {
+        self.common.state != EProcessState::Finished
     }
 }
 

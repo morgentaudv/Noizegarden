@@ -1,24 +1,81 @@
+use itertools::Itertools;
 use num_traits::Pow;
 
-use crate::{
-    carg::v2::{
-        EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-        TInputBufferOutputBuffer, TProcess,
-    },
-    wave::sample::UniformedSample,
+use crate::carg::v2::{
+    EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
+    TInputBufferOutputBuffer, TProcess,
 };
+
+/// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
+#[derive(Debug, Clone)]
+pub struct EnvelopeAdValueEmitter {
+    attack_time: f64,
+    decay_time: f64,
+    attack_curve: f64,
+    decay_curve: f64,
+    next_sample_index: usize,
+}
+
+impl EnvelopeAdValueEmitter {
+    pub fn new(attack_time: f64, decay_time: f64, attack_curve: f64, decay_curve: f64) -> Self {
+        Self {
+            attack_time,
+            decay_time,
+            attack_curve,
+            decay_curve,
+            next_sample_index: 0usize,
+        }
+    }
+
+    pub fn next_value(&mut self, sample_rate: usize) -> f64 {
+        let unittime = self.next_sample_index as f64;
+        self.next_sample_index += 1;
+
+        let sample_time = unittime / (sample_rate as f64);
+        let stop_time = self.decay_time + self.attack_time;
+        let decay_start_time = self.attack_time;
+
+        if sample_time >= stop_time {
+            // Envelopeが完全にとまったので。
+            0.0
+        } else if sample_time >= decay_start_time {
+            // Decay中。
+            // curve < 1.0ならLog式、curve > 1.0なら指数関数式。
+            let rate = (sample_time - decay_start_time) / self.decay_time;
+            let input_rate = 1.0 - rate;
+            // y = input_rate^(curve)。
+            input_rate.pow(self.decay_curve)
+        } else {
+            // Attack中。
+            // curve < 1.0ならLog式、curve > 1.0なら指数関数式。
+            let rate = sample_time / self.attack_time;
+            // y = input_rate^(curve)。
+            rate.pow(self.attack_curve)
+        }
+    }
+
+    /// `length`分の値を取得する。
+    pub fn next_values(&mut self, length: usize, sample_rate: usize) -> Vec<f64> {
+        if length == 0 {
+            vec![]
+        } else {
+            (0..length).map(|_| self.next_value(sample_rate)).collect_vec()
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// AdapterEnvelopeAdProcessData
+// ----------------------------------------------------------------------------
 
 #[derive(Debug)]
 pub struct AdapterEnvelopeAdProcessData {
     common: ProcessControlItem,
     /// これじゃ一つしか受け入れない。
-    input: Option<(usize, ProcessOutputBuffer)>,
+    input: Option<(String, ProcessOutputBuffer)>,
     /// 処理後に出力情報が保存されるところ。
     output: Option<ProcessOutputBuffer>,
-    attack_time: f64,
-    decay_time: f64,
-    attack_curve: f64,
-    decay_curve: f64,
+    emitter: EnvelopeAdValueEmitter,
 }
 
 impl AdapterEnvelopeAdProcessData {
@@ -32,42 +89,58 @@ impl AdapterEnvelopeAdProcessData {
             common: ProcessControlItem::new(),
             input: None,
             output: None,
-            attack_time,
-            decay_time,
-            attack_curve,
-            decay_curve,
+            emitter: EnvelopeAdValueEmitter::new(attack_time, decay_time, attack_curve, decay_curve),
+        }
+    }
+}
+
+impl AdapterEnvelopeAdProcessData {
+    fn update_state(&mut self, in_input: &ProcessProcessorInput) -> EProcessResult {
+        // Inputがなきゃ何もできぬ。
+        if self.input.is_none() {
+            return EProcessResult::Pending;
+        }
+
+        // このノードでは最初からADを行う。
+        // もし尺が足りなければ、そのまま終わる。
+        // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
+        let (_, input) = self.input.as_ref().unwrap();
+        let values = self.emitter.next_values(input.buffer.len(), input.setting.sample_rate as usize);
+        let buffer = input.buffer.iter().zip(values.iter()).map(|(a, b)| *b * *a).collect_vec();
+        println!("{:?}", buffer);
+
+        // outputのどこかに保持する。
+        self.output = Some(ProcessOutputBuffer {
+            buffer,
+            setting: input.setting.clone(),
+            range: input.range,
+        });
+
+        // 状態変更。
+        self.common.process_timestamp += 1;
+
+        if in_input.is_children_all_finished() {
+            self.common.state = EProcessState::Finished;
+            return EProcessResult::Finished;
+        } else {
+            self.common.state = EProcessState::Playing;
+            return EProcessResult::Pending;
         }
     }
 }
 
 impl TInputBufferOutputBuffer for AdapterEnvelopeAdProcessData {
-    fn set_child_count(&mut self, count: usize) {
-        if count > 1 {
-            println!("adapter-envelope-ad should have only one inputn node.");
-        }
-
-        self.common.child_count = count;
-    }
-
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
     fn get_output(&self) -> ProcessOutputBuffer {
         assert!(self.output.is_some());
         self.output.as_ref().unwrap().clone()
     }
 
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        if self.input.is_some() {
-            let old_input = self.input.as_ref().unwrap().0;
-            println!("adapter-envelope-ad node already has input information of ({}).", old_input);
-        }
-
-        match output {
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
+        match input {
             EProcessOutput::None => unimplemented!("Unexpected branch."),
             EProcessOutput::Buffer(v) => {
-                self.input = Some((index, v));
+                self.input = Some((node_name.to_owned(), v.clone()));
             }
         }
     }
@@ -78,66 +151,16 @@ impl TProcess for AdapterEnvelopeAdProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn try_process(&mut self, input: &crate::carg::v2::ProcessProcessorInput) -> EProcessResult {
-        if self.common.state == EProcessState::Finished {
-            return EProcessResult::Finished;
-        }
-
-        // Inputがなきゃ何もできぬ。
-        if self.input.is_none() {
-            return EProcessResult::Pending;
-        }
-
-        // このノードでは最初からADを行う。
-        // もし尺が足りなければ、そのまま終わる。
-        // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
-        let (_, input) = self.input.as_ref().unwrap();
-        let sample_rate = input.setting.sample_rate as f64;
-
-        let stop_time = self.decay_time + self.attack_time;
-        let decay_start_time = self.attack_time;
-
-        let mut applied_buffer = vec![];
-        applied_buffer.reserve(input.buffer.len());
-
-        for (sample_i, sample) in input.buffer.iter().enumerate() {
-            let sample_time = sample_i as f64 / sample_rate;
-
-            if sample_time >= stop_time {
-                // Envelopeが完全にとまったので。
-                applied_buffer.push(UniformedSample::MIN);
-            } else if sample_time >= decay_start_time {
-                // Decay中。
-                // curve < 1.0ならLog式、curve > 1.0なら指数関数式。
-                let rate = (sample_time - decay_start_time) / self.decay_time;
-                let input_rate = 1.0 - rate;
-                // y = input_rate^(curve)。
-                let value = input_rate.pow(self.decay_curve);
-                applied_buffer.push(value * *sample);
-            } else {
-                // Attack中。
-                // curve < 1.0ならLog式、curve > 1.0なら指数関数式。
-                let rate = sample_time / self.attack_time;
-                // y = input_rate^(curve)。
-                let value = rate.pow(self.attack_curve);
-                applied_buffer.push(value * *sample);
+    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+        match self.common.state {
+            EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
+            EProcessState::Finished => {
+                return EProcessResult::Finished;
             }
         }
-
-        // outputのどこかに保持する。
-        self.output = Some(ProcessOutputBuffer {
-            buffer: applied_buffer,
-            setting: input.setting.clone(),
-            range: input.range,
-        });
-
-        // 状態変更。
-        self.common.state = EProcessState::Finished;
-        self.common.process_timestamp += 1;
-        return EProcessResult::Finished;
     }
 
-    fn get_state(&self) -> EProcessState {
-        self.common.state
+    fn can_process(&self) -> bool {
+        self.input.is_some()
     }
 }

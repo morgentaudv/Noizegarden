@@ -52,7 +52,7 @@ impl ChildInputInfo {
 pub struct OutputLogProcessData {
     common: ProcessControlItem,
     mode: EParsedOutputLogMode,
-    inputs: HashMap<usize, ChildInputInfo>,
+    inputs: HashMap<String, ChildInputInfo>,
 }
 
 impl OutputLogProcessData {
@@ -66,10 +66,11 @@ impl OutputLogProcessData {
 }
 
 impl OutputLogProcessData {
-    fn update_state_stopped(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+    fn update_state(&mut self, _input: &ProcessProcessorInput) -> EProcessResult {
         // 出力する。
         match self.mode {
             EParsedOutputLogMode::Print => {
+                // 使ってから
                 for (i, input) in &mut self.inputs {
                     let logs = input.drain_buffer_if_updated();
                     if logs.is_empty() {
@@ -80,42 +81,30 @@ impl OutputLogProcessData {
                     logs.into_iter().for_each(|v| println!("{:?}", v));
                     println!("");
                 }
-            }
-        }
 
-        // その後にFinishしたら終わる。
-        let is_children_finished = input.children_states.iter().all(|v| *v == EProcessState::Finished);
-        if self.inputs.len() >= self.common.child_count && is_children_finished {
-            self.common.state = EProcessState::Finished;
-            self.common.process_timestamp += 1;
-            return EProcessResult::Finished;
+                // Drain。
+                self.inputs.clear();
+            }
         }
 
         // じゃなきゃPlayingに。
         self.common.state = EProcessState::Playing;
         self.common.process_timestamp += 1;
-        return EProcessResult::Pending;
+        return EProcessResult::Finished;
     }
 }
 
 impl TInputBufferOutputNone for OutputLogProcessData {
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
-    }
-
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        match output {
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
+        match input {
             EProcessOutput::None => unimplemented!("Unexpected branch."),
             EProcessOutput::Buffer(v) => {
-                if !self.inputs.contains_key(&index) {
-                    self.inputs.insert(index, ChildInputInfo::new());
+                if !self.inputs.contains_key(node_name) {
+                    self.inputs.insert(node_name.to_owned(), ChildInputInfo::new());
                 }
 
-                self.inputs.get_mut(&index).unwrap().insert_buffer(v);
+                self.inputs.get_mut(node_name).unwrap().insert_buffer(v.clone());
             }
         }
     }
@@ -126,16 +115,14 @@ impl TProcess for OutputLogProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn get_state(&self) -> EProcessState {
-        self.common.state
+    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+        self.update_state(input)
     }
 
-    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
-        match self.common.state {
-            EProcessState::Stopped | EProcessState::Playing => self.update_state_stopped(input),
-            EProcessState::Finished => {
-                return EProcessResult::Finished;
-            }
+    /// 自分は内部状態に関係なくいつでも処理できる。
+    fn can_process(&self) -> bool {
+        match self.mode {
+            EParsedOutputLogMode::Print => true,
         }
     }
 }

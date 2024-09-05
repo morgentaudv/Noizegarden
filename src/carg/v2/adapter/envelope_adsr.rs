@@ -10,7 +10,7 @@ use crate::{
 pub struct AdapterEnvelopeAdsrProcessData {
     common: ProcessControlItem,
     /// これじゃ一つしか受け入れない。
-    input: Option<(usize, ProcessOutputBuffer)>,
+    input: Option<ProcessOutputBuffer>,
     /// 処理後に出力情報が保存されるところ。
     output: Option<ProcessOutputBuffer>,
     attack_time: f64,
@@ -57,33 +57,17 @@ impl AdapterEnvelopeAdsrProcessData {
 }
 
 impl TInputBufferOutputBuffer for AdapterEnvelopeAdsrProcessData {
-    fn set_child_count(&mut self, count: usize) {
-        if count > 1 {
-            println!("adapter-envelope-ad should have only one inputn node.");
-        }
-
-        self.common.child_count = count;
-    }
-
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
     fn get_output(&self) -> ProcessOutputBuffer {
         assert!(self.output.is_some());
         self.output.as_ref().unwrap().clone()
     }
 
-    fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        if self.input.is_some() {
-            let old_input = self.input.as_ref().unwrap().0;
-            println!("adapter-envelope-ad node already has input information of ({}).", old_input);
-        }
-
-        match output {
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    fn update_input(&mut self, _: &str, input: &EProcessOutput) {
+        match input {
             EProcessOutput::None => unimplemented!("Unexpected branch."),
             EProcessOutput::Buffer(v) => {
-                self.input = Some((index, v));
+                self.input = Some(v.clone());
             }
         }
     }
@@ -92,10 +76,6 @@ impl TInputBufferOutputBuffer for AdapterEnvelopeAdsrProcessData {
 impl TProcess for AdapterEnvelopeAdsrProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished
-    }
-
-    fn get_state(&self) -> EProcessState {
-        self.common.state
     }
 
     fn try_process(&mut self, input: &crate::carg::v2::ProcessProcessorInput) -> EProcessResult {
@@ -111,7 +91,7 @@ impl TProcess for AdapterEnvelopeAdsrProcessData {
         // このノードでは最初からADを行う。
         // もし尺が足りなければ、そのまま終わる。
         // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
-        let (_, input) = self.input.as_ref().unwrap();
+        let input = self.input.as_ref().unwrap();
         let sample_rate = input.setting.sample_rate as f64;
 
         let decay_start_time = self.attack_time;
@@ -168,5 +148,9 @@ impl TProcess for AdapterEnvelopeAdsrProcessData {
         self.common.state = EProcessState::Finished;
         self.common.process_timestamp += 1;
         return EProcessResult::Finished;
+    }
+
+    fn can_process(&self) -> bool {
+        self.input.is_some()
     }
 }

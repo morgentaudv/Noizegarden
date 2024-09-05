@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
+    os::windows::process,
     rc::Rc,
 };
 
@@ -32,7 +33,9 @@ pub struct Setting {
 }
 
 /// 内部識別処理に使うEnum。
+#[derive(Debug, Clone, Copy)]
 enum ENodeSpecifier {
+    InternalStartPin,
     EmitterPinkNoise,
     EmitterWhiteNoise,
     EmitterSineWave,
@@ -49,6 +52,7 @@ impl ENodeSpecifier {
     /// 変換する
     pub fn from_node(node: &ENode) -> Self {
         match node {
+            ENode::InternalStartPin => Self::InternalStartPin,
             ENode::EmitterPinkNoise { .. } => Self::EmitterPinkNoise,
             ENode::EmitterWhiteNoise { .. } => Self::EmitterWhiteNoise,
             ENode::EmitterSineWave { .. } => Self::EmitterSineWave,
@@ -62,49 +66,36 @@ impl ENodeSpecifier {
         }
     }
 
+    /// Inputノードとして入れられるか
     pub fn is_input(&self) -> bool {
         match self {
-            Self::EmitterPinkNoise => true,
-            Self::EmitterWhiteNoise => true,
-            Self::EmitterSineWave => true,
-            Self::EmitterSawtooth => true,
-            Self::EmitterTriangle => true,
-            Self::EmitterSquare | Self::AdapterEnvlopeAd | Self::AdapterEnvlopeAdsr => true,
-            Self::OutputFile => false,
-            Self::OutputLog => false,
-        }
-    }
-
-    pub fn is_output(&self) -> bool {
-        match self {
-            Self::EmitterPinkNoise => false,
-            Self::EmitterWhiteNoise => false,
-            Self::EmitterSineWave => false,
-            Self::EmitterSawtooth => false,
-            Self::EmitterTriangle => false,
-            Self::EmitterSquare => false,
-            Self::OutputFile | Self::OutputLog | Self::AdapterEnvlopeAd | Self::AdapterEnvlopeAdsr => true,
-        }
-    }
-
-    /// ノード1個だけでも処理できるものなのか？
-    pub fn is_standalone(&self) -> bool {
-        match self {
-            Self::OutputFile | Self::OutputLog | Self::AdapterEnvlopeAd | Self::AdapterEnvlopeAdsr => false,
-            _ => true,
+            Self::InternalStartPin
+            | Self::EmitterPinkNoise
+            | Self::EmitterWhiteNoise
+            | Self::EmitterSineWave
+            | Self::EmitterSawtooth
+            | Self::EmitterTriangle
+            | Self::EmitterSquare
+            | Self::AdapterEnvlopeAd
+            | Self::AdapterEnvlopeAdsr => true,
+            Self::OutputFile | Self::OutputLog => false,
         }
     }
 
     /// 自分が`output`と互換性のあるノードなのか？
-    pub fn is_supported_by(&self, output: &Self) -> bool {
+    pub fn can_connect_to(&self, output: &Self) -> bool {
         match *output {
+            Self::InternalStartPin => false,
             // falseしかできない。
             Self::EmitterPinkNoise
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave
             | Self::EmitterSawtooth
             | Self::EmitterTriangle
-            | Self::EmitterSquare => false,
+            | Self::EmitterSquare => match self {
+                Self::InternalStartPin => true,
+                _ => false,
+            },
             // trueになれる。
             Self::OutputFile => match self {
                 Self::EmitterPinkNoise
@@ -115,7 +106,7 @@ impl ENodeSpecifier {
                 | Self::AdapterEnvlopeAd
                 | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
-                Self::OutputFile | Self::OutputLog => false,
+                _ => false,
             },
             Self::OutputLog => match self {
                 Self::EmitterPinkNoise
@@ -126,7 +117,7 @@ impl ENodeSpecifier {
                 | Self::AdapterEnvlopeAd
                 | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
-                Self::OutputFile | Self::OutputLog => false,
+                _ => false,
             },
             Self::AdapterEnvlopeAd => match self {
                 Self::EmitterPinkNoise
@@ -137,7 +128,7 @@ impl ENodeSpecifier {
                 | Self::AdapterEnvlopeAd
                 | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
-                Self::OutputFile | Self::OutputLog => false,
+                _ => false,
             },
             Self::AdapterEnvlopeAdsr => match self {
                 Self::EmitterPinkNoise
@@ -148,8 +139,15 @@ impl ENodeSpecifier {
                 | Self::AdapterEnvlopeAd
                 | Self::AdapterEnvlopeAdsr
                 | Self::EmitterSquare => true,
-                Self::OutputFile | Self::OutputLog => false,
+                _ => false,
             },
+        }
+    }
+
+    /// 処理が可能なノードが？
+    pub fn can_process(&self) -> bool {
+        match self {
+            _ => true,
         }
     }
 }
@@ -158,6 +156,9 @@ impl ENodeSpecifier {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum ENode {
+    /// 内部制御用。
+    #[serde(rename = "_start_pin")]
+    InternalStartPin,
     /// ピンクノイズを出力する。
     #[serde(rename = "emitter-pinknoise")]
     EmitterPinkNoise { intensity: f64, range: EmitterRange },
@@ -230,12 +231,8 @@ impl ENode {
         ENodeSpecifier::from_node(self).is_input()
     }
 
-    pub fn is_output(&self) -> bool {
-        ENodeSpecifier::from_node(self).is_output()
-    }
-
-    pub fn is_supported_by(&self, output: &ENode) -> bool {
-        ENodeSpecifier::from_node(self).is_supported_by(&ENodeSpecifier::from_node(output))
+    pub fn can_connect_to(&self, output: &ENode) -> bool {
+        ENodeSpecifier::from_node(self).can_connect_to(&ENodeSpecifier::from_node(output))
     }
 }
 
@@ -264,7 +261,7 @@ pub struct EmitterRange {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Relation {
     /// 入力側
-    pub input: Vec<String>,
+    pub input: String,
     /// 出力側
     pub output: String,
 }
@@ -291,11 +288,21 @@ pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
     return Ok(container);
 }
 
+/// 特殊なインプットノード名なのかを確認する。
+pub fn is_special_input_node(input: &str) -> bool {
+    if input == "_start_pin" {
+        return true;
+    }
+
+    return false;
+}
+
 /// 次のことを検査する。
 ///
 /// * inputとoutputが空白なものがあるかを確認する。
 /// * それぞれのノードに対してCycleになっていないかを確認する。
 pub fn validate_node_relations(nodes: &HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
+    let mut is_start_node_exist = false;
     for relation in relations {
         // inputとoutputが空白なものがあるかを確認する。
         if relation.input.is_empty() {
@@ -307,22 +314,17 @@ pub fn validate_node_relations(nodes: &HashMap<String, ENode>, relations: &[Rela
 
         // まずrelationsからnodesに当てはまらないノード文字列があるかを確認する。
         // input/output指定の文字列のノードが本当にinput/outputとして動作できるかを確認。
-        for node_name in &relation.input {
+        // もしくは特殊ノードなのかも確認。
+        if !is_special_input_node(&relation.input) {
+            let node_name = &relation.input;
             if !nodes.contains_key(node_name) {
                 return Err(anyhow::anyhow!("Given node {} is not exist in node map.", node_name));
             }
             if !nodes[node_name].is_input() {
                 return Err(anyhow::anyhow!("Given node {} is not for input.", node_name));
             }
-        }
-        {
-            let output_node_name = &relation.output;
-            if !nodes.contains_key(output_node_name) {
-                return Err(anyhow::anyhow!("Given node {} is not exist in node map.", output_node_name));
-            }
-            if !nodes[output_node_name].is_output() {
-                return Err(anyhow::anyhow!("Given node {} is not for output.", output_node_name));
-            }
+        } else {
+            is_start_node_exist = true;
         }
 
         // そしてinputとoutputの互換性を確認する。
@@ -331,16 +333,18 @@ pub fn validate_node_relations(nodes: &HashMap<String, ENode>, relations: &[Rela
             let output_node_name = &relation.output;
             let output = &nodes[output_node_name];
 
-            for input_node_name in &relation.input {
-                if !nodes[input_node_name].is_supported_by(output) {
-                    return Err(anyhow::anyhow!(
-                        "Input node {} does not support output node {}.",
-                        input_node_name,
-                        output_node_name
-                    ));
-                }
+            if !nodes[&relation.input].can_connect_to(output) {
+                return Err(anyhow::anyhow!(
+                    "Input node {} does not support output node {}.",
+                    &relation.input,
+                    output_node_name
+                ));
             }
         }
+    }
+
+    if !is_start_node_exist {
+        return Err(anyhow::anyhow!("There is no start pin node. '_start_pin'."));
     }
 
     // それぞれのノードに対してCycleになっていないかを確認する。
@@ -387,27 +391,14 @@ struct GraphNodeRoute {
     to: String,
 }
 
-/// Outputなノードの名前だけをリスト化して返す。
-pub fn get_end_node_names(nodes: &HashMap<String, ENode>, relations: &[Relation]) -> Vec<String> {
-    let mut end_nodes = vec![];
-    for (node_name, _) in nodes {
-        let mut is_node_only_output = true; // inputにはなくて、outputにはあったか。
+pub type ItemSPtr<T: ?Sized> = Rc<RefCell<T>>;
 
-        for relation in relations {
-            if relation.input.contains(node_name) {
-                // outputではなくなった。
-                is_node_only_output = false;
-                break;
-            }
-        }
-
-        // 実はここでnode_nameが本当にoutputにあるかを確認すべきだけど、
-        if is_node_only_output {
-            end_nodes.push(node_name.clone());
-        }
+pub struct SItemSPtr;
+impl SItemSPtr {
+    #[inline]
+    pub fn new<T>(value: T) -> ItemSPtr<T> {
+        Rc::new(RefCell::new(value))
     }
-
-    end_nodes
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -419,18 +410,33 @@ pub struct ProcessCommonInput {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessProcessorInput {
     pub common: ProcessCommonInput,
-    pub children_states: Vec<EProcessState>,
+    pub children_states: Vec<bool>,
 }
 
-pub type RelationTreeNodePtr = Rc<RefCell<RelationTreeNode>>;
+impl ProcessProcessorInput {
+    /// 子供がないかそれとも子供が全部処理が終わったか？
+    pub fn is_children_all_finished(&self) -> bool {
+        if self.children_states.is_empty() {
+            return true;
+        }
+
+        self.children_states.iter().all(|v| *v == true)
+    }
+}
+
+pub type RelationTreeNodePtr = ItemSPtr<RelationTreeNode>;
 
 /// 木のノードアイテム。
 #[derive(Debug)]
 pub struct RelationTreeNode {
     /// ノードの名前
     pub name: String,
-    /// 子ノード
-    children: Vec<RelationTreeNodePtr>,
+    /// ノード識別タイプ
+    specifier: ENodeSpecifier,
+    /// 前からこのノードを依存する前ノードのマップ
+    prev_nodes: HashMap<String, RelationTreeNodePtr>,
+    /// 次に伝播するノードのマップ
+    next_nodes: HashMap<String, RelationTreeNodePtr>,
     /// 子ノードのインプットを取得するためのタイムスタンプのリスト。[`Self::children`]と同じ数であること。
     sync_timestamps: Vec<i64>,
     /// このノードから処理するアイテム
@@ -438,88 +444,67 @@ pub struct RelationTreeNode {
 }
 
 impl RelationTreeNode {
-    /// 木のアイテムを作る。
-    pub fn new_item(name: &str, processor: &ENodeProcessData) -> RelationTreeNodePtr {
-        Rc::new(RefCell::new(RelationTreeNode {
+    /// ノードアイテムを作る。
+    pub fn new_item(name: &str, specifier: ENodeSpecifier, processor: &ENodeProcessData) -> RelationTreeNodePtr {
+        SItemSPtr::new(RelationTreeNode {
             name: name.to_owned(),
-            children: vec![],
+            specifier,
+            prev_nodes: HashMap::new(),
+            next_nodes: HashMap::new(),
             sync_timestamps: vec![],
             processor: processor.clone(),
-        }))
+        })
     }
 
-    /// 子ノードのリストを追加する。
-    pub fn append_children(&mut self, mut children: Vec<RelationTreeNodePtr>) {
-        if children.is_empty() {
-            return;
+    /// 前からこのノードを依存する前ノードを登録する。
+    pub fn append_prev_node(&mut self, node_name: String, prev: RelationTreeNodePtr) {
+        self.prev_nodes.insert(node_name, prev);
+    }
+
+    /// 次に処理を伝播するノードを登録する。
+    pub fn append_next_node(&mut self, node_name: String, next: RelationTreeNodePtr) {
+        self.next_nodes.insert(node_name, next);
+    }
+
+    /// ノード自分の処理が可能か？
+    pub fn can_process(&self) -> bool {
+        if !self.specifier.can_process() {
+            return false;
         }
 
-        self.children.append(&mut children);
-        let new_child_count = self.children.len();
-        self.sync_timestamps.resize(new_child_count, 0i64);
-
-        // child_countを更新する。
-        match &mut self.processor {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().set_child_count(new_child_count),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().set_child_count(new_child_count),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().set_child_count(new_child_count),
+        // 自分のノードも視野に入れる。
+        match &self.processor {
+            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().can_process(),
+            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().can_process(),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().can_process(),
+            ENodeProcessData::InternalStartNode => true,
         }
     }
 
-    pub fn try_process(&mut self, input: &ProcessCommonInput) -> EProcessResult {
-        assert_eq!(self.children.len(), self.sync_timestamps.len());
-
-        // まずinputの形式が何かを取得する。
-        // というかそもそもTreeの中ではinput/outputがValidationが決まっているので、正直いらないかも。
-        //
-        // 子ノードの終わる時間または更新時間はそれぞれ異なるはずなので、
-        // それぞれのタイムスタンプが更新されていて、自分のタイムスタンプが遅れていれば子ノードからinputを取得する。
-        let mut children_states = vec![];
-        children_states.reserve(self.children.len());
-
-        for (child_i, (child, sync_timestamp)) in self.children.iter().zip(&mut self.sync_timestamps).enumerate() {
-            let borrowed_child = child.borrow();
-            children_states.push(borrowed_child.get_state());
-
-            // 24-09-03 フレームごとにインプットし続ける。
-            let child_time_stamp = borrowed_child.get_timestamp();
-            if *sync_timestamp >= child_time_stamp {
-                continue;
-            }
-
-            // 更新する必要があれば、取得する。
-            // 24-09-02 今は子ノード全部何かを処理して結果を返すということで。
-            // ただしoutputを返さないこともありえる。（`EProcessOutput::None`の時）
-            match borrowed_child.get_output() {
-                EProcessOutput::None => (),
-                v => self.processor.update_input(child_i, v),
-            }
-            *sync_timestamp = child_time_stamp;
-        }
-
-        let process_input = ProcessProcessorInput {
+    pub fn process(&mut self, input: &ProcessCommonInput) {
+        let input = ProcessProcessorInput {
             common: *input,
-            children_states,
+            children_states: self.prev_nodes.iter().map(|(_, v)| v.borrow().is_finished()).collect_vec(),
         };
-        self.processor.try_process(&process_input)
-    }
 
-    /// 処理が終わっていない子ノードだけを名前としてリストに返す。
-    pub fn try_get_unfinished_children_names(&self) -> Vec<String> {
-        if self.children.is_empty() {
-            return vec![];
+        // 自分のノードも視野に入れる。
+        let _state = match &self.processor {
+            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(&input),
+            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(&input),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(&input),
+            ENodeProcessData::InternalStartNode => EProcessResult::Finished,
+        };
+
+        // inputを入れる。inputをどう扱うかはnextノード各自でお任せする。
+        let output = self.processor.get_output();
+        for (_, node) in &mut self.next_nodes {
+            node.borrow_mut().update_input(&self.name, &output);
         }
-
-        self.children
-            .iter()
-            .filter(|v| !v.borrow().processor.is_finished())
-            .map(|v| v.borrow().name.clone())
-            .collect_vec()
     }
 
-    /// 自分のタイムスタンプを返す。
-    pub fn get_timestamp(&self) -> i64 {
-        self.processor.get_timestamp()
+    /// 次につながっているノードのリストを返す。
+    pub fn get_next_nodes(&self) -> Vec<RelationTreeNodePtr> {
+        self.next_nodes.iter().map(|(_, v)| v.clone()).collect_vec()
     }
 
     /// 処理した後の出力を返す。
@@ -527,27 +512,31 @@ impl RelationTreeNode {
         self.processor.get_output()
     }
 
-    pub fn get_state(&self) -> EProcessState {
-        self.processor.get_state()
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    pub fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
+        // 自分のノードも視野に入れる。
+        match &self.processor {
+            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().update_input(node_name, input),
+            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().update_input(node_name, input),
+            _ => (),
+        };
     }
 
     /// ノードの処理活動が終わったか？
     pub fn is_finished(&self) -> bool {
-        match &self.processor {
+        // 前のノードが全部Finishedであること。
+        if self.prev_nodes.iter().any(|(_, node)| !node.borrow().is_finished()) {
+            return false;
+        }
+
+        // 自分のノードも視野に入れる。
+        let is_finished = match &self.processor {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().is_finished(),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow().is_finished(),
             ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
-        }
-    }
-
-    /// ノード1個だけでも処理できるものなのか？
-    pub fn is_standalone(&self) -> bool {
-        self.processor.is_standalone()
-    }
-
-    /// このノードからの子ノードの数を返す。
-    pub fn get_children_count(&self) -> usize {
-        self.children.len()
+            ENodeProcessData::InternalStartNode => true,
+        };
+        is_finished
     }
 }
 
@@ -568,8 +557,6 @@ pub struct ProcessControlItem {
     pub state: EProcessState,
     /// 最後の処理時間を示す。-1ならまだ処理していないことを表す。
     pub process_timestamp: i64,
-    /// アイテムを持つノードからつながっている子アイテムの数
-    pub child_count: usize,
     /// 経過した時間（秒単位）
     pub elapsed_time: f64,
 }
@@ -579,7 +566,6 @@ impl ProcessControlItem {
         Self {
             state: EProcessState::Stopped,
             process_timestamp: 0i64,
-            child_count: 0usize,
             elapsed_time: 0.0,
         }
     }
@@ -600,6 +586,7 @@ pub enum EProcessState {
 /// 各ノードが自分の情報と周りの情報から処理を行うときの処理アイテム
 #[derive(Debug, Clone)]
 pub enum ENodeProcessData {
+    InternalStartNode,
     InputNoneOutputBuffer(InputNoneOutputBufferPtr),
     InputBufferOutputNone(InputBufferOutputNonePtr),
     InputBufferOutputBuffer(InputBufferOutputBufferPtr),
@@ -615,23 +602,15 @@ impl ENodeProcessData {
             | ENode::EmitterTriangle { .. }
             | ENode::EmitterSquare { .. }
             | ENode::EmitterSawtooth { .. } => {
-                ENodeProcessData::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
+                Self::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
             }
             ENode::AdapterEnvlopeAd { .. } | ENode::AdapterEnvlopeAdsr { .. } => {
-                ENodeProcessData::InputBufferOutputBuffer(SInputBufferOutputBuffer::create_from(node, setting))
+                Self::InputBufferOutputBuffer(SInputBufferOutputBuffer::create_from(node, setting))
             }
             ENode::OutputLog { .. } | ENode::OutputFile { .. } => {
-                ENodeProcessData::InputBufferOutputNone(SInputBufferOutputNone::create_from(node, setting))
+                Self::InputBufferOutputNone(SInputBufferOutputNone::create_from(node, setting))
             }
-        }
-    }
-
-    /// ノード1個だけでも処理できるものなのか？
-    pub fn is_standalone(&self) -> bool {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(_) => true,
-            ENodeProcessData::InputBufferOutputBuffer(_) => false,
-            ENodeProcessData::InputBufferOutputNone(_) => false,
+            ENode::InternalStartPin => Self::InternalStartNode,
         }
     }
 
@@ -641,15 +620,7 @@ impl ENodeProcessData {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().is_finished(),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow().is_finished(),
             ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
-        }
-    }
-
-    /// 自分のタイムスタンプを返す。
-    pub fn get_timestamp(&self) -> i64 {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().get_timestamp(),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().get_timestamp(),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().get_timestamp(),
+            ENodeProcessData::InternalStartNode => true,
         }
     }
 
@@ -659,15 +630,7 @@ impl ENodeProcessData {
             ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(input),
             ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(input),
             ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(input),
-        }
-    }
-
-    /// 中に`output`を更新する。
-    pub fn update_input(&mut self, index: usize, output: EProcessOutput) {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(_) => unreachable!("Unexpected branch"),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().update_input(index, output),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().update_input(index, output),
+            ENodeProcessData::InternalStartNode => EProcessResult::Finished,
         }
     }
 
@@ -675,16 +638,8 @@ impl ENodeProcessData {
     pub fn get_output(&self) -> EProcessOutput {
         match self {
             ENodeProcessData::InputNoneOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
-            ENodeProcessData::InputBufferOutputNone(_) => EProcessOutput::None,
             ENodeProcessData::InputBufferOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
-        }
-    }
-
-    pub fn get_state(&self) -> EProcessState {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().get_state(),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().get_state(),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().get_state(),
+            _ => EProcessOutput::None,
         }
     }
 }
@@ -710,9 +665,10 @@ pub trait TProcess {
     /// データアイテムの処理が終わったか？
     fn is_finished(&self) -> bool;
 
-    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult;
+    /// 自分が処理可能なノードなのかを確認する。
+    fn can_process(&self) -> bool;
 
-    fn get_state(&self) -> EProcessState;
+    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult;
 }
 
 // ----------------------------------------------------------------------------
@@ -720,17 +676,12 @@ pub trait TProcess {
 // ----------------------------------------------------------------------------
 
 /// [`TInputNoneOutputBuffer`]を実装しているアイテムの外部表示タイプ
-pub type InputNoneOutputBufferPtr = Rc<RefCell<dyn TInputNoneOutputBuffer>>;
+pub type InputNoneOutputBufferPtr = ItemSPtr<dyn TInputNoneOutputBuffer>;
 
 /// 処理からOutputでバッファを返すためのTrait。
 pub trait TInputNoneOutputBuffer: std::fmt::Debug + TProcess {
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64;
-
     /// 処理結果を返す。
     fn get_output(&self) -> ProcessOutputBuffer;
-
-    fn set_child_count(&mut self, count: usize);
 }
 
 /// [`TInputNoneOutputBuffer`]のインスタンス生成ファクトリー。
@@ -740,11 +691,11 @@ impl SInputNoneOutputBuffer {
         match node {
             ENode::EmitterPinkNoise { intensity, range } => {
                 let item = SineWaveEmitterProcessData::new_pink(*intensity, *range, setting.clone());
-                Rc::new(RefCell::new(item))
+                SItemSPtr::new(item)
             }
             ENode::EmitterWhiteNoise { intensity, range } => {
                 let item = SineWaveEmitterProcessData::new_white(*intensity, *range, setting.clone());
-                Rc::new(RefCell::new(item))
+                SItemSPtr::new(item)
             }
             ENode::EmitterSineWave {
                 frequency,
@@ -752,7 +703,7 @@ impl SInputNoneOutputBuffer {
                 range,
             } => {
                 let item = SineWaveEmitterProcessData::new_sine(*frequency, *intensity, *range, setting.clone());
-                Rc::new(RefCell::new(item))
+                SItemSPtr::new(item)
             }
             ENode::EmitterSawtooth {
                 frequency,
@@ -760,7 +711,7 @@ impl SInputNoneOutputBuffer {
                 range,
             } => {
                 let item = SineWaveEmitterProcessData::new_saw(*frequency, *intensity, *range, setting.clone());
-                Rc::new(RefCell::new(item))
+                SItemSPtr::new(item)
             }
             ENode::EmitterTriangle {
                 frequency,
@@ -768,7 +719,7 @@ impl SInputNoneOutputBuffer {
                 range,
             } => {
                 let item = SineWaveEmitterProcessData::new_triangle(*frequency, *intensity, *range, setting.clone());
-                Rc::new(RefCell::new(item))
+                SItemSPtr::new(item)
             }
             ENode::EmitterSquare {
                 frequency,
@@ -778,7 +729,7 @@ impl SInputNoneOutputBuffer {
             } => {
                 let item =
                     SineWaveEmitterProcessData::new_square(*frequency, *duty_rate, *intensity, *range, setting.clone());
-                Rc::new(RefCell::new(item))
+                SItemSPtr::new(item)
             }
             _ => unreachable!("Unexpected branch."),
         }
@@ -800,17 +751,12 @@ pub enum ESineWaveEmitterType {
 // ----------------------------------------------------------------------------
 
 /// [`TInputBufferOutputNone`]を実装しているアイテムの外部表示タイプ
-pub type InputBufferOutputNonePtr = Rc<RefCell<dyn TInputBufferOutputNone>>;
+pub type InputBufferOutputNonePtr = ItemSPtr<dyn TInputBufferOutputNone>;
 
 /// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
 pub trait TInputBufferOutputNone: std::fmt::Debug + TProcess {
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64;
-
-    /// 中に`output`を更新する。
-    fn update_input(&mut self, index: usize, output: EProcessOutput);
-
-    fn set_child_count(&mut self, count: usize);
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    fn update_input(&mut self, node_name: &str, input: &EProcessOutput);
 }
 
 struct SInputBufferOutputNone;
@@ -818,9 +764,9 @@ impl SInputBufferOutputNone {
     fn create_from(node: &ENode, _: &Setting) -> InputBufferOutputNonePtr {
         match node {
             ENode::OutputFile { format, file_name } => {
-                Rc::new(RefCell::new(OutputFileProcessData::new(format.clone(), file_name.clone())))
+                SItemSPtr::new(OutputFileProcessData::new(format.clone(), file_name.clone()))
             }
-            ENode::OutputLog { mode } => Rc::new(RefCell::new(OutputLogProcessData::new(*mode))),
+            ENode::OutputLog { mode } => SItemSPtr::new(OutputLogProcessData::new(*mode)),
             _ => unreachable!("Unexpected branch."),
         }
     }
@@ -831,20 +777,15 @@ impl SInputBufferOutputNone {
 // ----------------------------------------------------------------------------
 
 /// [`TInputBufferOutputBuffer`]を実装しているアイテムの外部表示タイプ
-pub type InputBufferOutputBufferPtr = Rc<RefCell<dyn TInputBufferOutputBuffer>>;
+pub type InputBufferOutputBufferPtr = ItemSPtr<dyn TInputBufferOutputBuffer>;
 
 /// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
 pub trait TInputBufferOutputBuffer: std::fmt::Debug + TProcess {
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64;
-
     /// 処理結果を返す。
     fn get_output(&self) -> ProcessOutputBuffer;
 
-    /// 中に`output`を更新する。
-    fn update_input(&mut self, index: usize, output: EProcessOutput);
-
-    fn set_child_count(&mut self, count: usize);
+    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
+    fn update_input(&mut self, node_name: &str, input: &EProcessOutput);
 }
 
 struct SInputBufferOutputBuffer;
@@ -856,12 +797,12 @@ impl SInputBufferOutputBuffer {
                 decay_time,
                 attack_curve,
                 decay_curve,
-            } => Rc::new(RefCell::new(AdapterEnvelopeAdProcessData::new(
+            } => SItemSPtr::new(AdapterEnvelopeAdProcessData::new(
                 *attack_time,
                 *decay_time,
                 *attack_curve,
                 *decay_curve,
-            ))),
+            )),
             ENode::AdapterEnvlopeAdsr {
                 attack_time,
                 decay_time,
@@ -871,7 +812,7 @@ impl SInputBufferOutputBuffer {
                 decay_curve,
                 release_curve,
                 sustain_value,
-            } => Rc::new(RefCell::new(AdapterEnvelopeAdsrProcessData::new(
+            } => SItemSPtr::new(AdapterEnvelopeAdsrProcessData::new(
                 *attack_time,
                 *decay_time,
                 *sustain_time,
@@ -880,126 +821,85 @@ impl SInputBufferOutputBuffer {
                 *decay_curve,
                 *release_curve,
                 *sustain_value,
-            ))),
+            )),
             _ => unreachable!("Unexpected branch."),
         }
     }
 }
 
 pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
+    // 下で`_start_pin`のチェックもやってくれる。
     validate_node_relations(nodes, &relations)?;
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
     // outputがinputとして使われているものは一つの独立したツリーとして構成しない。
-    let mut output_tree = vec![];
-    let mut tree_node_map = HashMap::new();
-    {
+    let node_map = {
+        let mut map = HashMap::new();
         // 各ノードから処理に使うためのアイテムを全部生成しておく。
-        let mut process_datas = HashMap::new();
         for (node_name, node) in nodes {
-            process_datas.insert(node_name, ENodeProcessData::create_from(node, setting));
+            let processor = ENodeProcessData::create_from(node, setting);
+            let specifier = ENodeSpecifier::from_node(node);
+            let node = RelationTreeNode::new_item(&node_name, specifier, &processor);
+            map.insert(node_name.clone(), node);
         }
 
-        for (node_name, processor) in process_datas.into_iter() {
-            let node = RelationTreeNode::new_item(&node_name, &processor);
-            tree_node_map.insert(node_name.clone(), node);
-        }
-    }
+        map
+    };
 
-    for node_name in get_end_node_names(nodes, &relations).into_iter() {
-        // root_nodeをqueueより寿命を長くする。
-        let root_node = tree_node_map.get(&node_name).unwrap().clone();
-        let mut pending_node_queue = VecDeque::new();
-        pending_node_queue.push_back(root_node.clone());
+    // relationsからnext_nodeを入れる。
+    for relation in relations {
+        let input = &relation.input;
+        let output = &relation.output;
 
+        // prev → next
         {
-            while !pending_node_queue.is_empty() {
-                let pending_node = pending_node_queue.pop_front().unwrap();
-
-                for relation in relations {
-                    let is_output = relation.output == *pending_node.borrow().name;
-                    if !is_output {
-                        continue;
-                    }
-
-                    // outputなrelationなので、inputを全部入れる。
-                    let children = relation
-                        .input
-                        .iter()
-                        .map(|name| tree_node_map.get(name).unwrap().clone())
-                        .collect_vec();
-                    pending_node.borrow_mut().append_children(children.clone());
-
-                    // Queueにも入れる。
-                    for child in children {
-                        pending_node_queue.push_back(child);
-                    }
-                }
-            }
+            let output_node = node_map.get(output).unwrap().clone();
+            node_map[input].borrow_mut().append_next_node(output.clone(), output_node);
         }
-
-        // もしroot_nodeがstandaloneでなくて、childrenがなければ無視する。
-        let can_process = {
-            let borrowed = root_node.borrow();
-            borrowed.is_standalone() || borrowed.get_children_count() > 0
-        };
-        if !can_process {
-            continue;
+        // next → prev
+        {
+            let input_node = node_map.get(input).unwrap().clone();
+            node_map[output].borrow_mut().append_prev_node(input.clone(), input_node);
         }
-
-        // Outputのツリー
-        output_tree.push(root_node);
-    }
-    if output_tree.is_empty() {
-        return Ok(());
     }
 
     // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
     // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
+    let start_node = node_map.get("_start_pin").unwrap().clone();
     let tick_threshold = (setting.sample_count_frame as f64) / (setting.sample_rate as f64);
     let mut tick_timer = Timer::from_second(tick_threshold);
 
     // 終了条件は、すべてのノードが終わった時。
-    // つまり、`output_root`のルートノードがすべて終わった時？
+    let mut node_queue = VecDeque::new();
     loop {
         let duration = tick_timer.tick();
         let second = duration.as_secs_f64();
 
         // 共通で使う処理時の入力。
         let input = ProcessCommonInput { elapsed_time: second };
+        node_queue.push_back(start_node.clone());
 
         //
-        for output_root in &mut output_tree {
-            let mut stack = vec![];
-            stack.push(output_root.clone());
+        let mut is_all_finished = true;
+        while !node_queue.is_empty() {
+            let process_node = node_queue.pop_front().unwrap();
+            process_node.borrow_mut().process(&input);
 
-            while !stack.is_empty() {
-                let result = stack.last_mut().unwrap().borrow_mut().try_process(&input);
+            // 次ノードをQueueに入れる。
+            let next_nodes = process_node.borrow().get_next_nodes();
+            let is_node_end = next_nodes.is_empty();
+            for next_node in next_nodes.into_iter().filter(|v| v.borrow().can_process()) {
+                node_queue.push_back(next_node);
+            }
 
-                match result {
-                    EProcessResult::Finished => {
-                        let _ = stack.pop().unwrap();
-                    }
-                    EProcessResult::Pending => {
-                        // reverseしてpop()するのがめんどくさいので、一旦これで。
-                        let mut children = {
-                            let item = stack.last_mut().unwrap();
-                            item.borrow().try_get_unfinished_children_names()
-                        };
-                        if !children.is_empty() {
-                            let next_node = tree_node_map.get(&children.pop().unwrap()).unwrap().clone();
-                            stack.push(next_node);
-                        } else {
-                            let _ = stack.pop().unwrap();
-                        }
-                    }
-                }
+            // もしnextがなければ、自分をfinalだとみなしてstartから自分までの処理が終わってるかを確認する。
+            if is_node_end {
+                is_all_finished &= process_node.borrow().is_finished();
             }
         }
 
-        let all_output_finished = output_tree.iter().all(|v| v.borrow().is_finished());
-        if all_output_finished {
+        if is_all_finished {
             break;
         }
     }

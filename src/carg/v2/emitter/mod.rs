@@ -235,28 +235,15 @@ impl SineWaveEmitterProcessData {
 }
 
 impl TInputNoneOutputBuffer for SineWaveEmitterProcessData {
-    /// 自分のタイムスタンプを返す。
-    fn get_timestamp(&self) -> i64 {
-        self.common.process_timestamp
-    }
-
     fn get_output(&self) -> ProcessOutputBuffer {
         assert!(self.output.is_some());
         self.output.as_ref().unwrap().clone()
-    }
-
-    fn set_child_count(&mut self, count: usize) {
-        self.common.child_count = count;
     }
 }
 
 impl TProcess for SineWaveEmitterProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished
-    }
-
-    fn get_state(&self) -> EProcessState {
-        self.common.state
     }
 
     fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
@@ -267,6 +254,11 @@ impl TProcess for SineWaveEmitterProcessData {
                 return EProcessResult::Finished;
             }
         }
+    }
+
+    /// 自分が処理可能なノードなのかを確認する。
+    fn can_process(&self) -> bool {
+        return true;
     }
 }
 

@@ -1,10 +1,18 @@
+use std::fmt;
+
 /// 共通化したサンプルの振幅を表す。
 ///
 /// 値の絶対値の0が一番低く、1が大きい。(0dBFS)
 /// 値自体の範囲は [-1, 1]となる。
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Default)]
 #[repr(transparent)]
 pub struct UniformedSample(f64);
+
+impl fmt::Debug for UniformedSample {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("U").field(&self.0).finish()
+    }
+}
 
 impl std::ops::Add<Self> for UniformedSample {
     type Output = Self;
