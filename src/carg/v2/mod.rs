@@ -384,13 +384,16 @@ impl ProcessControlItem {
         }
     }
 
-    /// すべてのInputピンに対し更新要請があるかを確認する。
+    /// Outputピンが繋がっているすべてのInputピンに対し更新要請があるかを確認する。
     pub fn is_all_input_pins_update_notified(&self) -> bool {
         if self.input_pins.is_empty() {
             return true;
         }
 
-        self.input_pins.iter().all(|(_, v)| v.borrow().is_update_requested)
+        self.input_pins
+            .iter()
+            .filter(|(_, v)| v.borrow().linked_pins.len() > 0)
+            .all(|(_, v)| v.borrow().is_update_requested)
     }
 
     /// Updateフラグが立っているすべてのInputピンを更新する。

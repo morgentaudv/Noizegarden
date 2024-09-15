@@ -4,6 +4,7 @@ use crate::carg::v1::EOutputFileFormat;
 use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, Setting, TProcessItemPtr};
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
+use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
 use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
@@ -92,6 +93,9 @@ pub enum ENode {
         /// sustainで維持する振幅`[0, 1]`の値。
         sustain_value: f64,
     },
+    /// バッファを全部合わせる。
+    #[serde(rename = "adapter-wave-sum")]
+    AdapterWaveSum,
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
     OutputFile {
@@ -120,6 +124,7 @@ impl ENode {
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
             ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),
+            ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
         }
     }
 }
