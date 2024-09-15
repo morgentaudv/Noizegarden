@@ -22,7 +22,7 @@ impl TPinCategory for AnalyzerDFSProcessData {
     fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec!["out_info, out_freq"] }
+    fn get_output_pin_names() -> Vec<&'static str> { vec!["out_info", "out_freq"] }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
@@ -120,7 +120,7 @@ impl AnalyzerDFSProcessData {
             let analyzed_sample_len = self.level;
             self.common
                 .insert_to_output_pin(
-                    "out_info",
+                    "out_freq",
                     EProcessOutput::Frequency(ProcessOutputFrequency {
                         frequencies,
                         analyzed_sample_len,

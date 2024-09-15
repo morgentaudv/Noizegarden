@@ -48,7 +48,8 @@
             "file_name": "test_envelope_adsr_idft.wav"
         },
         "idft": {
-            "type": "emitter-idft"
+            "type": "emitter-idft",
+            "sample_length": 4096
         },
         "output_log": {
             "type": "output-log",
@@ -99,17 +100,17 @@
         {
             "prev": {
                 "node": "analyze_dft",
-                "pin": "out_info"
+                "pin": "out_freq"
             },
             "next": {
-                "node": "output_log",
+                "node": "idft",
                 "pin": "in"
             }
         },
         {
             "prev": {
-                "node": "analyze_dft",
-                "pin": "out_freq"
+                "node": "idft",
+                "pin": "out"
             },
             "next": {
                 "node": "output_idft",

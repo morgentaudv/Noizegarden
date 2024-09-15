@@ -6,13 +6,14 @@ pub mod node;
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
-use crate::carg::v2::emitter::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
+use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
+use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 
 /// ピンのカテゴリのビットフラグ
 pub mod pin_category {
@@ -64,6 +65,7 @@ pub enum ENodeSpecifier {
     EmitterSawtooth,
     EmitterTriangle,
     EmitterSquare,
+    EmitterIDFT,
     AnalyzerDFT,
     AdapterEnvelopeAd,
     AdapterEnvelopeAdsr,
@@ -82,6 +84,7 @@ impl ENodeSpecifier {
             ENode::EmitterSawtooth { .. } => Self::EmitterSawtooth,
             ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
+            ENode::EmitterIDFT { .. } => Self::EmitterIDFT,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
             ENode::AdapterEnvlopeAd { .. } => Self::AdapterEnvelopeAd,
             ENode::AdapterEnvlopeAdsr { .. } => Self::AdapterEnvelopeAdsr,
@@ -105,6 +108,7 @@ impl ENodeSpecifier {
             Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
         };
 
         let mut map = NodePinItemList::new();
@@ -132,6 +136,7 @@ impl ENodeSpecifier {
             Self::AnalyzerDFT => AnalyzerDFSProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
         };
 
         let mut map = NodePinItemList::new();
@@ -164,6 +169,7 @@ impl ENodeSpecifier {
             Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
         };
         if names.is_empty() {
             return false;
@@ -186,6 +192,7 @@ impl ENodeSpecifier {
             Self::AnalyzerDFT => AnalyzerDFSProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
         };
         if names.is_empty() {
             return false;
@@ -208,6 +215,7 @@ impl ENodeSpecifier {
             Self::AnalyzerDFT => AnalyzerDFSProcessData::get_pin_categories(pin_name),
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
             Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -226,6 +234,7 @@ impl ENodeSpecifier {
             Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_container_flag(pin_name),
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
         }.unwrap()
     }
 }

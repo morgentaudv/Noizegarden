@@ -5,7 +5,8 @@ use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, Setting, TProcessItemP
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
-use crate::carg::v2::emitter::SineWaveEmitterProcessData;
+use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
+use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::output::output_file::OutputFileProcessData;
@@ -59,6 +60,11 @@ pub enum ENode {
         intensity: f64,
         range: EmitterRange,
     },
+    /// 周波数情報から音波バッファを生成する。
+    #[serde(rename = "emitter-idft")]
+    EmitterIDFT {
+        sample_length: usize,
+    },
     /// DFTで音波を分析する。
     #[serde(rename = "analyze-dft")]
     AnalyzerDFT { level: usize },
@@ -109,6 +115,7 @@ impl ENode {
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFSProcessData::create_from(self, setting),
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
+            ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
         }
     }
 }
@@ -155,9 +162,11 @@ impl MetaNodeContainer {
     /// `relation`が有効か？
     pub fn is_valid_relation(&self, relation: &Relation) -> bool {
         if !self.is_valid_prev_node_pin(&relation.prev) {
+            println!("self.is_valid_prev_node_pin(&relation.prev) failed.");
             return false;
         }
         if !self.is_valid_next_node_pin(&relation.next) {
+            println!("self.is_valid_next_node_pin(&relation.next) failed.");
             return false;
         }
 

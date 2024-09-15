@@ -611,7 +611,8 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     let mut node_queue = VecDeque::new();
     let mut elapsed_time = 0.0;
     loop {
-        elapsed_time += tick_timer.tick().as_secs_f64();
+        //elapsed_time += tick_timer.tick().as_secs_f64();
+        elapsed_time += 5.0 / 1000.0;
 
         // 共通で使う処理時の入力。
         let input = ProcessCommonInput { elapsed_time };
@@ -642,8 +643,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         }
     }
 
-    let duration = tick_timer.tick();
-    println!("{:?}", duration);
+    println!("{:?}s", elapsed_time);
 
     Ok(())
 }

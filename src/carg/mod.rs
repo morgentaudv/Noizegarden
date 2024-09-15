@@ -63,6 +63,18 @@ const TEST_JSON_STRING: &str = r#"
             },
             "file_name": "test_envelope_adsr.wav"
         },
+        "output_idft": {
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_envelope_adsr_idft.wav"
+        },
+        "idft": {
+            "type": "emitter-idft",
+            "sample_length": 4096
+        },
         "output_log": {
             "type": "output-log",
             "mode": "print"
@@ -116,6 +128,26 @@ const TEST_JSON_STRING: &str = r#"
             },
             "next": {
                 "node": "output_log",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "analyze_dft",
+                "pin": "out_freq"
+            },
+            "next": {
+                "node": "idft",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "idft",
+                "pin": "out"
+            },
+            "next": {
+                "node": "output_idft",
                 "pin": "in"
             }
         }

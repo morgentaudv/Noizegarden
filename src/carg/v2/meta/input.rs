@@ -4,6 +4,8 @@ use crate::wave::sample::UniformedSample;
 
 /// [`EProcessInputContainer`]の各アイテムの識別子をまとめている。
 pub mod container_category {
+    use crate::carg::v2::meta::pin_category;
+
     pub const UNINITIALIZED: u64 = 0;
 
     /// 空
@@ -17,6 +19,9 @@ pub mod container_category {
 
     /// 動的にTextのリストを保持するコンテナとして運用する。
     pub const TEXT_DYNAMIC: u64 = 1 << 3;
+
+    /// [`pin_category::FREQUENCY`]を参照するが、Inputでなにかを持ったりはしない。
+    pub const FREQUENCY_PHANTOM: u64 = 1 << 4;
 
     /// [`ENodeSpecifier::OutputLog`]専用
     pub const OUTPUT_LOG: u64 = WAVE_BUFFERS_DYNAMIC | TEXT_DYNAMIC;
@@ -32,6 +37,7 @@ pub enum EProcessInputContainer {
     WaveBufferPhantom,
     TextDynamic(TextDynamicItem),
     OutputLog(EOutputLogItem),
+    FrequencyPhantom,
 }
 
 /// [`EProcessInputContainer::WaveBuffersDynamic`]の内部コンテナ
@@ -75,20 +81,14 @@ impl EOutputLogItem {
     /// 今のセッティングで`output`が受け取れるか？
     fn can_support(&self, output: &EProcessOutputContainer) -> bool {
         match self {
-            EOutputLogItem::BuffersDynamic(_) => {
-                match output {
-                    EProcessOutputContainer::Empty |
-                    EProcessOutputContainer::WaveBuffer(_) =>  true,
-                    _ => false,
-                }
-            }
-            EOutputLogItem::TextDynamic(_) => {
-                match output {
-                    EProcessOutputContainer::Empty |
-                    EProcessOutputContainer::Text(_) => true,
-                    _ => false,
-                }
-            }
+            EOutputLogItem::BuffersDynamic(_) => match output {
+                EProcessOutputContainer::Empty | EProcessOutputContainer::WaveBuffer(_) => true,
+                _ => false,
+            },
+            EOutputLogItem::TextDynamic(_) => match output {
+                EProcessOutputContainer::Empty | EProcessOutputContainer::Text(_) => true,
+                _ => false,
+            },
         }
     }
 
@@ -133,6 +133,7 @@ impl EProcessInputContainer {
             EProcessInputContainer::WaveBuffersDynamic(_) => container_category::WAVE_BUFFERS_DYNAMIC,
             EProcessInputContainer::TextDynamic(_) => container_category::TEXT_DYNAMIC,
             EProcessInputContainer::OutputLog(_) => container_category::OUTPUT_LOG,
+            EProcessInputContainer::FrequencyPhantom => container_category::FREQUENCY_PHANTOM,
         }
     }
 
@@ -156,6 +157,7 @@ impl EProcessInputContainer {
             container_category::OUTPUT_LOG => {
                 EProcessInputContainer::OutputLog(EOutputLogItem::TextDynamic(TextDynamicItem { buffer: vec![] }))
             }
+            container_category::FREQUENCY_PHANTOM => EProcessInputContainer::FrequencyPhantom,
             _ => unreachable!("Unexpected branch"),
         }
     }
@@ -217,16 +219,15 @@ impl EProcessInputContainer {
                             _ => unreachable!("Unexpected output"),
                         }
                     }
-                    EOutputLogItem::TextDynamic(dst) => {
-                        match output {
-                            EProcessOutputContainer::Text(v) => {
-                                dst.buffer.push(v.text.clone());
-                            }
-                            _ => unreachable!("Unexpected output"),
+                    EOutputLogItem::TextDynamic(dst) => match output {
+                        EProcessOutputContainer::Text(v) => {
+                            dst.buffer.push(v.text.clone());
                         }
-                    }
+                        _ => unreachable!("Unexpected output"),
+                    },
                 }
             }
+            EProcessInputContainer::FrequencyPhantom => {}
         }
     }
 }
