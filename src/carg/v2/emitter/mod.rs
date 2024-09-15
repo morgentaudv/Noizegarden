@@ -1,9 +1,10 @@
 use super::{ENode, EProcessOutput, EProcessState, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
-use crate::carg::v2::meta::ENodeSpecifier;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::{
     math::frequency::EFrequency,
     wave::{sample::UniformedSample, sine::emitter::SineUnitSampleEmitter},
 };
+use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ESineWaveEmitterType {
@@ -168,6 +169,31 @@ impl SineWaveEmitterProcessData {
             setting,
             emitter: None,
             sample_elased_time: 0.0,
+        }
+    }
+}
+
+impl TPinCategory for SineWaveEmitterProcessData {
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
+    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
+    fn get_output_pin_names() -> Vec<&'static str> { vec!["out"] }
+
+    /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
+    fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
+        match pin_name {
+            "in" => Some(pin_category::START),
+            "out" => Some(pin_category::WAVE_BUFFER),
+            _ => None,
+        }
+    }
+
+    /// Inputピンのコンテナフラグ
+    fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
+        match pin_name {
+            "in" => Some(input::container_category::EMPTY),
+            _ => None,
         }
     }
 }

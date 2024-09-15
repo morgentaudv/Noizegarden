@@ -39,6 +39,17 @@
             },
             "file_name": "test_envelope_adsr.wav"
         },
+        "output_idft": {
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_envelope_adsr_idft.wav"
+        },
+        "idft": {
+            "type": "emitter-idft"
+        },
         "output_log": {
             "type": "output-log",
             "mode": "print"
@@ -92,6 +103,16 @@
             },
             "next": {
                 "node": "output_log",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "analyze_dft",
+                "pin": "out_freq"
+            },
+            "next": {
+                "node": "output_idft",
                 "pin": "in"
             }
         }

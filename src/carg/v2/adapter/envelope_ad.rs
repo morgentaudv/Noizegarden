@@ -2,11 +2,12 @@ use itertools::Itertools;
 use num_traits::Pow;
 
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::ENodeSpecifier;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
     ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
+use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug, Clone)]
@@ -30,10 +31,10 @@ impl EnvelopeAdValueEmitter {
     }
 
     pub fn next_value(&mut self, sample_rate: usize) -> f64 {
-        let unittime = self.next_sample_index as f64;
+        let unit_time = self.next_sample_index as f64;
         self.next_sample_index += 1;
 
-        let sample_time = unittime / (sample_rate as f64);
+        let sample_time = unit_time / (sample_rate as f64);
         let stop_time = self.decay_time + self.attack_time;
         let decay_start_time = self.attack_time;
 
@@ -74,6 +75,31 @@ impl EnvelopeAdValueEmitter {
 pub struct AdapterEnvelopeAdProcessData {
     common: ProcessControlItem,
     emitter: EnvelopeAdValueEmitter,
+}
+
+impl TPinCategory for AdapterEnvelopeAdProcessData {
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
+    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
+    fn get_output_pin_names() -> Vec<&'static str> { vec!["out"] }
+
+    /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
+    fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
+        match pin_name {
+            "in" => Some(pin_category::WAVE_BUFFER),
+            "out" => Some(pin_category::WAVE_BUFFER),
+            _ => None,
+        }
+    }
+
+    /// Inputピンのコンテナフラグ
+    fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
+        match pin_name {
+            "in" => Some(input::container_category::WAVE_BUFFER_PHANTOM),
+            _ => None,
+        }
+    }
 }
 
 impl AdapterEnvelopeAdProcessData {

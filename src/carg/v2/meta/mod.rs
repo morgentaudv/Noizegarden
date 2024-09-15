@@ -2,7 +2,14 @@ pub mod input;
 pub mod output;
 pub mod relation;
 
+use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
+use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
+use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
+use crate::carg::v2::emitter::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
+use crate::carg::v2::output::output_file::OutputFileProcessData;
+use crate::carg::v2::output::output_log::OutputLogProcessData;
+use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
 
@@ -29,6 +36,21 @@ impl SPinCategory {
     pub fn can_support(output: EPinCategoryFlag, input: EPinCategoryFlag) -> bool {
         !(input & output).is_zero()
     }
+}
+
+/// `EPinCategoryFlag`関連のtrait。
+pub trait TPinCategory {
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
+    fn get_input_pin_names() -> Vec<&'static str>;
+
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
+    fn get_output_pin_names() -> Vec<&'static str>;
+
+    /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
+    fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag>;
+
+    /// Inputピンのコンテナフラグ
+    fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag>;
 }
 
 /// 内部識別処理に使うEnum。
@@ -69,184 +91,140 @@ impl ENodeSpecifier {
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンのリストを生成して返す。
     pub fn create_input_pins(&self) -> NodePinItemList {
-        let mut map = NodePinItemList::new();
-
-        match self {
-            Self::InternalStartPin => (),
+        let names = match self {
+            Self::InternalStartPin => StartProcessData::get_input_pin_names(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave
-            | Self::AdapterEnvelopeAd
-            | Self::AdapterEnvelopeAdsr
-            | Self::AnalyzerDFT
-            | Self::OutputFile
-            | Self::OutputLog => {
-                map.insert(
-                    "in".to_owned(),
-                    NodePinItem::new_item(
-                        "in",
-                        self.get_pin_categories("in").unwrap(),
-                        false,
-                        self.get_input_flag("in"),
-                    ),
-                );
-            }
-        }
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_pin_names(),
+            Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
+            Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
+        };
 
+        let mut map = NodePinItemList::new();
+        for name in names {
+            map.insert(
+                name.to_owned(),
+                NodePinItem::new_item(name, self.get_pin_categories(name).unwrap(), false, self.get_input_flag(name)),
+            );
+        }
         map
     }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンのリストを生成して返す。
     pub fn create_output_pins(&self) -> NodePinItemList {
-        let mut map = NodePinItemList::new();
-
-        match self {
-            Self::InternalStartPin
-            | Self::EmitterPinkNoise
+        let names = match self {
+            Self::InternalStartPin => StartProcessData::get_output_pin_names(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
+            Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave
-            | Self::AdapterEnvelopeAd
-            | Self::AdapterEnvelopeAdsr => {
-                map.insert(
-                    "out".to_owned(),
-                    NodePinItem::new_item(
-                        "out",
-                        self.get_pin_categories("out").unwrap(),
-                        true,
-                        input::container_category::UNINITIALIZED,
-                    ),
-                );
-            }
-            Self::AnalyzerDFT => {
-                map.insert(
-                    "out_info".to_owned(),
-                    NodePinItem::new_item(
-                        "out_info",
-                        self.get_pin_categories("out_info").unwrap(),
-                        true,
-                        input::container_category::UNINITIALIZED,
-                    ),
-                );
-                map.insert(
-                    "out_freq".to_owned(),
-                    NodePinItem::new_item(
-                        "out_freq",
-                        self.get_pin_categories("out_freq").unwrap(),
-                        true,
-                        input::container_category::UNINITIALIZED,
-                    ),
-                );
-            }
-            _ => {}
-        }
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_output_pin_names(),
+            Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
+            Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
+        };
 
+        let mut map = NodePinItemList::new();
+        for name in names {
+            map.insert(
+                name.to_owned(),
+                NodePinItem::new_item(
+                    name,
+                    self.get_pin_categories(name).unwrap(),
+                    true,
+                    input::container_category::UNINITIALIZED,
+                ),
+            );
+        }
         map
     }
 
     /// 自分のinputピンに`pin_name`と一致する名前のピンがあるか？
     pub fn is_valid_input_pin(&self, pin_name: &str) -> bool {
-        match self {
+        let names = match self {
+            Self::InternalStartPin => StartProcessData::get_input_pin_names(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave
-            | Self::AdapterEnvelopeAd
-            | Self::AdapterEnvelopeAdsr
-            | Self::AnalyzerDFT
-            | Self::OutputFile
-            | Self::OutputLog => match pin_name {
-                "in" => true,
-                &_ => false,
-            },
-            _ => false,
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_pin_names(),
+            Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
+            Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
+        };
+        if names.is_empty() {
+            return false;
         }
+        names.contains(&pin_name)
     }
 
     /// 自分のoutputピンに`pin_name`と一致する名前のピンがあるか？
     pub fn is_valid_output_pin(&self, pin_name: &str) -> bool {
-        match self {
-            Self::InternalStartPin
-            | Self::EmitterPinkNoise
+        let names = match self {
+            Self::InternalStartPin => StartProcessData::get_output_pin_names(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
+            Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave
-            | Self::AdapterEnvelopeAd
-            | Self::AdapterEnvelopeAdsr => match pin_name {
-                "out" => true,
-                &_ => false,
-            },
-            Self::AnalyzerDFT => match pin_name {
-                "out_freq" => true,
-                "out_info" => true,
-                &_ => false,
-            },
-            _ => false,
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_output_pin_names(),
+            Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
+            Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
+        };
+        if names.is_empty() {
+            return false;
         }
+        names.contains(&pin_name)
     }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     pub fn get_pin_categories(&self, pin_name: &str) -> Option<EPinCategoryFlag> {
         match self {
-            Self::InternalStartPin => match pin_name {
-                "out" => Some(pin_category::START),
-                &_ => None,
-            },
-            Self::AdapterEnvelopeAd | Self::AdapterEnvelopeAdsr => match pin_name {
-                "in" => Some(pin_category::WAVE_BUFFER),
-                "out" => Some(pin_category::WAVE_BUFFER),
-                &_ => None,
-            },
+            Self::InternalStartPin => StartProcessData::get_pin_categories(pin_name),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_pin_categories(pin_name),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_pin_categories(pin_name),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave => match pin_name {
-                "in" => Some(pin_category::START),
-                "out" => Some(pin_category::WAVE_BUFFER),
-                &_ => None,
-            },
-            Self::AnalyzerDFT => match pin_name {
-                "in" => Some(pin_category::WAVE_BUFFER),
-                "out_freq" => Some(pin_category::FREQUENCY),
-                "out_info" => Some(pin_category::TEXT),
-                &_ => None,
-            },
-            Self::OutputFile => match pin_name {
-                "in" => Some(pin_category::WAVE_BUFFER),
-                &_ => None,
-            },
-            Self::OutputLog => match pin_name {
-                "in" => Some(pin_category::TEXT | pin_category::WAVE_BUFFER),
-                &_ => None,
-            },
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_pin_categories(pin_name),
+            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_pin_categories(pin_name),
+            Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
+            Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
         }
     }
 
     /// Inputピンである場合、そのInputピンのフラグを返す。
-    pub fn get_input_flag(&self, _pin_name: &str) -> EInputContainerCategoryFlag {
+    pub fn get_input_flag(&self, pin_name: &str) -> EInputContainerCategoryFlag {
         match self {
-            ENodeSpecifier::InternalStartPin
-            | ENodeSpecifier::EmitterPinkNoise
-            | ENodeSpecifier::EmitterWhiteNoise
-            | ENodeSpecifier::EmitterSineWave
-            | ENodeSpecifier::EmitterSawtooth
-            | ENodeSpecifier::EmitterTriangle
-            | ENodeSpecifier::EmitterSquare => input::container_category::EMPTY,
-            ENodeSpecifier::AdapterEnvelopeAd | ENodeSpecifier::AdapterEnvelopeAdsr => input::container_category::WAVE_BUFFER_PHANTOM,
-            ENodeSpecifier::AnalyzerDFT => input::container_category::WAVE_BUFFERS_DYNAMIC,
-            ENodeSpecifier::OutputFile => input::container_category::WAVE_BUFFERS_DYNAMIC,
-            ENodeSpecifier::OutputLog => input::container_category::OUTPUT_LOG,
-        }
+            Self::InternalStartPin => StartProcessData::get_input_container_flag(pin_name),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_container_flag(pin_name),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_container_flag(pin_name),
+            Self::EmitterPinkNoise
+            | Self::EmitterSawtooth
+            | Self::EmitterSquare
+            | Self::EmitterTriangle
+            | Self::EmitterWhiteNoise
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_container_flag(pin_name),
+            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_container_flag(pin_name),
+            Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
+            Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
+        }.unwrap()
     }
 }

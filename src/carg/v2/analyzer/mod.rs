@@ -2,8 +2,8 @@ use super::{
     ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText,
     ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr,
 };
-use crate::carg::v2::meta::input::EProcessInputContainer;
-use crate::carg::v2::meta::ENodeSpecifier;
+use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::wave::analyze::{
     analyzer::{FrequencyAnalyzerV2, WaveContainerSetting},
     method::EAnalyzeMethod,
@@ -15,6 +15,31 @@ use itertools::Itertools;
 pub struct AnalyzerDFSProcessData {
     common: ProcessControlItem,
     level: usize,
+}
+
+impl TPinCategory for AnalyzerDFSProcessData {
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
+    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
+    fn get_output_pin_names() -> Vec<&'static str> { vec!["out_info, out_freq"] }
+
+    /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
+    fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
+        match pin_name {
+            "in" => Some(pin_category::WAVE_BUFFER),
+            "out_info" => Some(pin_category::TEXT),
+            "out_freq" => Some(pin_category::FREQUENCY),
+            _ => None,
+        }
+    }
+
+    fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
+        match pin_name {
+            "in" => Some(input::container_category::WAVE_BUFFERS_DYNAMIC),
+            _ => None,
+        }
+    }
 }
 
 impl AnalyzerDFSProcessData {
