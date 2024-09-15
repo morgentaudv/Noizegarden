@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use crate::wave::{sample::UniformedSample, PI2};
 
 pub(super) struct DeemphasizerInternal {

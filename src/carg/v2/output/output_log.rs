@@ -1,48 +1,9 @@
-use itertools::Itertools;
-
 use crate::carg::v2::meta::input::EProcessInputContainer;
 use crate::carg::v2::meta::ENodeSpecifier;
 use crate::carg::v2::{
-    ENode, EParsedOutputLogMode, EProcessOutput, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
+    ENode, EParsedOutputLogMode, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
-
-/// [`OutputLogProcessData`]専用で
-#[derive(Debug)]
-struct ChildInputInfo {
-    buffers: Vec<EProcessOutput>,
-    is_new_inserted: bool,
-}
-
-impl ChildInputInfo {
-    fn new() -> Self {
-        Self {
-            buffers: vec![],
-            is_new_inserted: false,
-        }
-    }
-
-    fn insert_buffer(&mut self, buffer: EProcessOutput) {
-        self.buffers.push(buffer);
-        self.is_new_inserted = true;
-    }
-
-    fn drain_buffer_if_updated(&mut self) -> Vec<String> {
-        if !self.is_new_inserted {
-            return vec![];
-        }
-
-        let logs = self.buffers.iter().map(|v| format!("{:?}", v)).collect_vec();
-        self.buffers.clear();
-        self.is_new_inserted = false;
-
-        logs
-    }
-}
-
-// ----------------------------------------------------------------------------
-// OutputLogProcessData
-// ----------------------------------------------------------------------------
 
 #[derive(Debug)]
 pub struct OutputLogProcessData {

@@ -1,6 +1,6 @@
 use super::{
-    ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputText, ProcessProcessorInput, SItemSPtr,
-    Setting, TProcess, TProcessItemPtr,
+    ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText,
+    ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr,
 };
 use crate::carg::v2::meta::input::EProcessInputContainer;
 use crate::carg::v2::meta::ENodeSpecifier;
@@ -18,7 +18,7 @@ pub struct AnalyzerDFSProcessData {
 }
 
 impl AnalyzerDFSProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
+    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
         match node {
             ENode::AnalyzerDFT { level } => {
                 let item = Self::new(*level);
@@ -77,7 +77,7 @@ impl AnalyzerDFSProcessData {
         // out_info関連出力処理
         if self.common.is_output_pin_connected("out_info") {
             let mut log = "".to_owned();
-            for frequency in frequencies {
+            for frequency in &frequencies {
                 if frequency.amplitude < 5.0 {
                     continue;
                 }
@@ -92,7 +92,16 @@ impl AnalyzerDFSProcessData {
 
         // out_freq関連出力処理
         if self.common.is_output_pin_connected("out_freq") {
-
+            let analyzed_sample_len = self.level;
+            self.common
+                .insert_to_output_pin(
+                    "out_info",
+                    EProcessOutput::Frequency(ProcessOutputFrequency {
+                        frequencies,
+                        analyzed_sample_len,
+                    }),
+                )
+                .unwrap();
         }
 
         // 状態変更。
@@ -123,7 +132,7 @@ impl TProcess for AnalyzerDFSProcessData {
         &mut self.common
     }
 
-    fn try_process(&mut self, input: &super::ProcessProcessorInput) {
+    fn try_process(&mut self, input: &ProcessProcessorInput) {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
