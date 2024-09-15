@@ -23,6 +23,9 @@ pub mod container_category {
     /// [`pin_category::FREQUENCY`]を参照するが、Inputでなにかを持ったりはしない。
     pub const FREQUENCY_PHANTOM: u64 = 1 << 4;
 
+    /// ダミーのインプット。なんでもあり。
+    pub const DUMMY: u64 = 1 << 5;
+
     /// [`ENodeSpecifier::OutputLog`]専用
     pub const OUTPUT_LOG: u64 = WAVE_BUFFERS_DYNAMIC | TEXT_DYNAMIC;
 }
@@ -33,6 +36,7 @@ pub type EInputContainerCategoryFlag = u64;
 pub enum EProcessInputContainer {
     Uninitialized,
     Empty,
+    Dummy,
     WaveBuffersDynamic(WaveBufferDynamicItem),
     WaveBufferPhantom,
     TextDynamic(TextDynamicItem),
@@ -134,6 +138,7 @@ impl EProcessInputContainer {
             EProcessInputContainer::TextDynamic(_) => container_category::TEXT_DYNAMIC,
             EProcessInputContainer::OutputLog(_) => container_category::OUTPUT_LOG,
             EProcessInputContainer::FrequencyPhantom => container_category::FREQUENCY_PHANTOM,
+            EProcessInputContainer::Dummy => container_category::DUMMY,
         }
     }
 
@@ -158,6 +163,7 @@ impl EProcessInputContainer {
                 EProcessInputContainer::OutputLog(EOutputLogItem::TextDynamic(TextDynamicItem { buffer: vec![] }))
             }
             container_category::FREQUENCY_PHANTOM => EProcessInputContainer::FrequencyPhantom,
+            container_category::DUMMY => EProcessInputContainer::Dummy,
             _ => unreachable!("Unexpected branch"),
         }
     }
@@ -228,6 +234,7 @@ impl EProcessInputContainer {
                 }
             }
             EProcessInputContainer::FrequencyPhantom => {}
+            EProcessInputContainer::Dummy => {}
         }
     }
 }

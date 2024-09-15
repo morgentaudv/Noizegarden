@@ -8,6 +8,9 @@
         "_start_pin": {
             "type": "_start_pin"
         },
+        "_dummy": {
+            "type": "_dummy"
+        },
         "input_1": {
             "type": "emitter-sine",
             "frequency": {
@@ -113,7 +116,7 @@
                 "pin": "out"
             },
             "next": {
-                "node": "output_idft",
+                "node": "_dummy",
                 "pin": "in"
             }
         }

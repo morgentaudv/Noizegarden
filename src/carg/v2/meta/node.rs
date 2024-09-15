@@ -11,6 +11,7 @@ use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
+use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::math::frequency::EFrequency;
 
@@ -25,6 +26,8 @@ pub enum ENode {
     /// 内部制御用。
     #[serde(rename = "_start_pin")]
     InternalStartPin,
+    #[serde(rename = "_dummy")]
+    InternalDummy,
     /// ピンクノイズを出力する。
     #[serde(rename = "emitter-pinknoise")]
     EmitterPinkNoise { intensity: f64, range: EmitterRange },
@@ -116,6 +119,7 @@ impl ENode {
             ENode::AnalyzerDFT { .. } => AnalyzerDFSProcessData::create_from(self, setting),
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
             ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
+            ENode::InternalDummy => DummyProcessData::create_from(self, setting),
         }
     }
 }

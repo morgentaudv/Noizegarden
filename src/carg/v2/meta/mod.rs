@@ -1,31 +1,34 @@
 pub mod input;
+pub mod node;
 pub mod output;
 pub mod relation;
-pub mod node;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
+use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
+use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
+use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
-use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
-use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 
 /// ピンのカテゴリのビットフラグ
 pub mod pin_category {
     /// グラフのスタートピン
     pub const START: u32 = 1 << 0;
     /// 音波バッファが保持できる
-    pub const WAVE_BUFFER: u32 = 1 << 1;
+    pub const WAVE_BUFFER: u32 = 1 << 2;
     /// ただのテキストが保持できる
-    pub const TEXT: u32 = 1 << 2;
+    pub const TEXT: u32 = 1 << 3;
 
     /// 周波数情報を保持する。
-    pub const FREQUENCY: u32 = 1 << 3;
+    pub const FREQUENCY: u32 = 1 << 4;
+    /// ダミー
+    pub const DUMMY: u32 = WAVE_BUFFER | TEXT | FREQUENCY;
 }
 
 /// [`pin_category`]のフラグ制御の補助タイプ
@@ -59,6 +62,7 @@ pub trait TPinCategory {
 #[derive(Debug, Clone, Copy, PartialEq, Hash)]
 pub enum ENodeSpecifier {
     InternalStartPin,
+    InternalDummy,
     EmitterPinkNoise,
     EmitterWhiteNoise,
     EmitterSineWave,
@@ -78,6 +82,7 @@ impl ENodeSpecifier {
     pub fn from_node(node: &ENode) -> Self {
         match node {
             ENode::InternalStartPin => Self::InternalStartPin,
+            ENode::InternalDummy => Self::InternalDummy,
             ENode::EmitterPinkNoise { .. } => Self::EmitterPinkNoise,
             ENode::EmitterWhiteNoise { .. } => Self::EmitterWhiteNoise,
             ENode::EmitterSineWave { .. } => Self::EmitterSineWave,
@@ -97,6 +102,7 @@ impl ENodeSpecifier {
     pub fn create_input_pins(&self) -> NodePinItemList {
         let names = match self {
             Self::InternalStartPin => StartProcessData::get_input_pin_names(),
+            Self::InternalDummy => DummyProcessData::get_input_pin_names(),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
             Self::EmitterPinkNoise
@@ -125,6 +131,7 @@ impl ENodeSpecifier {
     pub fn create_output_pins(&self) -> NodePinItemList {
         let names = match self {
             Self::InternalStartPin => StartProcessData::get_output_pin_names(),
+            Self::InternalDummy => DummyProcessData::get_output_pin_names(),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
             Self::EmitterPinkNoise
@@ -145,7 +152,7 @@ impl ENodeSpecifier {
                 name.to_owned(),
                 NodePinItem::new_item(
                     name,
-                    self.get_pin_categories(name).unwrap(),
+                    self.get_pin_categories(name).expect(&format!("{}", name)),
                     true,
                     input::container_category::UNINITIALIZED,
                 ),
@@ -158,6 +165,7 @@ impl ENodeSpecifier {
     pub fn is_valid_input_pin(&self, pin_name: &str) -> bool {
         let names = match self {
             Self::InternalStartPin => StartProcessData::get_input_pin_names(),
+            Self::InternalDummy => DummyProcessData::get_input_pin_names(),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
             Self::EmitterPinkNoise
@@ -181,6 +189,7 @@ impl ENodeSpecifier {
     pub fn is_valid_output_pin(&self, pin_name: &str) -> bool {
         let names = match self {
             Self::InternalStartPin => StartProcessData::get_output_pin_names(),
+            Self::InternalDummy => DummyProcessData::get_output_pin_names(),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
             Self::EmitterPinkNoise
@@ -204,6 +213,7 @@ impl ENodeSpecifier {
     pub fn get_pin_categories(&self, pin_name: &str) -> Option<EPinCategoryFlag> {
         match self {
             Self::InternalStartPin => StartProcessData::get_pin_categories(pin_name),
+            Self::InternalDummy => DummyProcessData::get_pin_categories(pin_name),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_pin_categories(pin_name),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_pin_categories(pin_name),
             Self::EmitterPinkNoise
@@ -223,6 +233,7 @@ impl ENodeSpecifier {
     pub fn get_input_flag(&self, pin_name: &str) -> EInputContainerCategoryFlag {
         match self {
             Self::InternalStartPin => StartProcessData::get_input_container_flag(pin_name),
+            Self::InternalDummy => DummyProcessData::get_input_container_flag(pin_name),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_container_flag(pin_name),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_container_flag(pin_name),
             Self::EmitterPinkNoise
@@ -235,6 +246,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
-        }.unwrap()
+        }
+        .unwrap()
     }
 }
