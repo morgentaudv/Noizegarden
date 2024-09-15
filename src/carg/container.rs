@@ -13,6 +13,7 @@ use crate::wave::{
 };
 use itertools::Itertools;
 use crate::carg::v2::meta;
+use crate::carg::v2::meta::node::ENode;
 use super::{
     v1,
     v2::{self},
@@ -30,7 +31,7 @@ pub enum ENodeContainer {
     },
     V2 {
         setting: v2::Setting,
-        nodes: HashMap<String, v2::ENode>,
+        nodes: HashMap<String, ENode>,
         relations: Vec<meta::relation::Relation>,
     },
 }

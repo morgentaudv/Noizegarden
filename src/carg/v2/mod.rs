@@ -1,21 +1,16 @@
-use super::{container::ENodeContainer, v1::EOutputFileFormat};
-use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
-use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
-use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
-use crate::carg::v2::emitter::SineWaveEmitterProcessData;
+use super::container::ENodeContainer;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag, SPinCategory};
-use crate::carg::v2::output::output_file::OutputFileProcessData;
-use crate::carg::v2::output::output_log::OutputLogProcessData;
+use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag};
 use crate::carg::v2::utility::validate_node_relations;
 use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{
-    math::{frequency::EFrequency, timer::Timer},
+    math::timer::Timer,
     wave::sample::UniformedSample,
 };
 use itertools::Itertools;
-use meta::relation::{Relation, RelationItemPin};
+use meta::relation::Relation;
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 use std::rc::Weak;
@@ -24,7 +19,6 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use crate::carg::v2::special::start::StartProcessData;
 
 pub mod adapter;
 pub mod analyzer;
@@ -59,157 +53,6 @@ pub struct Setting {
     sample_rate: u64,
 }
 
-///
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "type")]
-pub enum ENode {
-    /// 内部制御用。
-    #[serde(rename = "_start_pin")]
-    InternalStartPin,
-    /// ピンクノイズを出力する。
-    #[serde(rename = "emitter-pinknoise")]
-    EmitterPinkNoise { intensity: f64, range: EmitterRange },
-    /// ホワイトノイズを出力する。
-    #[serde(rename = "emitter-whitenoise")]
-    EmitterWhiteNoise { intensity: f64, range: EmitterRange },
-    /// サイン波形（正弦波）を出力する。
-    #[serde(rename = "emitter-sine")]
-    EmitterSineWave {
-        frequency: EFrequency,
-        intensity: f64,
-        range: EmitterRange,
-    },
-    /// ノコギリ波を出力する。
-    #[serde(rename = "emitter-saw")]
-    EmitterSawtooth {
-        frequency: EFrequency,
-        intensity: f64,
-        range: EmitterRange,
-    },
-    /// 三角波を出力する。
-    #[serde(rename = "emitter-triangle")]
-    EmitterTriangle {
-        frequency: EFrequency,
-        intensity: f64,
-        range: EmitterRange,
-    },
-    /// 矩形波を出力する。
-    #[serde(rename = "emitter-square")]
-    EmitterSquare {
-        frequency: EFrequency,
-        duty_rate: f64,
-        intensity: f64,
-        range: EmitterRange,
-    },
-    /// DFTで音波を分析する。
-    #[serde(rename = "analyze-dft")]
-    AnalyzerDFT { level: usize },
-    /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
-    #[serde(rename = "adapter-envelope-ad")]
-    AdapterEnvlopeAd {
-        attack_time: f64,
-        decay_time: f64,
-        attack_curve: f64,
-        decay_curve: f64,
-    },
-    /// 振幅をADSR(Attack-Delay-Sustain-Release)Envelopeを使って調整する。
-    #[serde(rename = "adapter-envelope-adsr")]
-    AdapterEnvlopeAdsr {
-        attack_time: f64,
-        decay_time: f64,
-        sustain_time: f64,
-        release_time: f64,
-        attack_curve: f64,
-        decay_curve: f64,
-        release_curve: f64,
-        /// sustainで維持する振幅`[0, 1]`の値。
-        sustain_value: f64,
-    },
-    /// 何かからファイルを出力する
-    #[serde(rename = "output-file")]
-    OutputFile {
-        format: EOutputFileFormat,
-        file_name: String,
-    },
-    #[serde(rename = "output-log")]
-    OutputLog { mode: EParsedOutputLogMode },
-}
-
-impl ENode {
-    /// ノードから処理アイテムを生成する。
-    pub fn create_from(&self, setting: &Setting) -> TProcessItemPtr {
-        match self {
-            ENode::EmitterPinkNoise { .. }
-            | ENode::EmitterWhiteNoise { .. }
-            | ENode::EmitterSineWave { .. }
-            | ENode::EmitterTriangle { .. }
-            | ENode::EmitterSquare { .. }
-            | ENode::EmitterSawtooth { .. } => SineWaveEmitterProcessData::create_from(self, setting),
-            ENode::AdapterEnvlopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
-            ENode::AdapterEnvlopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
-            ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
-            ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
-            ENode::AnalyzerDFT { .. } => AnalyzerDFSProcessData::create_from(self, setting),
-            ENode::InternalStartPin => StartProcessData::create_from(self, setting),
-        }
-    }
-}
-
-/// パーサーから取得したメター情報を持つノードのコンテナ。
-pub struct MetaNodeContainer {
-    map: HashMap<String, ENode>,
-}
-
-impl MetaNodeContainer {
-    /// ノード間の関係図で前ノードとして処理が行えるか。
-    pub fn is_valid_prev_node_pin(&self, item: &RelationItemPin) -> bool {
-        // メタノードに接近して、pinが存在しているか？
-        match self.map.get(&item.node) {
-            // メタノードマップにあるか？
-            None => false,
-            Some(v) => ENodeSpecifier::from_node(v).is_valid_output_pin(&item.pin),
-        }
-    }
-
-    /// ノード間の関係図で次ノードとして処理が行えるか。
-    pub fn is_valid_next_node_pin(&self, item: &RelationItemPin) -> bool {
-        // メタノードに接近して、pinが存在しているか？
-        match self.map.get(&item.node) {
-            // メタノードマップにあるか？
-            None => false,
-            Some(v) => ENodeSpecifier::from_node(v).is_valid_input_pin(&item.pin),
-        }
-    }
-
-    /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
-    pub fn get_pin_categories(&self, item: &RelationItemPin) -> Option<EPinCategoryFlag> {
-        match self.map.get(&item.node) {
-            // メタノードマップにあるか？
-            None => None,
-            Some(v) => ENodeSpecifier::from_node(v).get_pin_categories(&item.pin),
-        }
-    }
-
-    /// `relation`が有効か？
-    pub fn is_valid_relation(&self, relation: &Relation) -> bool {
-        if !self.is_valid_prev_node_pin(&relation.prev) {
-            return false;
-        }
-        if !self.is_valid_next_node_pin(&relation.next) {
-            return false;
-        }
-
-        // お互いにチェック。
-        // pinの種類を見て判定する。
-        let output_pin = self
-            .get_pin_categories(&relation.prev)
-            .expect(&format!("({:?}) must be have pin categories", relation.prev));
-        let input_pin = self
-            .get_pin_categories(&relation.next)
-            .expect(&format!("({:?}) must be have pin categories", relation.next));
-        SPinCategory::can_support(output_pin, input_pin)
-    }
-}
 
 /// 発動条件を示す。
 #[derive(Serialize, Deserialize, Debug, Clone)]
