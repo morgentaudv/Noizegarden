@@ -1,20 +1,16 @@
-use std::collections::HashMap;
-
 use itertools::Itertools;
 
+use crate::carg::v2::meta::input::EProcessInputContainer;
+use crate::carg::v2::meta::ENodeSpecifier;
 use crate::carg::v2::{
-    EParsedOutputLogMode, EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-    ProcessProcessorInput, TInputBufferOutputNone, TProcess,
+    ENode, EParsedOutputLogMode, EProcessOutput, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
+    Setting, TProcess, TProcessItemPtr,
 };
-
-// ----------------------------------------------------------------------------
-// ChildInputInfo
-// ----------------------------------------------------------------------------
 
 /// [`OutputLogProcessData`]専用で
 #[derive(Debug)]
 struct ChildInputInfo {
-    buffers: Vec<ProcessOutputBuffer>,
+    buffers: Vec<EProcessOutput>,
     is_new_inserted: bool,
 }
 
@@ -26,7 +22,7 @@ impl ChildInputInfo {
         }
     }
 
-    fn insert_buffer(&mut self, buffer: ProcessOutputBuffer) {
+    fn insert_buffer(&mut self, buffer: EProcessOutput) {
         self.buffers.push(buffer);
         self.is_new_inserted = true;
     }
@@ -52,61 +48,48 @@ impl ChildInputInfo {
 pub struct OutputLogProcessData {
     common: ProcessControlItem,
     mode: EParsedOutputLogMode,
-    inputs: HashMap<String, ChildInputInfo>,
 }
 
 impl OutputLogProcessData {
-    pub fn new(mode: EParsedOutputLogMode) -> Self {
+    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
+        match node {
+            ENode::OutputLog { mode } => {
+                let item = Self::new(mode.clone());
+                SItemSPtr::new(item)
+            }
+            _ => unreachable!("Unexpected branch."),
+        }
+    }
+
+    fn new(mode: EParsedOutputLogMode) -> Self {
         Self {
-            common: ProcessControlItem::new(),
+            common: ProcessControlItem::new(ENodeSpecifier::OutputLog),
             mode,
-            inputs: HashMap::new(),
         }
     }
 }
 
 impl OutputLogProcessData {
-    fn update_state(&mut self, _input: &ProcessProcessorInput) -> EProcessResult {
+    fn update_state(&mut self, _input: &ProcessProcessorInput) {
         // 出力する。
         match self.mode {
             EParsedOutputLogMode::Print => {
-                // 使ってから
-                for (i, input) in &mut self.inputs {
-                    let logs = input.drain_buffer_if_updated();
-                    if logs.is_empty() {
-                        continue;
+                let string = match &mut self.common.input_pins.get("in").unwrap().borrow_mut().input {
+                    EProcessInputContainer::OutputLog(v) => {
+                        let string = format!("{:?}", v);
+                        v.reset(); // Drain。
+                        string
                     }
+                    _ => unreachable!("Unexpected input."),
+                };
 
-                    println!("Index : {i}");
-                    logs.into_iter().for_each(|v| println!("{:?}", v));
-                    println!("");
-                }
-
-                // Drain。
-                self.inputs.clear();
+                println!("{}", string);
+                println!();
             }
         }
 
         // じゃなきゃPlayingに。
         self.common.state = EProcessState::Playing;
-        self.common.process_timestamp += 1;
-        return EProcessResult::Finished;
-    }
-}
-
-impl TInputBufferOutputNone for OutputLogProcessData {
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
-        match input {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                if !self.inputs.contains_key(node_name) {
-                    self.inputs.insert(node_name.to_owned(), ChildInputInfo::new());
-                }
-
-                self.inputs.get_mut(node_name).unwrap().insert_buffer(v.clone());
-            }
-        }
     }
 }
 
@@ -115,14 +98,25 @@ impl TProcess for OutputLogProcessData {
         true
     }
 
-    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
-        self.update_state(input)
-    }
-
     /// 自分は内部状態に関係なくいつでも処理できる。
     fn can_process(&self) -> bool {
         match self.mode {
             EParsedOutputLogMode::Print => true,
         }
+    }
+
+    fn get_common_ref(&self) -> &ProcessControlItem {
+        &self.common
+    }
+
+    fn get_common_mut(&mut self) -> &mut ProcessControlItem {
+        &mut self.common
+    }
+
+    fn try_process(&mut self, input: &ProcessProcessorInput) {
+        self.common.elapsed_time = input.common.elapsed_time;
+        self.common.process_input_pins();
+
+        self.update_state(input)
     }
 }

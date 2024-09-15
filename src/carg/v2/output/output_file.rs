@@ -1,23 +1,22 @@
 use std::{
-    collections::HashMap,
     fs,
     io::{self, Write},
 };
 
-use itertools::Itertools;
-
+use crate::carg::v2::meta::input::EProcessInputContainer;
+use crate::carg::v2::meta::ENodeSpecifier;
+use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
 use crate::{
     carg::{
         v1::EOutputFileFormat,
         v2::{
-            EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-            ProcessProcessorInput, TInputBufferOutputNone, TProcess,
+            EProcessState, ProcessControlItem,
+            ProcessProcessorInput, TProcess,
         },
     },
     wave::{
         analyze::window::EWindowFunction,
         container::WaveBuilder,
-        sample::UniformedSample,
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
@@ -27,70 +26,43 @@ pub struct OutputFileProcessData {
     common: ProcessControlItem,
     format: EOutputFileFormat,
     file_name: String,
-    inputs: HashMap<String, Vec<ProcessOutputBuffer>>,
 }
 
 impl OutputFileProcessData {
-    pub fn new(format: EOutputFileFormat, file_name: String) -> Self {
+    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
+        match node {
+            ENode::OutputFile { format, file_name } => {
+                let item = Self::new(format.clone(), file_name.clone());
+                SItemSPtr::new(item)
+            }
+            _ => unreachable!("Unexpected branch."),
+        }
+    }
+
+    fn new(format: EOutputFileFormat, file_name: String) -> Self {
         Self {
-            common: ProcessControlItem::new(),
+            common: ProcessControlItem::new(ENodeSpecifier::OutputFile),
             format: format.clone(),
             file_name: file_name.clone(),
-            inputs: HashMap::new(),
         }
     }
 }
 
 impl OutputFileProcessData {
-    fn update_state_stopped(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
+    fn update_state(&mut self, input: &ProcessProcessorInput) {
         // Childrenが全部送信完了したら処理が行える。
         // commonで初期Childrenの数を比較するだけでいいかも。
-        if self.inputs.is_empty() {
-            return EProcessResult::Pending;
-        }
         if !input.is_children_all_finished() {
-            return EProcessResult::Pending;
+            return;
         }
 
-        // inputsのサンプルレートが同じかを確認する。
-        let source_sample_rate = self.inputs.iter().next().unwrap().1.first().unwrap().setting.sample_rate;
-        for (_, input) in self.inputs.iter().skip(1) {
-            assert!(input.first().unwrap().setting.sample_rate == source_sample_rate);
-        }
-
-        // inputsを全部合わせる。
-        let flattened_inputs = self
-            .inputs
-            .iter()
-            .map(|(_, v)| v.iter().map(|w| w.buffer.clone()).flatten().collect_vec())
-            .collect_vec();
-        let range_inputs = self.inputs.iter().map(|(_, v)| v.first().unwrap().range).collect_vec();
-
-        // ここで各bufferを組み合わせて、一つにしてから書き込む。
-        let mut final_buffer_length = 0usize;
-        let ref_vec = flattened_inputs
-            .iter()
-            .zip(range_inputs.iter())
-            .map(|(buffer, range)| {
-                let buffer_length = buffer.len();
-                let start_index = (range.start * (source_sample_rate as f64)).floor() as usize;
-                let exclusive_end_index = start_index + buffer_length;
-
-                final_buffer_length = exclusive_end_index.max(final_buffer_length);
-
-                (buffer, start_index)
-            })
-            .collect_vec();
-
-        // 書き込み
-        let mut new_buffer = vec![];
-        new_buffer.resize(final_buffer_length, UniformedSample::default());
-        for (ref_buffer, start_index) in ref_vec {
-            for src_i in 0..ref_buffer.len() {
-                let dest_i = start_index + src_i;
-                new_buffer[dest_i] += ref_buffer[src_i];
+        let input = &self.common.input_pins.get("in").unwrap().borrow().input;
+        let (buffer, source_sample_rate) = match input {
+            EProcessInputContainer::WaveBuffersDynamic(v) => {
+                (v.buffer.clone(), v.setting.as_ref().unwrap().sample_rate)
             }
-        }
+            _ => unreachable!("Unexpected input."),
+        };
 
         let container = match self.format {
             EOutputFileFormat::WavLPCM16 { sample_rate } => {
@@ -102,7 +74,7 @@ impl OutputFileProcessData {
                 let processed_container = {
                     let pitch_rate = source_sample_rate / dest_sample_rate;
                     if pitch_rate == 1.0 {
-                        new_buffer
+                        buffer
                     } else {
                         PitchShifterBuilder::default()
                             .pitch_rate(pitch_rate)
@@ -110,7 +82,7 @@ impl OutputFileProcessData {
                             .window_function(EWindowFunction::None)
                             .build()
                             .unwrap()
-                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &new_buffer })
+                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &buffer })
                             .unwrap()
                     }
                 };
@@ -132,28 +104,8 @@ impl OutputFileProcessData {
             writer.flush().expect("Failed to flush writer.")
         }
 
-        self.inputs.clear();
-
         // 状態変更。
         self.common.state = EProcessState::Finished;
-        self.common.process_timestamp += 1;
-        return EProcessResult::Finished;
-    }
-}
-
-impl TInputBufferOutputNone for OutputFileProcessData {
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
-        match input {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                if !self.inputs.contains_key(node_name) {
-                    self.inputs.insert(node_name.to_owned(), vec![]);
-                }
-
-                self.inputs.get_mut(node_name).unwrap().push(v.clone());
-            }
-        }
     }
 }
 
@@ -163,18 +115,26 @@ impl TProcess for OutputFileProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
-        match self.common.state {
-            EProcessState::Stopped => self.update_state_stopped(input),
-            EProcessState::Finished => {
-                return EProcessResult::Finished;
-            }
-            _ => unreachable!("Unexpected branch"),
-        }
+    fn can_process(&self) -> bool {
+        self.common.is_all_input_pins_update_notified()
     }
 
-    fn can_process(&self) -> bool {
-        self.common.state != EProcessState::Finished
+    fn get_common_ref(&self) -> &ProcessControlItem {
+        &self.common
+    }
+
+    fn get_common_mut(&mut self) -> &mut ProcessControlItem {
+        &mut self.common
+    }
+
+    fn try_process(&mut self, input: &ProcessProcessorInput) {
+        self.common.elapsed_time = input.common.elapsed_time;
+        self.common.process_input_pins();
+
+        match self.common.state {
+            EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
+            _ => (),
+        }
     }
 }
 

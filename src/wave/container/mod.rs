@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use num_traits::FromPrimitive;
 use wav::{
     data::LowWaveDataChunk,
     fact::LowWaveFactChunk,

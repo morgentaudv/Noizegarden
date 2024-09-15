@@ -1,16 +1,17 @@
+use crate::carg::v2::meta::ENodeSpecifier;
+use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
 use crate::{
     carg::v2::{
-        EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer,
-        TInputBufferOutputBuffer, TProcess,
+        EProcessState, ProcessControlItem, ProcessOutputBuffer,
+        ProcessProcessorInput, TProcess,
     },
     wave::sample::UniformedSample,
 };
+use crate::carg::v2::meta::output::EProcessOutputContainer;
 
 #[derive(Debug)]
 pub struct AdapterEnvelopeAdsrProcessData {
     common: ProcessControlItem,
-    /// これじゃ一つしか受け入れない。
-    input: Option<ProcessOutputBuffer>,
     /// 処理後に出力情報が保存されるところ。
     output: Option<ProcessOutputBuffer>,
     attack_time: f64,
@@ -25,6 +26,33 @@ pub struct AdapterEnvelopeAdsrProcessData {
 }
 
 impl AdapterEnvelopeAdsrProcessData {
+    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
+        match node {
+            ENode::AdapterEnvlopeAdsr {
+                attack_time,
+                decay_time,
+                sustain_time,
+                release_time,
+                attack_curve,
+                decay_curve,
+                release_curve,
+                sustain_value,
+            } => {
+                let item = Self::new(
+                    *attack_time,
+                    *decay_time,
+                    *sustain_time,
+                    *release_time,
+                    *attack_curve,
+                    *decay_curve,
+                    *release_curve,
+                    *sustain_value);
+                SItemSPtr::new(item)
+            }
+            _ => unreachable!("Unexpected branch."),
+        }
+    }
+
     pub fn new(
         attack_time: f64,
         decay_time: f64,
@@ -41,8 +69,7 @@ impl AdapterEnvelopeAdsrProcessData {
         assert!(decay_curve > 0.0);
 
         Self {
-            common: ProcessControlItem::new(),
-            input: None,
+            common: ProcessControlItem::new(ENodeSpecifier::AdapterEnvelopeAdsr),
             output: None,
             attack_time,
             decay_time,
@@ -56,42 +83,32 @@ impl AdapterEnvelopeAdsrProcessData {
     }
 }
 
-impl TInputBufferOutputBuffer for AdapterEnvelopeAdsrProcessData {
-    fn get_output(&self) -> ProcessOutputBuffer {
-        assert!(self.output.is_some());
-        self.output.as_ref().unwrap().clone()
-    }
-
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    fn update_input(&mut self, _: &str, input: &EProcessOutput) {
-        match input {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                self.input = Some(v.clone());
-            }
-        }
-    }
-}
-
-impl TProcess for AdapterEnvelopeAdsrProcessData {
-    fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
-    }
-
-    fn try_process(&mut self, input: &crate::carg::v2::ProcessProcessorInput) -> EProcessResult {
-        if self.common.state == EProcessState::Finished {
-            return EProcessResult::Finished;
-        }
-
+impl AdapterEnvelopeAdsrProcessData {
+    fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // Inputがなきゃ何もできぬ。
-        if self.input.is_none() {
-            return EProcessResult::Pending;
-        }
+        // これなに…
+        let linked_output_pin = self
+            .common
+            .get_input_pin("in")
+            .unwrap()
+            .upgrade()
+            .unwrap()
+            .borrow()
+            .linked_pins
+            .first()
+            .unwrap()
+            .upgrade()
+            .unwrap();
+
+        let borrowed = linked_output_pin.borrow();
+        let input = match &borrowed.output {
+            EProcessOutputContainer::WaveBuffer(v) => v,
+            _ => unreachable!("Unexpected branch"),
+        };
 
         // このノードでは最初からADを行う。
         // もし尺が足りなければ、そのまま終わる。
         // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
-        let input = self.input.as_ref().unwrap();
         let sample_rate = input.setting.sample_rate as f64;
 
         let decay_start_time = self.attack_time;
@@ -145,12 +162,42 @@ impl TProcess for AdapterEnvelopeAdsrProcessData {
         });
 
         // 状態変更。
-        self.common.state = EProcessState::Finished;
-        self.common.process_timestamp += 1;
-        return EProcessResult::Finished;
+        if in_input.is_children_all_finished() {
+            self.common.state = EProcessState::Finished;
+            return;
+        } else {
+            self.common.state = EProcessState::Playing;
+            return;
+        }
+    }
+}
+
+impl TProcess for AdapterEnvelopeAdsrProcessData {
+    fn is_finished(&self) -> bool {
+        self.common.state == EProcessState::Finished
     }
 
     fn can_process(&self) -> bool {
-        self.input.is_some()
+        self.common.is_all_input_pins_update_notified()
+    }
+
+    /// 共用アイテムの参照を返す。
+    fn get_common_ref(&self) -> &ProcessControlItem {
+        &self.common
+    }
+
+    /// 共用アイテムの可変参照を返す。
+    fn get_common_mut(&mut self) -> &mut ProcessControlItem {
+        &mut self.common
+    }
+
+    fn try_process(&mut self, input: &ProcessProcessorInput) {
+        self.common.elapsed_time = input.common.elapsed_time;
+        self.common.process_input_pins();
+
+        match self.common.state {
+            EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
+            _ => (),
+        }
     }
 }

@@ -12,7 +12,7 @@ use crate::wave::{
     stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
 };
 use itertools::Itertools;
-
+use crate::carg::v2::meta;
 use super::{
     v1,
     v2::{self},
@@ -31,7 +31,7 @@ pub enum ENodeContainer {
     V2 {
         setting: v2::Setting,
         nodes: HashMap<String, v2::ENode>,
-        relations: Vec<v2::Relation>,
+        relations: Vec<meta::relation::Relation>,
     },
 }
 
@@ -44,7 +44,7 @@ impl ENodeContainer {
                 setting,
                 nodes,
                 relations,
-            } => v2::process_v2(setting, nodes, relations),
+            } => v2::process_v2(setting, nodes.clone(), relations),
         }
     }
 }

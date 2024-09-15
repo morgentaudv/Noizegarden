@@ -29,7 +29,7 @@ pub struct FrequencyAnalyzerV2 {
 
 /// 波形コンテナ関連の設定を記載。
 pub struct WaveContainerSetting<'a> {
-    pub container: &'a WaveContainer,
+    pub container: &'a [UniformedSample],
     pub start_sample_index: usize,
     pub samples_count: usize,
 }
@@ -43,11 +43,6 @@ impl FrequencyAnalyzerV2 {
 
         // まず入れられた情報から範囲に収められそうなのかを確認する。
         // sound_lengthはhalf-opened rangeなのかclosedなのかがいかがわしい模様。
-        {
-            let container = setting.container;
-            assert!(container.channel() == 1);
-        }
-
         match self.analyze_method {
             EAnalyzeMethod::DFT => Some(self.analyze_dft(&setting)),
             EAnalyzeMethod::FFT => {
@@ -75,7 +70,7 @@ impl FrequencyAnalyzerV2 {
         let proceed_frequency = self.get_proceeding_frequency();
         let mut results = vec![];
         let mut cursor_frequency = self.frequency_start;
-        let sample_buffer = setting.container.uniformed_sample_buffer();
+        let sample_buffer = setting.container;
 
         // ナイキスト周波数の半分まで取る。
         // またこのアルゴリズムではsamples_countとbin_countが一致すればO(N^2)。
@@ -132,7 +127,7 @@ impl FrequencyAnalyzerV2 {
 
         // まず最後レベルの信号を計算する。index_count分作る。
         let final_signals = {
-            let sample_buffer = setting.container.uniformed_sample_buffer();
+            let sample_buffer = setting.container;
 
             let mut prev_signals: Vec<Complex<f64>> = vec![];
             prev_signals.reserve(samples_count);

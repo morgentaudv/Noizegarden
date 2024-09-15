@@ -1,25 +1,53 @@
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet, VecDeque},
-    rc::Rc,
-};
-
-use adapter::{envelope_ad::AdapterEnvelopeAdProcessData, envelope_adsr::AdapterEnvelopeAdsrProcessData};
-use emitter::SineWaveEmitterProcessData;
-use itertools::Itertools;
-use output::{output_file::OutputFileProcessData, output_log::OutputLogProcessData};
-use serde::{Deserialize, Serialize};
-
+use super::{container::ENodeContainer, v1::EOutputFileFormat};
+use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
+use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
+use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
+use crate::carg::v2::emitter::SineWaveEmitterProcessData;
+use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag, SPinCategory};
+use crate::carg::v2::output::output_file::OutputFileProcessData;
+use crate::carg::v2::output::output_log::OutputLogProcessData;
+use crate::carg::v2::special::StartProcessData;
+use crate::carg::v2::utility::validate_node_relations;
+use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{
     math::{frequency::EFrequency, timer::Timer},
     wave::sample::UniformedSample,
 };
-
-use super::{container::ENodeContainer, v1::EOutputFileFormat};
+use itertools::Itertools;
+use meta::relation::{Relation, RelationItemPin};
+use serde::{Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
+use std::rc::Weak;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+};
 
 pub mod adapter;
+pub mod analyzer;
+pub mod base;
 pub mod emitter;
+pub mod meta;
 pub mod output;
+mod special;
+mod utility;
+
+/// シングルスレッド、通常参照
+pub type ItemSPtr<T> = Rc<RefCell<T>>;
+
+/// シングルスレッド、弱参照
+pub type ItemWPtr<T> = Weak<RefCell<T>>;
+
+pub struct SItemSPtr;
+impl SItemSPtr {
+    #[inline]
+    pub fn new<T>(value: T) -> ItemSPtr<T> {
+        Rc::new(RefCell::new(value))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Setting {
@@ -29,126 +57,6 @@ pub struct Setting {
     sample_count_frame: usize,
     /// 音生成のために使うサンプルレートを指す。0より上であること。
     sample_rate: u64,
-}
-
-/// 内部識別処理に使うEnum。
-#[derive(Debug, Clone, Copy)]
-pub enum ENodeSpecifier {
-    InternalStartPin,
-    EmitterPinkNoise,
-    EmitterWhiteNoise,
-    EmitterSineWave,
-    EmitterSawtooth,
-    EmitterTriangle,
-    EmitterSquare,
-    AdapterEnvlopeAd,
-    AdapterEnvlopeAdsr,
-    OutputFile,
-    OutputLog,
-}
-
-impl ENodeSpecifier {
-    /// 変換する
-    pub fn from_node(node: &ENode) -> Self {
-        match node {
-            ENode::InternalStartPin => Self::InternalStartPin,
-            ENode::EmitterPinkNoise { .. } => Self::EmitterPinkNoise,
-            ENode::EmitterWhiteNoise { .. } => Self::EmitterWhiteNoise,
-            ENode::EmitterSineWave { .. } => Self::EmitterSineWave,
-            ENode::EmitterSawtooth { .. } => Self::EmitterSawtooth,
-            ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
-            ENode::EmitterSquare { .. } => Self::EmitterSquare,
-            ENode::AdapterEnvlopeAd { .. } => Self::AdapterEnvlopeAd,
-            ENode::AdapterEnvlopeAdsr { .. } => Self::AdapterEnvlopeAdsr,
-            ENode::OutputFile { .. } => Self::OutputFile,
-            ENode::OutputLog { .. } => Self::OutputLog,
-        }
-    }
-
-    /// Inputノードとして入れられるか
-    pub fn is_input(&self) -> bool {
-        match self {
-            Self::InternalStartPin
-            | Self::EmitterPinkNoise
-            | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave
-            | Self::EmitterSawtooth
-            | Self::EmitterTriangle
-            | Self::EmitterSquare
-            | Self::AdapterEnvlopeAd
-            | Self::AdapterEnvlopeAdsr => true,
-            Self::OutputFile | Self::OutputLog => false,
-        }
-    }
-
-    /// 自分が`output`と互換性のあるノードなのか？
-    pub fn can_connect_to(&self, output: &Self) -> bool {
-        match *output {
-            Self::InternalStartPin => false,
-            // falseしかできない。
-            Self::EmitterPinkNoise
-            | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave
-            | Self::EmitterSawtooth
-            | Self::EmitterTriangle
-            | Self::EmitterSquare => match self {
-                Self::InternalStartPin => true,
-                _ => false,
-            },
-            // trueになれる。
-            Self::OutputFile => match self {
-                Self::EmitterPinkNoise
-                | Self::EmitterWhiteNoise
-                | Self::EmitterSineWave
-                | Self::EmitterSawtooth
-                | Self::EmitterTriangle
-                | Self::AdapterEnvlopeAd
-                | Self::AdapterEnvlopeAdsr
-                | Self::EmitterSquare => true,
-                _ => false,
-            },
-            Self::OutputLog => match self {
-                Self::EmitterPinkNoise
-                | Self::EmitterWhiteNoise
-                | Self::EmitterSineWave
-                | Self::EmitterSawtooth
-                | Self::EmitterTriangle
-                | Self::AdapterEnvlopeAd
-                | Self::AdapterEnvlopeAdsr
-                | Self::EmitterSquare => true,
-                _ => false,
-            },
-            Self::AdapterEnvlopeAd => match self {
-                Self::EmitterPinkNoise
-                | Self::EmitterWhiteNoise
-                | Self::EmitterSineWave
-                | Self::EmitterSawtooth
-                | Self::EmitterTriangle
-                | Self::AdapterEnvlopeAd
-                | Self::AdapterEnvlopeAdsr
-                | Self::EmitterSquare => true,
-                _ => false,
-            },
-            Self::AdapterEnvlopeAdsr => match self {
-                Self::EmitterPinkNoise
-                | Self::EmitterWhiteNoise
-                | Self::EmitterSineWave
-                | Self::EmitterSawtooth
-                | Self::EmitterTriangle
-                | Self::AdapterEnvlopeAd
-                | Self::AdapterEnvlopeAdsr
-                | Self::EmitterSquare => true,
-                _ => false,
-            },
-        }
-    }
-
-    /// 処理が可能なノードが？
-    pub fn can_process(&self) -> bool {
-        match self {
-            _ => true,
-        }
-    }
 }
 
 ///
@@ -193,6 +101,9 @@ pub enum ENode {
         intensity: f64,
         range: EmitterRange,
     },
+    /// DFTで音波を分析する。
+    #[serde(rename = "analyze-dft")]
+    AnalyzerDFT { level: usize },
     /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-ad")]
     AdapterEnvlopeAd {
@@ -225,13 +136,78 @@ pub enum ENode {
 }
 
 impl ENode {
-    ///
-    pub fn is_input(&self) -> bool {
-        ENodeSpecifier::from_node(self).is_input()
+    /// ノードから処理アイテムを生成する。
+    pub fn create_from(&self, setting: &Setting) -> TProcessItemPtr {
+        match self {
+            ENode::EmitterPinkNoise { .. }
+            | ENode::EmitterWhiteNoise { .. }
+            | ENode::EmitterSineWave { .. }
+            | ENode::EmitterTriangle { .. }
+            | ENode::EmitterSquare { .. }
+            | ENode::EmitterSawtooth { .. } => SineWaveEmitterProcessData::create_from(self, setting),
+            ENode::AdapterEnvlopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
+            ENode::AdapterEnvlopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
+            ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
+            ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
+            ENode::AnalyzerDFT { .. } => AnalyzerDFSProcessData::create_from(self, setting),
+            ENode::InternalStartPin => StartProcessData::create_from(self, setting),
+        }
+    }
+}
+
+/// パーサーから取得したメター情報を持つノードのコンテナ。
+pub struct MetaNodeContainer {
+    map: HashMap<String, ENode>,
+}
+
+impl MetaNodeContainer {
+    /// ノード間の関係図で前ノードとして処理が行えるか。
+    pub fn is_valid_prev_node_pin(&self, item: &RelationItemPin) -> bool {
+        // メタノードに接近して、pinが存在しているか？
+        match self.map.get(&item.node) {
+            // メタノードマップにあるか？
+            None => false,
+            Some(v) => ENodeSpecifier::from_node(v).is_valid_output_pin(&item.pin),
+        }
     }
 
-    pub fn can_connect_to(&self, output: &ENode) -> bool {
-        ENodeSpecifier::from_node(self).can_connect_to(&ENodeSpecifier::from_node(output))
+    /// ノード間の関係図で次ノードとして処理が行えるか。
+    pub fn is_valid_next_node_pin(&self, item: &RelationItemPin) -> bool {
+        // メタノードに接近して、pinが存在しているか？
+        match self.map.get(&item.node) {
+            // メタノードマップにあるか？
+            None => false,
+            Some(v) => ENodeSpecifier::from_node(v).is_valid_input_pin(&item.pin),
+        }
+    }
+
+    /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
+    pub fn get_pin_categories(&self, item: &RelationItemPin) -> Option<EPinCategoryFlag> {
+        match self.map.get(&item.node) {
+            // メタノードマップにあるか？
+            None => None,
+            Some(v) => ENodeSpecifier::from_node(v).get_pin_categories(&item.pin),
+        }
+    }
+
+    /// `relation`が有効か？
+    pub fn is_valid_relation(&self, relation: &Relation) -> bool {
+        if !self.is_valid_prev_node_pin(&relation.prev) {
+            return false;
+        }
+        if !self.is_valid_next_node_pin(&relation.next) {
+            return false;
+        }
+
+        // お互いにチェック。
+        // pinの種類を見て判定する。
+        let output_pin = self
+            .get_pin_categories(&relation.prev)
+            .expect(&format!("({:?}) must be have pin categories", relation.prev));
+        let input_pin = self
+            .get_pin_categories(&relation.next)
+            .expect(&format!("({:?}) must be have pin categories", relation.next));
+        SPinCategory::can_support(output_pin, input_pin)
     }
 }
 
@@ -256,15 +232,6 @@ pub struct EmitterRange {
     length: f64,
 }
 
-/// [`ENode`]間の関係性を記述する。
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Relation {
-    /// 入力側
-    pub input: String,
-    /// 出力側
-    pub output: String,
-}
-
 /// v2バージョンにパーシングする。
 pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
     // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
@@ -284,120 +251,7 @@ pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
         nodes,
         relations,
     };
-    return Ok(container);
-}
-
-/// 特殊なインプットノード名なのかを確認する。
-pub fn is_special_input_node(input: &str) -> bool {
-    if input == "_start_pin" {
-        return true;
-    }
-
-    return false;
-}
-
-/// 次のことを検査する。
-///
-/// * inputとoutputが空白なものがあるかを確認する。
-/// * それぞれのノードに対してCycleになっていないかを確認する。
-pub fn validate_node_relations(nodes: &HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
-    let mut is_start_node_exist = false;
-    for relation in relations {
-        // inputとoutputが空白なものがあるかを確認する。
-        if relation.input.is_empty() {
-            return Err(anyhow::anyhow!("input node list is empty."));
-        }
-        if relation.output.is_empty() {
-            return Err(anyhow::anyhow!("output node list is empty."));
-        }
-
-        // まずrelationsからnodesに当てはまらないノード文字列があるかを確認する。
-        // input/output指定の文字列のノードが本当にinput/outputとして動作できるかを確認。
-        // もしくは特殊ノードなのかも確認。
-        if !is_special_input_node(&relation.input) {
-            let node_name = &relation.input;
-            if !nodes.contains_key(node_name) {
-                return Err(anyhow::anyhow!("Given node {} is not exist in node map.", node_name));
-            }
-            if !nodes[node_name].is_input() {
-                return Err(anyhow::anyhow!("Given node {} is not for input.", node_name));
-            }
-        } else {
-            is_start_node_exist = true;
-        }
-
-        // そしてinputとoutputの互換性を確認する。
-        // 具体的にはoutputに対してinputの組み方とタイプを検証する。
-        {
-            let output_node_name = &relation.output;
-            let output = &nodes[output_node_name];
-
-            if !nodes[&relation.input].can_connect_to(output) {
-                return Err(anyhow::anyhow!(
-                    "Input node {} does not support output node {}.",
-                    &relation.input,
-                    output_node_name
-                ));
-            }
-        }
-    }
-
-    if !is_start_node_exist {
-        return Err(anyhow::anyhow!("There is no start pin node. '_start_pin'."));
-    }
-
-    // それぞれのノードに対してCycleになっていないかを確認する。
-    // 一番簡単な方法？ではinputとして使っているノードだけを検査し、
-    // ノードからの経路をチェックして2回目以上通ることがあればCycle判定にする。
-    for (node_name, _) in nodes {
-        let mut name_queue: VecDeque<&String> = VecDeque::new();
-        name_queue.push_back(node_name);
-
-        let mut route_set: HashSet<GraphNodeRoute> = HashSet::new();
-
-        while !name_queue.is_empty() {
-            let search_name = name_queue.pop_front().unwrap();
-
-            for relation in relations {
-                let is_input = relation.input.contains(search_name);
-                if !is_input {
-                    continue;
-                }
-
-                // input-outputの経路を作って、今持っている経路リストにすでにあるかを確認する。
-                // もしあれば、Cycleになっていると判断する。
-                let route_item = GraphNodeRoute {
-                    from: (*search_name).clone(),
-                    to: relation.output.clone(),
-                };
-                if route_set.contains(&route_item) {
-                    return Err(anyhow::anyhow!("Node {} is cycled.", node_name));
-                }
-
-                // 入れる。
-                route_set.insert(route_item);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// [`validate_node_relations`]の関数だけでしか使わないもの。経路を表す。
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-struct GraphNodeRoute {
-    from: String,
-    to: String,
-}
-
-pub type ItemSPtr<T: ?Sized> = Rc<RefCell<T>>;
-
-pub struct SItemSPtr;
-impl SItemSPtr {
-    #[inline]
-    pub fn new<T>(value: T) -> ItemSPtr<T> {
-        Rc::new(RefCell::new(value))
-    }
+    Ok(container)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -423,147 +277,362 @@ impl ProcessProcessorInput {
     }
 }
 
+// ----------------------------------------------------------------------------
+// RelationTreeNode
+// ----------------------------------------------------------------------------
+
 pub type RelationTreeNodePtr = ItemSPtr<RelationTreeNode>;
+
+pub type RelationTreeNodeWPtr = ItemWPtr<RelationTreeNode>;
 
 /// 木のノードアイテム。
 #[derive(Debug)]
 pub struct RelationTreeNode {
     /// ノードの名前
     pub name: String,
-    /// ノード識別タイプ
-    specifier: ENodeSpecifier,
     /// 前からこのノードを依存する前ノードのマップ
-    prev_nodes: HashMap<String, RelationTreeNodePtr>,
+    prev_nodes: HashMap<String, RelationTreeNodeWPtr>,
     /// 次に伝播するノードのマップ
-    next_nodes: HashMap<String, RelationTreeNodePtr>,
+    next_nodes: HashMap<String, RelationTreeNodeWPtr>,
     /// このノードから処理するアイテム
-    processor: ENodeProcessData,
+    processor: TProcessItemPtr,
 }
 
 impl RelationTreeNode {
     /// ノードアイテムを作る。
-    pub fn new_item(name: &str, specifier: ENodeSpecifier, processor: &ENodeProcessData) -> RelationTreeNodePtr {
+    pub fn new_item(name: &str, processor: TProcessItemPtr) -> RelationTreeNodePtr {
         SItemSPtr::new(RelationTreeNode {
             name: name.to_owned(),
-            specifier,
             prev_nodes: HashMap::new(),
             next_nodes: HashMap::new(),
-            processor: processor.clone(),
+            processor,
         })
     }
 
     /// 前からこのノードを依存する前ノードを登録する。
     pub fn append_prev_node(&mut self, node_name: String, prev: RelationTreeNodePtr) {
-        self.prev_nodes.insert(node_name, prev);
+        self.prev_nodes.insert(node_name, Rc::downgrade(&prev));
     }
 
     /// 次に処理を伝播するノードを登録する。
     pub fn append_next_node(&mut self, node_name: String, next: RelationTreeNodePtr) {
-        self.next_nodes.insert(node_name, next);
+        self.next_nodes.insert(node_name, Rc::downgrade(&next));
+    }
+
+    ///
+    pub fn link_pin_output_to_input(&mut self, input_pin: &str, output_pin: NodePinItemWPtr) {
+        self.processor
+            .borrow_mut()
+            .get_common_mut()
+            .link_pin_output_to_input(input_pin, output_pin);
+    }
+
+    pub fn link_pin_input_to_output(&mut self, output_pin: &str, input_pin: NodePinItemWPtr) {
+        self.processor
+            .borrow_mut()
+            .get_common_mut()
+            .link_pin_input_to_output(output_pin, input_pin);
+    }
+
+    /// ノードの識別子を返す。
+    pub fn get_specifier(&self) -> ENodeSpecifier {
+        self.processor.borrow().get_common_ref().specifier
+    }
+
+    /// `pin_name`のOutputピンが存在する場合、そのピンのWeakPtrを返す。
+    pub fn get_output_pin(&self, pin_name: &str) -> Option<NodePinItemWPtr> {
+        self.processor.borrow().get_common_ref().get_output_pin(pin_name)
+    }
+
+    /// `pin_name`のInputピンが存在する場合、そのピンのWeakPtrを返す。
+    pub fn get_input_pin(&self, pin_name: &str) -> Option<NodePinItemWPtr> {
+        self.processor.borrow().get_common_ref().get_input_pin(pin_name)
     }
 
     /// ノード自分の処理が可能か？
+    /// たとえば、インプットが全部更新されている状態だったりとか。
     pub fn can_process(&self) -> bool {
-        if !self.specifier.can_process() {
-            return false;
-        }
-
-        // 自分のノードも視野に入れる。
-        match &self.processor {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().can_process(),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().can_process(),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().can_process(),
-            ENodeProcessData::InternalStartNode => true,
-        }
+        self.processor.borrow().can_process()
     }
 
     pub fn process(&mut self, input: &ProcessCommonInput) {
         let input = ProcessProcessorInput {
             common: *input,
-            children_states: self.prev_nodes.iter().map(|(_, v)| v.borrow().is_finished()).collect_vec(),
+            children_states: self
+                .prev_nodes
+                .iter()
+                .map(|(_, v)| v.upgrade().unwrap().borrow().is_finished())
+                .collect_vec(),
         };
-
-        // 自分のノードも視野に入れる。
-        let _state = match &self.processor {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(&input),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(&input),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(&input),
-            ENodeProcessData::InternalStartNode => EProcessResult::Finished,
-        };
-
-        // inputを入れる。inputをどう扱うかはnextノード各自でお任せする。
-        let output = self.processor.get_output();
-        for (_, node) in &mut self.next_nodes {
-            node.borrow_mut().update_input(&self.name, &output);
-        }
+        self.processor.borrow_mut().try_process(&input);
     }
 
     /// 次につながっているノードのリストを返す。
     pub fn get_next_nodes(&self) -> Vec<RelationTreeNodePtr> {
-        self.next_nodes.iter().map(|(_, v)| v.clone()).collect_vec()
-    }
-
-    /// 処理した後の出力を返す。
-    pub fn get_output(&self) -> EProcessOutput {
-        self.processor.get_output()
-    }
-
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    pub fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
-        // 自分のノードも視野に入れる。
-        match &self.processor {
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().update_input(node_name, input),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().update_input(node_name, input),
-            _ => (),
-        };
+        self.next_nodes.iter().filter_map(|(_, v)| v.upgrade()).collect_vec()
     }
 
     /// ノードの処理活動が終わったか？
     pub fn is_finished(&self) -> bool {
-        // 前のノードが全部Finishedであること。
-        if self.prev_nodes.iter().any(|(_, node)| !node.borrow().is_finished()) {
-            return false;
-        }
-
-        // 自分のノードも視野に入れる。
-        let is_finished = match &self.processor {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().is_finished(),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().is_finished(),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
-            ENodeProcessData::InternalStartNode => true,
-        };
-        is_finished
+        self.processor.borrow().is_finished()
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-
-pub enum EProcessResult {
-    Finished,
-    Pending,
 }
 
 // ----------------------------------------------------------------------------
 // ProcessControlItem
 // ----------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone)]
+pub struct NodePinItem {
+    /// ピンの名前
+    name: String,
+    /// ピンのカテゴリフラグ（複数可）
+    categories: EPinCategoryFlag,
+    /// Output用ピンなのか？
+    is_output: bool,
+    /// このノードが最後に更新された時間
+    elapsed_time: f64,
+    /// アップデートがリクエストされている状態か
+    is_update_requested: bool,
+    /// 連結しているピンのリスト
+    linked_pins: Vec<NodePinItemWPtr>,
+    /// Inputのコンテナ
+    input: EProcessInputContainer,
+    /// [`EProcessInputContainer`]の指定カテゴリフラグ
+    input_flag: EInputContainerCategoryFlag,
+    /// Outputのコンテナ
+    output: EProcessOutputContainer,
+}
+
+pub type NodePinItemSPtr = ItemSPtr<NodePinItem>;
+pub type NodePinItemWPtr = ItemWPtr<NodePinItem>;
+
+pub type NodePinItemList = HashMap<String, NodePinItemSPtr>;
+
+impl NodePinItem {
+    /// 新規アイテムの生成。
+    pub fn new_item(
+        name: &str,
+        categories: EPinCategoryFlag,
+        is_output: bool,
+        input_flag: EInputContainerCategoryFlag,
+    ) -> NodePinItemSPtr {
+        SItemSPtr::new(Self {
+            name: name.to_owned(),
+            categories,
+            is_output,
+            elapsed_time: 0.0,
+            linked_pins: vec![],
+            is_update_requested: false,
+            input: EProcessInputContainer::Uninitialized,
+            input_flag,
+            output: EProcessOutputContainer::Empty,
+        })
+    }
+
+    pub fn downgrade(item: &NodePinItemSPtr) -> NodePinItemWPtr {
+        Rc::downgrade(item)
+    }
+
+    pub fn insert_to_output(&mut self, new_output: EProcessOutput) -> anyhow::Result<()> {
+        // カテゴリを見て`new_output`がサポートできない種類であればエラーを返す。
+        if !new_output.check(self.categories) {
+            return Err(anyhow::anyhow!(
+                "Not supported output category of ({} pin, {} flags).",
+                self.name,
+                self.categories
+            ));
+        }
+
+        // もし現在のOutputコンテナとカテゴリが違ったら、作り治す。
+        if self.output.as_pin_category_flag() != new_output.as_pin_category_flag() {
+            self.output.reset_with(new_output);
+            self.notify_update_to_next_pins();
+            return Ok(());
+        }
+
+        // 既存コンテナに入れる。
+        self.output.insert_with(new_output).expect("Failed to insert output");
+        self.notify_update_to_next_pins();
+        Ok(())
+    }
+
+    /// 繋がっているピンにアップデート通知を送る。
+    pub fn notify_update_to_next_pins(&mut self) {
+        for linked_pin in &mut self.linked_pins {
+            // Upgradeしてフラグを更新する。
+            if let Some(pin) = linked_pin.upgrade() {
+                pin.borrow_mut().is_update_requested = true;
+            }
+        }
+    }
+
+    /// Input処理を行う。
+    pub fn process_input(&mut self) {
+        assert_eq!(self.is_output, false);
+
+        // もしUninitializedなら、初期化する。
+        if !self.input.is_initialized() {
+            // 初期化する。
+            self.input.initialize(self.input_flag);
+        }
+
+        // output側から情報を処理する。
+        // ただしinputではlinked_pinsの数は1個までで、Emptyなことはないと。
+        assert_eq!(self.linked_pins.len(), 1);
+        let output_pin = self.linked_pins.first().unwrap().upgrade().unwrap();
+        let output = &output_pin.borrow().output;
+        self.input.process(output);
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ProcessControlItem {
     /// アイテムの状態を表す。
     pub state: EProcessState,
-    /// 最後の処理時間を示す。-1ならまだ処理していないことを表す。
-    pub process_timestamp: i64,
+    /// アイテムの識別子タイプ
+    pub specifier: ENodeSpecifier,
     /// 経過した時間（秒単位）
     pub elapsed_time: f64,
+    /// Input用ピンのリスト（ノードに入る側）
+    pub input_pins: NodePinItemList,
+    /// Output用ピンのリスト（ノード側出る側）
+    pub output_pins: NodePinItemList,
 }
 
 impl ProcessControlItem {
-    pub fn new() -> Self {
+    pub fn new(specifier: ENodeSpecifier) -> Self {
         Self {
             state: EProcessState::Stopped,
-            process_timestamp: 0i64,
+            specifier,
             elapsed_time: 0.0,
+            input_pins: specifier.create_input_pins(),
+            output_pins: specifier.create_output_pins(),
         }
+    }
+
+    /// `pin_name`のOutputピンが存在する場合、そのピンのWeakPtrを返す。
+    pub fn get_output_pin(&self, pin_name: &str) -> Option<NodePinItemWPtr> {
+        match self.output_pins.get(pin_name) {
+            None => None,
+            Some(v) => Some(NodePinItem::downgrade(v)),
+        }
+    }
+
+    /// `pin_name`のInputピンが存在する場合、そのピンのWeakPtrを返す。
+    pub fn get_input_pin(&self, pin_name: &str) -> Option<NodePinItemWPtr> {
+        match self.input_pins.get(pin_name) {
+            None => None,
+            Some(v) => Some(NodePinItem::downgrade(v)),
+        }
+    }
+
+    /// `input_pin`名前のInputピンが存在すれば、`output_pin`をそのピンのリンク先としてリストに入れる。
+    pub fn link_pin_output_to_input(&mut self, input_pin: &str, output_pin: NodePinItemWPtr) {
+        if let Some(v) = self.get_input_pin(input_pin) {
+            v.upgrade().unwrap().borrow_mut().linked_pins.push(output_pin);
+        }
+    }
+
+    /// `output_pin`名前のOutputピンが存在すれば、`input_pin`をそのピンのリンク先としてリストに入れる。
+    pub fn link_pin_input_to_output(&mut self, output_pin: &str, input_pin: NodePinItemWPtr) {
+        if let Some(v) = self.get_output_pin(output_pin) {
+            v.upgrade().unwrap().borrow_mut().linked_pins.push(input_pin);
+        }
+    }
+
+    /// すべてのInputピンに対し更新要請があるかを確認する。
+    pub fn is_all_input_pins_update_notified(&self) -> bool {
+        if self.input_pins.is_empty() {
+            return true;
+        }
+
+        self.input_pins.iter().all(|(_, v)| v.borrow().is_update_requested)
+    }
+
+    /// Updateフラグが立っているすべてのInputピンを更新する。
+    pub fn process_input_pins(&mut self) {
+        //
+        for (_, pin) in &mut self.input_pins {
+            let mut borrowed = pin.borrow_mut();
+            if borrowed.is_update_requested {
+                // 何をやるかはちょっと考える…
+                assert!(borrowed.is_output == false);
+                borrowed.process_input();
+            }
+        }
+
+        // フラグを全部リセット
+        self.reset_all_input_pins_update_flag();
+    }
+
+    /// すべてのInputピンの更新フラグをリセットする。
+    pub fn reset_all_input_pins_update_flag(&mut self) {
+        if self.input_pins.is_empty() {
+            return;
+        }
+
+        self.input_pins.iter_mut().for_each(|(_, v)| {
+            v.borrow_mut().is_update_requested = false;
+        });
+    }
+
+    /// `new_output`を`pin_name`のoutputピンに入れる。
+    pub fn insert_to_output_pin(&mut self, pin_name: &str, new_output: EProcessOutput) -> anyhow::Result<()> {
+        match self.output_pins.get_mut(pin_name) {
+            None => Err(anyhow::anyhow!("Failed to find output pin `{}`.", pin_name)),
+            Some(v) => v.borrow_mut().insert_to_output(new_output),
+        }
+    }
+
+    pub fn get_input_internal(&self, pin_name: &str) -> Option<InputInternal> {
+        let borrowed = self.input_pins.get(pin_name)?.borrow();
+        Some(InputInternal { borrowed })
+    }
+
+    pub fn get_input_internal_mut(&mut self, pin_name: &str) -> Option<InputInternalMut> {
+        let borrowed = self.input_pins.get(pin_name)?.borrow_mut();
+        Some(InputInternalMut { borrowed })
+    }
+
+    /// `pin_name`のOutputピンが他のノードのピンに繋がっているかを確認。
+    pub fn is_output_pin_connected(&self, pin_name: &str) -> bool {
+        match self.output_pins.get(pin_name) {
+            None => false,
+            Some(v) => v.borrow().linked_pins.is_empty() == false,
+        }
+    }
+}
+
+/// [`ProcessControlItem::get_input_internal`]関数からの構造体。
+pub struct InputInternal<'a> {
+    borrowed: std::cell::Ref<'a, NodePinItem>,
+}
+
+impl Deref for InputInternal<'_> {
+    type Target = EProcessInputContainer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.borrowed.input
+    }
+}
+
+/// [`ProcessControlItem::get_input_internal_mut`]関数からの構造体。
+pub struct InputInternalMut<'a> {
+    borrowed: std::cell::RefMut<'a, NodePinItem>,
+}
+
+impl Deref for InputInternalMut<'_> {
+    type Target = EProcessInputContainer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.borrowed.input
+    }
+}
+
+impl DerefMut for InputInternalMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.borrowed.input
     }
 }
 
@@ -576,78 +645,32 @@ pub enum EProcessState {
 }
 
 // ----------------------------------------------------------------------------
-// ProcessBuffer
-// ----------------------------------------------------------------------------
-
-/// 各ノードが自分の情報と周りの情報から処理を行うときの処理アイテム
-#[derive(Debug, Clone)]
-pub enum ENodeProcessData {
-    InternalStartNode,
-    InputNoneOutputBuffer(InputNoneOutputBufferPtr),
-    InputBufferOutputNone(InputBufferOutputNonePtr),
-    InputBufferOutputBuffer(InputBufferOutputBufferPtr),
-}
-
-impl ENodeProcessData {
-    /// ノードから処理アイテムを生成する。
-    pub fn create_from(node: &ENode, setting: &Setting) -> Self {
-        match node {
-            ENode::EmitterPinkNoise { .. }
-            | ENode::EmitterWhiteNoise { .. }
-            | ENode::EmitterSineWave { .. }
-            | ENode::EmitterTriangle { .. }
-            | ENode::EmitterSquare { .. }
-            | ENode::EmitterSawtooth { .. } => {
-                Self::InputNoneOutputBuffer(SInputNoneOutputBuffer::create_from(node, setting))
-            }
-            ENode::AdapterEnvlopeAd { .. } | ENode::AdapterEnvlopeAdsr { .. } => {
-                Self::InputBufferOutputBuffer(SInputBufferOutputBuffer::create_from(node, setting))
-            }
-            ENode::OutputLog { .. } | ENode::OutputFile { .. } => {
-                Self::InputBufferOutputNone(SInputBufferOutputNone::create_from(node, setting))
-            }
-            ENode::InternalStartPin => Self::InternalStartNode,
-        }
-    }
-
-    /// データアイテムの処理が終わったか？
-    pub fn is_finished(&self) -> bool {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow().is_finished(),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow().is_finished(),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow().is_finished(),
-            ENodeProcessData::InternalStartNode => true,
-        }
-    }
-
-    /// 処理してみる。
-    pub fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(v) => v.borrow_mut().try_process(input),
-            ENodeProcessData::InputBufferOutputNone(v) => v.borrow_mut().try_process(input),
-            ENodeProcessData::InputBufferOutputBuffer(v) => v.borrow_mut().try_process(input),
-            ENodeProcessData::InternalStartNode => EProcessResult::Finished,
-        }
-    }
-
-    /// 処理した後の出力を返す。
-    pub fn get_output(&self) -> EProcessOutput {
-        match self {
-            ENodeProcessData::InputNoneOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
-            ENodeProcessData::InputBufferOutputBuffer(v) => EProcessOutput::Buffer(v.borrow().get_output()),
-            _ => EProcessOutput::None,
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
 // EProcessOutput
 // ----------------------------------------------------------------------------
 
 #[derive(Debug)]
 pub enum EProcessOutput {
     None,
-    Buffer(ProcessOutputBuffer),
+    WaveBuffer(ProcessOutputBuffer),
+    Text(ProcessOutputText),
+    Frequency(ProcessOutputFrequency),
+}
+
+impl EProcessOutput {
+    /// 自分が`categories`の範疇に入れるかを確認する。
+    pub fn check(&self, categories: EPinCategoryFlag) -> bool {
+        let self_flag = self.as_pin_category_flag();
+        categories & self_flag == self_flag
+    }
+
+    pub fn as_pin_category_flag(&self) -> EPinCategoryFlag {
+        match self {
+            Self::None => pin_category::START,
+            Self::WaveBuffer(_) => pin_category::WAVE_BUFFER,
+            Self::Text(_) => pin_category::TEXT,
+            Self::Frequency(_) => pin_category::FREQUENCY,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -657,208 +680,83 @@ pub struct ProcessOutputBuffer {
     setting: Setting,
 }
 
-pub trait TProcess {
+#[derive(Debug, Clone)]
+pub struct ProcessOutputText {
+    text: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessOutputFrequency {
+    frequencies: Vec<SineFrequency>,
+    analyzed_sample_len: usize,
+}
+
+pub trait TProcess: std::fmt::Debug {
     /// データアイテムの処理が終わったか？
     fn is_finished(&self) -> bool;
 
     /// 自分が処理可能なノードなのかを確認する。
     fn can_process(&self) -> bool;
 
-    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult;
+    /// 共用アイテムの参照を返す。
+    fn get_common_ref(&self) -> &ProcessControlItem;
+
+    /// 共用アイテムの可変参照を返す。
+    fn get_common_mut(&mut self) -> &mut ProcessControlItem;
+
+    fn try_process(&mut self, input: &ProcessProcessorInput);
 }
 
-// ----------------------------------------------------------------------------
-// TInputNoneOutputBuffer
-// ----------------------------------------------------------------------------
+/// [`TProcess`]を実装しているアイテムの外部表示タイプ
+pub type TProcessItemPtr = ItemSPtr<dyn TProcess>;
 
-/// [`TInputNoneOutputBuffer`]を実装しているアイテムの外部表示タイプ
-pub type InputNoneOutputBufferPtr = ItemSPtr<dyn TInputNoneOutputBuffer>;
-
-/// 処理からOutputでバッファを返すためのTrait。
-pub trait TInputNoneOutputBuffer: std::fmt::Debug + TProcess {
-    /// 処理結果を返す。
-    fn get_output(&self) -> ProcessOutputBuffer;
-}
-
-/// [`TInputNoneOutputBuffer`]のインスタンス生成ファクトリー。
-struct SInputNoneOutputBuffer;
-impl SInputNoneOutputBuffer {
-    fn create_from(node: &ENode, setting: &Setting) -> InputNoneOutputBufferPtr {
-        match node {
-            ENode::EmitterPinkNoise { intensity, range } => {
-                let item = SineWaveEmitterProcessData::new_pink(*intensity, *range, setting.clone());
-                SItemSPtr::new(item)
-            }
-            ENode::EmitterWhiteNoise { intensity, range } => {
-                let item = SineWaveEmitterProcessData::new_white(*intensity, *range, setting.clone());
-                SItemSPtr::new(item)
-            }
-            ENode::EmitterSineWave {
-                frequency,
-                intensity,
-                range,
-            } => {
-                let item = SineWaveEmitterProcessData::new_sine(*frequency, *intensity, *range, setting.clone());
-                SItemSPtr::new(item)
-            }
-            ENode::EmitterSawtooth {
-                frequency,
-                intensity,
-                range,
-            } => {
-                let item = SineWaveEmitterProcessData::new_saw(*frequency, *intensity, *range, setting.clone());
-                SItemSPtr::new(item)
-            }
-            ENode::EmitterTriangle {
-                frequency,
-                intensity,
-                range,
-            } => {
-                let item = SineWaveEmitterProcessData::new_triangle(*frequency, *intensity, *range, setting.clone());
-                SItemSPtr::new(item)
-            }
-            ENode::EmitterSquare {
-                frequency,
-                duty_rate,
-                intensity,
-                range,
-            } => {
-                let item =
-                    SineWaveEmitterProcessData::new_square(*frequency, *duty_rate, *intensity, *range, setting.clone());
-                SItemSPtr::new(item)
-            }
-            _ => unreachable!("Unexpected branch."),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ESineWaveEmitterType {
-    PinkNoise,
-    WhiteNoise,
-    Sine,
-    Saw,
-    Triangle,
-    Square { duty_rate: f64 },
-}
-
-// ----------------------------------------------------------------------------
-// TInputBufferOutputNone
-// ----------------------------------------------------------------------------
-
-/// [`TInputBufferOutputNone`]を実装しているアイテムの外部表示タイプ
-pub type InputBufferOutputNonePtr = ItemSPtr<dyn TInputBufferOutputNone>;
-
-/// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
-pub trait TInputBufferOutputNone: std::fmt::Debug + TProcess {
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    fn update_input(&mut self, node_name: &str, input: &EProcessOutput);
-}
-
-struct SInputBufferOutputNone;
-impl SInputBufferOutputNone {
-    fn create_from(node: &ENode, _: &Setting) -> InputBufferOutputNonePtr {
-        match node {
-            ENode::OutputFile { format, file_name } => {
-                SItemSPtr::new(OutputFileProcessData::new(format.clone(), file_name.clone()))
-            }
-            ENode::OutputLog { mode } => SItemSPtr::new(OutputLogProcessData::new(*mode)),
-            _ => unreachable!("Unexpected branch."),
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
-// TInputBufferOutputBuffer
-// ----------------------------------------------------------------------------
-
-/// [`TInputBufferOutputBuffer`]を実装しているアイテムの外部表示タイプ
-pub type InputBufferOutputBufferPtr = ItemSPtr<dyn TInputBufferOutputBuffer>;
-
-/// インプットでバッファーを受け取り、自分の処理の中で消費して完結するためのTrait。
-pub trait TInputBufferOutputBuffer: std::fmt::Debug + TProcess {
-    /// 処理結果を返す。
-    fn get_output(&self) -> ProcessOutputBuffer;
-
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    fn update_input(&mut self, node_name: &str, input: &EProcessOutput);
-}
-
-struct SInputBufferOutputBuffer;
-impl SInputBufferOutputBuffer {
-    fn create_from(node: &ENode, _: &Setting) -> InputBufferOutputBufferPtr {
-        match node {
-            ENode::AdapterEnvlopeAd {
-                attack_time,
-                decay_time,
-                attack_curve,
-                decay_curve,
-            } => SItemSPtr::new(AdapterEnvelopeAdProcessData::new(
-                *attack_time,
-                *decay_time,
-                *attack_curve,
-                *decay_curve,
-            )),
-            ENode::AdapterEnvlopeAdsr {
-                attack_time,
-                decay_time,
-                sustain_time,
-                release_time,
-                attack_curve,
-                decay_curve,
-                release_curve,
-                sustain_value,
-            } => SItemSPtr::new(AdapterEnvelopeAdsrProcessData::new(
-                *attack_time,
-                *decay_time,
-                *sustain_time,
-                *release_time,
-                *attack_curve,
-                *decay_curve,
-                *release_curve,
-                *sustain_value,
-            )),
-            _ => unreachable!("Unexpected branch."),
-        }
-    }
-}
-
-pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
+pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
     // 下で`_start_pin`のチェックもやってくれる。
-    validate_node_relations(nodes, &relations)?;
+    let node_container = MetaNodeContainer { map: nodes };
+    validate_node_relations(&node_container, &relations)?;
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
-    // outputがinputとして使われているものは一つの独立したツリーとして構成しない。
     let node_map = {
         let mut map = HashMap::new();
+
         // 各ノードから処理に使うためのアイテムを全部生成しておく。
-        for (node_name, node) in nodes {
-            let processor = ENodeProcessData::create_from(node, setting);
-            let specifier = ENodeSpecifier::from_node(node);
-            let node = RelationTreeNode::new_item(&node_name, specifier, &processor);
+        // 中でinputピンとoutputピンを作る。
+        for (node_name, node) in &node_container.map {
+            let processor = node.create_from(setting);
+            let node = RelationTreeNode::new_item(&node_name, processor);
             map.insert(node_name.clone(), node);
+        }
+
+        // relationsからnext_nodeを入れる。
+        for relation in relations {
+            let prev = &relation.prev;
+            let next = &relation.next;
+
+            // prev → next
+            {
+                let prev_node = map.get(&prev.node).unwrap().clone();
+                let output_pin = prev_node.borrow().get_output_pin(&prev.pin).unwrap();
+
+                // これはnext側にprevを連結するため。
+                let mut borrowed = map[&next.node].borrow_mut();
+                borrowed.link_pin_output_to_input(&next.pin, output_pin);
+                borrowed.append_prev_node(prev.node.clone(), prev_node);
+            }
+            // next → prev
+            {
+                let next_node = map.get(&next.node).unwrap().clone();
+                let input_pin = next_node.borrow().get_input_pin(&next.pin).unwrap();
+
+                // これはprev側にnextを連結するため。
+                let mut borrowed = map[&prev.node].borrow_mut();
+                borrowed.link_pin_input_to_output(&prev.pin, input_pin);
+                borrowed.append_next_node(next.node.clone(), next_node);
+            }
         }
 
         map
     };
-
-    // relationsからnext_nodeを入れる。
-    for relation in relations {
-        let input = &relation.input;
-        let output = &relation.output;
-
-        // prev → next
-        {
-            let output_node = node_map.get(output).unwrap().clone();
-            node_map[input].borrow_mut().append_next_node(output.clone(), output_node);
-        }
-        // next → prev
-        {
-            let input_node = node_map.get(input).unwrap().clone();
-            node_map[output].borrow_mut().append_prev_node(input.clone(), input_node);
-        }
-    }
 
     // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
     // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
@@ -868,17 +766,18 @@ pub fn process_v2(setting: &Setting, nodes: &HashMap<String, ENode>, relations: 
 
     // 終了条件は、すべてのノードが終わった時。
     let mut node_queue = VecDeque::new();
+    let mut elapsed_time = 0.0;
     loop {
-        let duration = tick_timer.tick();
-        let second = duration.as_secs_f64();
+        elapsed_time += tick_timer.tick().as_secs_f64();
 
         // 共通で使う処理時の入力。
-        let input = ProcessCommonInput { elapsed_time: second };
+        let input = ProcessCommonInput { elapsed_time };
         node_queue.push_back(start_node.clone());
 
         //
         let mut is_all_finished = true;
         while !node_queue.is_empty() {
+            // 処理する。
             let process_node = node_queue.pop_front().unwrap();
             process_node.borrow_mut().process(&input);
 

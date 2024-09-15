@@ -1,7 +1,5 @@
 use derive_builder::Builder;
 use itertools::Itertools;
-use num_traits::PrimInt;
-use rand::Rng;
 
 use crate::wave::{filter::FilterADSR, sample::UniformedSample, PI2};
 

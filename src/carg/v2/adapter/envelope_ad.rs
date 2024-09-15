@@ -1,14 +1,16 @@
 use itertools::Itertools;
 use num_traits::Pow;
 
+use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::ENodeSpecifier;
 use crate::carg::v2::{
-    EProcessOutput, EProcessResult, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
-    TInputBufferOutputBuffer, TProcess,
+    ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
+    Setting, TProcess, TProcessItemPtr,
 };
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug, Clone)]
-pub struct EnvelopeAdValueEmitter {
+struct EnvelopeAdValueEmitter {
     attack_time: f64,
     decay_time: f64,
     attack_curve: f64,
@@ -17,7 +19,7 @@ pub struct EnvelopeAdValueEmitter {
 }
 
 impl EnvelopeAdValueEmitter {
-    pub fn new(attack_time: f64, decay_time: f64, attack_curve: f64, decay_curve: f64) -> Self {
+    fn new(attack_time: f64, decay_time: f64, attack_curve: f64, decay_curve: f64) -> Self {
         Self {
             attack_time,
             decay_time,
@@ -71,77 +73,85 @@ impl EnvelopeAdValueEmitter {
 #[derive(Debug)]
 pub struct AdapterEnvelopeAdProcessData {
     common: ProcessControlItem,
-    /// これじゃ一つしか受け入れない。
-    input: Option<(String, ProcessOutputBuffer)>,
-    /// 処理後に出力情報が保存されるところ。
-    output: Option<ProcessOutputBuffer>,
     emitter: EnvelopeAdValueEmitter,
 }
 
 impl AdapterEnvelopeAdProcessData {
-    pub fn new(attack_time: f64, decay_time: f64, attack_curve: f64, decay_curve: f64) -> Self {
+    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
+        match node {
+            ENode::AdapterEnvlopeAd {
+                attack_time,
+                decay_time,
+                attack_curve,
+                decay_curve,
+            } => {
+                let item = Self::new(*attack_time, *decay_time, *attack_curve, *decay_curve);
+                SItemSPtr::new(item)
+            }
+            _ => unreachable!("Unexpected branch."),
+        }
+    }
+
+    fn new(attack_time: f64, decay_time: f64, attack_curve: f64, decay_curve: f64) -> Self {
         assert!(attack_time >= 0.0);
         assert!(decay_time >= 0.0);
         assert!(attack_curve > 0.0);
         assert!(decay_curve > 0.0);
 
         Self {
-            common: ProcessControlItem::new(),
-            input: None,
-            output: None,
+            common: ProcessControlItem::new(ENodeSpecifier::AdapterEnvelopeAd),
             emitter: EnvelopeAdValueEmitter::new(attack_time, decay_time, attack_curve, decay_curve),
         }
     }
 }
 
 impl AdapterEnvelopeAdProcessData {
-    fn update_state(&mut self, in_input: &ProcessProcessorInput) -> EProcessResult {
+    fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // Inputがなきゃ何もできぬ。
-        if self.input.is_none() {
-            return EProcessResult::Pending;
-        }
+        // これなに…
+        let linked_output_pin = self
+            .common
+            .get_input_pin("in")
+            .unwrap()
+            .upgrade()
+            .unwrap()
+            .borrow()
+            .linked_pins
+            .first()
+            .unwrap()
+            .upgrade()
+            .unwrap();
+
+        let borrowed = linked_output_pin.borrow();
+        let input = match &borrowed.output {
+            EProcessOutputContainer::WaveBuffer(v) => v,
+            _ => unreachable!("Unexpected branch"),
+        };
 
         // このノードでは最初からADを行う。
         // もし尺が足りなければ、そのまま終わる。
         // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
-        let (_, input) = self.input.as_ref().unwrap();
         let values = self.emitter.next_values(input.buffer.len(), input.setting.sample_rate as usize);
         let buffer = input.buffer.iter().zip(values.iter()).map(|(a, b)| *b * *a).collect_vec();
-        println!("{:?}", buffer);
 
         // outputのどこかに保持する。
-        self.output = Some(ProcessOutputBuffer {
-            buffer,
-            setting: input.setting.clone(),
-            range: input.range,
-        });
-
-        // 状態変更。
-        self.common.process_timestamp += 1;
+        self.common
+            .insert_to_output_pin(
+                "out",
+                EProcessOutput::WaveBuffer(ProcessOutputBuffer {
+                    buffer,
+                    setting: input.setting.clone(),
+                    range: input.range,
+                }),
+            )
+            .unwrap();
 
         if in_input.is_children_all_finished() {
             self.common.state = EProcessState::Finished;
-            return EProcessResult::Finished;
+            return;
         } else {
             self.common.state = EProcessState::Playing;
-            return EProcessResult::Pending;
-        }
-    }
-}
-
-impl TInputBufferOutputBuffer for AdapterEnvelopeAdProcessData {
-    fn get_output(&self) -> ProcessOutputBuffer {
-        assert!(self.output.is_some());
-        self.output.as_ref().unwrap().clone()
-    }
-
-    /// 自分のノードに[`input`]を入れるか判定して適切に処理する。
-    fn update_input(&mut self, node_name: &str, input: &EProcessOutput) {
-        match input {
-            EProcessOutput::None => unimplemented!("Unexpected branch."),
-            EProcessOutput::Buffer(v) => {
-                self.input = Some((node_name.to_owned(), v.clone()));
-            }
+            return;
         }
     }
 }
@@ -151,16 +161,31 @@ impl TProcess for AdapterEnvelopeAdProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn try_process(&mut self, input: &ProcessProcessorInput) -> EProcessResult {
-        match self.common.state {
-            EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
-            EProcessState::Finished => {
-                return EProcessResult::Finished;
-            }
-        }
+    fn can_process(&self) -> bool {
+        self.common.is_all_input_pins_update_notified()
     }
 
-    fn can_process(&self) -> bool {
-        self.input.is_some()
+    /// 共用アイテムの参照を返す。
+    fn get_common_ref(&self) -> &ProcessControlItem {
+        &self.common
+    }
+
+    /// 共用アイテムの可変参照を返す。
+    fn get_common_mut(&mut self) -> &mut ProcessControlItem {
+        &mut self.common
+    }
+
+    fn try_process(&mut self, input: &ProcessProcessorInput) {
+        self.common.elapsed_time = input.common.elapsed_time;
+        self.common.process_input_pins();
+
+        match self.common.state {
+            EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
+            _ => (),
+        }
     }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------
