@@ -11,7 +11,7 @@ use super::{
     sine::setting::WaveSound,
     stretch::time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
 };
-use std::{io, mem};
+use std::io;
 
 pub mod wav;
 
@@ -40,16 +40,16 @@ impl WaveContainer {
     where
         T: io::Read + io::Seek,
     {
-        const MIMINUM_SIZE: usize = mem::size_of::<LowWaveRiffHeader>()
-            + mem::size_of::<LowWaveFormatHeader>()
-            + mem::size_of::<LowWaveFactChunk>()
-            + mem::size_of::<LowWaveDataChunk>();
+        const MINIMUM_SIZE: usize = size_of::<LowWaveRiffHeader>()
+            + size_of::<LowWaveFormatHeader>()
+            + size_of::<LowWaveFactChunk>()
+            + size_of::<LowWaveDataChunk>();
 
         // readerの大きさを計算して判定を行う。
         {
             let reader_length = reader.seek(io::SeekFrom::End(0)).expect("Failed to seek reader.") as usize;
             reader.rewind().expect("Failed to rewind reader.");
-            if MIMINUM_SIZE > reader_length {
+            if MINIMUM_SIZE > reader_length {
                 // Chunkのサイズが足りなければ、そもそも読み込む必要はない。
                 return None;
             }
@@ -71,12 +71,12 @@ impl WaveContainer {
         // 最後に実際データが入っているバッファーを読み取る。
         let mut buffer = vec![];
         reader.read_to_end(&mut buffer).expect("Failed to read buffer.");
-        assert!(buffer.len() == (buffer_size as usize));
+        assert_eq!(buffer.len(), buffer_size as usize);
 
         // bufferの各ブロックから`UniformedSample`に変換する。
         let unit_block_size = wave_fmt_header.unit_block_size();
         let bits_per_sample = wave_fmt_header.bits_per_sample as usize;
-        assert!(bits_per_sample == 16);
+        assert_eq!(bits_per_sample, 16);
 
         // 今の量子化は16Bitsしか対応しない。
         // 16Bitsは [-32768, 32768)の範囲を持つ。
@@ -129,8 +129,8 @@ impl WaveContainer {
         }
     }
 
-    /// [`WaveContainer`]の情報を[`std::io::Write`]ストリームに書き込む。
-    /// `writer`は[`std::io::Write`]と[`std::io::Seek`]を実装していること。
+    /// [`WaveContainer`]の情報を[`io::Write`]ストリームに書き込む。
+    /// `writer`は[`io::Write`]と[`io::Seek`]を実装していること。
     ///
     /// `writer`のflush動作などは行わない。
     pub fn write<T>(&self, writer: &mut T) -> ()
@@ -171,7 +171,7 @@ impl WaveContainer {
                     let converted_buffer: Vec<u8> =
                         { self.uniformed_buffer.iter().map(|v| v.to_unsigned_8bits()).collect() };
                     let converted_buffer_slice = unsafe {
-                        let p_buffer = converted_buffer.as_ptr() as *const u8;
+                        let p_buffer = converted_buffer.as_ptr();
                         std::slice::from_raw_parts(p_buffer, converted_buffer.len())
                     };
 
@@ -244,7 +244,7 @@ impl WaveContainer {
     ///
     pub(crate) fn calculate_sample_index_of_time(&self, time: f64) -> Option<usize> {
         // 今はチャンネルをMONOに限定する。
-        assert!(self.fmt.channel == 1);
+        assert_eq!(self.fmt.channel, 1);
         if time >= self.sound_length() {
             return None;
         }
@@ -312,7 +312,7 @@ impl WaveBuilder {
                 // F_sがそのままなのでOK
                 src_container.to_owned()
             } else {
-                // TimeStrecherを使ってResamplingする。（精度はちゃんとしたアルゴリズムに比べたら落ちる）
+                // TimeStretcherを使ってResamplingする。（精度はちゃんとしたアルゴリズムに比べたら落ちる）
                 let original_fs = container.samples_per_second();
                 let template_size = (original_fs as f64 * 0.01) as usize;
                 let p_min = (original_fs as f64 * 0.005) as usize;
@@ -326,8 +326,7 @@ impl WaveBuilder {
                     .sample_period_length(p_max - p_min)
                     .build()
                     .unwrap()
-                    .process_with_buffer(&setting)
-                    .unwrap()
+                    .process_with_buffer(&setting)?
             }
         };
 
@@ -349,7 +348,6 @@ impl WaveBuilder {
         }
         assert_eq!(left.len(), right.len());
 
-        // 今はMONO、PCMで固定する。
         // ローレベルのヘッダーの情報などを作る。
         let builder = fmt::EBuilder::Normal {
             samples_per_sec: self.samples_per_sec,
