@@ -87,8 +87,8 @@ impl TPinCategory for AdapterEnvelopeAdProcessData {
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::WAVE_BUFFER),
-            "out" => Some(pin_category::WAVE_BUFFER),
+            "in" => Some(pin_category::BUFFER_MONO),
+            "out" => Some(pin_category::BUFFER_MONO),
             _ => None,
         }
     }
@@ -96,7 +96,7 @@ impl TPinCategory for AdapterEnvelopeAdProcessData {
     /// Inputピンのコンテナフラグ
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::WAVE_BUFFER_PHANTOM),
+            "in" => Some(input::container_category::BUFFER_MONO_PHANTOM),
             _ => None,
         }
     }
@@ -105,7 +105,7 @@ impl TPinCategory for AdapterEnvelopeAdProcessData {
 impl AdapterEnvelopeAdProcessData {
     pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::AdapterEnvlopeAd {
+            ENode::AdapterEnvelopeAd {
                 attack_time,
                 decay_time,
                 attack_curve,
@@ -150,7 +150,7 @@ impl AdapterEnvelopeAdProcessData {
 
         let borrowed = linked_output_pin.borrow();
         let input = match &borrowed.output {
-            EProcessOutputContainer::WaveBuffer(v) => v,
+            EProcessOutputContainer::BufferMono(v) => v,
             _ => unreachable!("Unexpected branch"),
         };
 
@@ -164,7 +164,7 @@ impl AdapterEnvelopeAdProcessData {
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::WaveBuffer(ProcessOutputBuffer {
+                EProcessOutput::BufferMono(ProcessOutputBuffer {
                     buffer,
                     setting: input.setting.clone(),
                     range: input.range,

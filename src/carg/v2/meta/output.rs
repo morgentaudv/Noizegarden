@@ -1,11 +1,12 @@
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
-use crate::carg::v2::{EProcessOutput, ProcessOutputBuffer, ProcessOutputFrequency, ProcessOutputText};
+use crate::carg::v2::{EProcessOutput, ProcessOutputBuffer, ProcessOutputBufferStereo, ProcessOutputFrequency, ProcessOutputText};
 
 /// [`EProcessOutput`]などをまとめて管理するコンテナ。
 #[derive(Debug, Clone)]
 pub enum EProcessOutputContainer {
     Empty,
-    WaveBuffer(ProcessOutputBuffer),
+    BufferMono(ProcessOutputBuffer),
+    BufferStereo(ProcessOutputBufferStereo),
     Text(ProcessOutputText),
     Frequency(ProcessOutputFrequency),
 }
@@ -14,7 +15,8 @@ impl EProcessOutputContainer {
     pub fn as_pin_category_flag(&self) -> EPinCategoryFlag {
         match self {
             EProcessOutputContainer::Empty => pin_category::START,
-            EProcessOutputContainer::WaveBuffer(_) => pin_category::WAVE_BUFFER,
+            EProcessOutputContainer::BufferMono(_) => pin_category::BUFFER_MONO,
+            EProcessOutputContainer::BufferStereo(_) => pin_category::BUFFER_STEREO,
             EProcessOutputContainer::Text(_) => pin_category::TEXT,
             EProcessOutputContainer::Frequency(_) => pin_category::FREQUENCY,
         }
@@ -23,14 +25,17 @@ impl EProcessOutputContainer {
     pub fn reset_with(&mut self, new_output: EProcessOutput) {
         match new_output {
             EProcessOutput::None => *self = EProcessOutputContainer::Empty,
-            EProcessOutput::WaveBuffer(v) => {
-                *self = EProcessOutputContainer::WaveBuffer(v);
+            EProcessOutput::BufferMono(v) => {
+                *self = EProcessOutputContainer::BufferMono(v);
             }
             EProcessOutput::Text(v) => {
                 *self = EProcessOutputContainer::Text(v);
             }
             EProcessOutput::Frequency(v) => {
                 *self = EProcessOutputContainer::Frequency(v);
+            }
+            EProcessOutput::BufferStereo(v) => {
+                *self = EProcessOutputContainer::BufferStereo(v);
             }
         }
     }
@@ -42,8 +47,8 @@ impl EProcessOutputContainer {
 
         match self {
             EProcessOutputContainer::Empty => {}
-            EProcessOutputContainer::WaveBuffer(dst) => {
-                if let EProcessOutput::WaveBuffer(src) = new_output {
+            EProcessOutputContainer::BufferMono(dst) => {
+                if let EProcessOutput::BufferMono(src) = new_output {
                     *dst = src;
                 } else {
                     unreachable!("Unexpected branch");
@@ -58,6 +63,13 @@ impl EProcessOutputContainer {
             }
             EProcessOutputContainer::Frequency(dst) => {
                 if let EProcessOutput::Frequency(src) = new_output {
+                    *dst = src;
+                } else {
+                    unreachable!("Unexpected branch");
+                }
+            }
+            EProcessOutputContainer::BufferStereo(dst) => {
+                if let EProcessOutput::BufferStereo(src) = new_output {
                     *dst = src;
                 } else {
                     unreachable!("Unexpected branch");

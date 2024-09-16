@@ -27,7 +27,7 @@ impl TPinCategory for AnalyzerDFSProcessData {
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::WAVE_BUFFER),
+            "in" => Some(pin_category::BUFFER_MONO),
             "out_info" => Some(pin_category::TEXT),
             "out_freq" => Some(pin_category::FREQUENCY),
             _ => None,
@@ -36,7 +36,7 @@ impl TPinCategory for AnalyzerDFSProcessData {
 
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::WAVE_BUFFERS_DYNAMIC),
+            "in" => Some(input::container_category::BUFFER_MONO_DYNAMIC),
             _ => None,
         }
     }
@@ -63,7 +63,7 @@ impl AnalyzerDFSProcessData {
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // チェックしてself.levelよりバッファが多くないと処理しない。
         let can_process = match &*self.common.get_input_internal("in").unwrap() {
-            EProcessInputContainer::WaveBuffersDynamic(v) => v.buffer.len() >= self.level,
+            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
             _ => false,
         };
         if !can_process {
@@ -71,7 +71,7 @@ impl AnalyzerDFSProcessData {
         }
 
         let (buffer, sample_rate) = match &mut *self.common.get_input_internal_mut("in").unwrap() {
-            EProcessInputContainer::WaveBuffersDynamic(v) => {
+            EProcessInputContainer::BufferMonoDynamic(v) => {
                 let buffer = v.buffer.drain(..self.level).collect_vec();
                 (buffer, v.setting.as_ref().unwrap().sample_rate)
             }

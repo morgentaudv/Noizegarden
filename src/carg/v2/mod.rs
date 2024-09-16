@@ -28,6 +28,7 @@ pub mod meta;
 pub mod output;
 mod special;
 mod utility;
+pub mod mix;
 
 /// シングルスレッド、通常参照
 pub type ItemSPtr<T> = Rc<RefCell<T>>;
@@ -497,7 +498,8 @@ pub enum EProcessState {
 #[derive(Debug)]
 pub enum EProcessOutput {
     None,
-    WaveBuffer(ProcessOutputBuffer),
+    BufferMono(ProcessOutputBuffer),
+    BufferStereo(ProcessOutputBufferStereo),
     Text(ProcessOutputText),
     Frequency(ProcessOutputFrequency),
 }
@@ -512,7 +514,8 @@ impl EProcessOutput {
     pub fn as_pin_category_flag(&self) -> EPinCategoryFlag {
         match self {
             Self::None => pin_category::START,
-            Self::WaveBuffer(_) => pin_category::WAVE_BUFFER,
+            Self::BufferMono(_) => pin_category::BUFFER_MONO,
+            Self::BufferStereo(_) => pin_category::BUFFER_STEREO,
             Self::Text(_) => pin_category::TEXT,
             Self::Frequency(_) => pin_category::FREQUENCY,
         }
@@ -522,6 +525,14 @@ impl EProcessOutput {
 #[derive(Debug, Clone)]
 pub struct ProcessOutputBuffer {
     buffer: Vec<UniformedSample>,
+    range: EmitterRange,
+    setting: Setting,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcessOutputBufferStereo {
+    ch_left: Vec<UniformedSample>,
+    ch_right: Vec<UniformedSample>,
     range: EmitterRange,
     setting: Setting,
 }

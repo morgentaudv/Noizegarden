@@ -16,20 +16,27 @@ use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
+use crate::carg::v2::mix::stereo::MixStereoProcessData;
 
 /// ピンのカテゴリのビットフラグ
 pub mod pin_category {
     /// グラフのスタートピン
     pub const START: u32 = 1 << 0;
+
     /// 音波バッファが保持できる
-    pub const WAVE_BUFFER: u32 = 1 << 2;
+    pub const BUFFER_MONO: u32 = 1 << 2;
+
+    /// ステレオの音波バッファが保持できる
+    pub const BUFFER_STEREO: u32 = 1 << 3;
+
     /// ただのテキストが保持できる
-    pub const TEXT: u32 = 1 << 3;
+    pub const TEXT: u32 = 1 << 4;
 
     /// 周波数情報を保持する。
-    pub const FREQUENCY: u32 = 1 << 4;
+    pub const FREQUENCY: u32 = 1 << 5;
+
     /// ダミー
-    pub const DUMMY: u32 = WAVE_BUFFER | TEXT | FREQUENCY;
+    pub const DUMMY: u32 = BUFFER_MONO | BUFFER_STEREO | TEXT | FREQUENCY;
 }
 
 /// [`pin_category`]のフラグ制御の補助タイプ
@@ -75,6 +82,7 @@ pub enum ENodeSpecifier {
     AdapterEnvelopeAd,
     AdapterEnvelopeAdsr,
     AdapterWaveSum,
+    MixStereo,
     OutputFile,
     OutputLog,
 }
@@ -93,11 +101,12 @@ impl ENodeSpecifier {
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::EmitterIDFT { .. } => Self::EmitterIDFT,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
-            ENode::AdapterEnvlopeAd { .. } => Self::AdapterEnvelopeAd,
-            ENode::AdapterEnvlopeAdsr { .. } => Self::AdapterEnvelopeAdsr,
+            ENode::AdapterEnvelopeAd { .. } => Self::AdapterEnvelopeAd,
+            ENode::AdapterEnvelopeAdsr { .. } => Self::AdapterEnvelopeAdsr,
             ENode::OutputFile { .. } => Self::OutputFile,
             ENode::OutputLog { .. } => Self::OutputLog,
             ENode::AdapterWaveSum => Self::AdapterWaveSum,
+            ENode::MixStereo{ .. } => Self::MixStereo,
         }
     }
 
@@ -119,6 +128,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
+            Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
         };
 
         let mut map = NodePinItemList::new();
@@ -149,6 +159,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
+            Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
         };
 
         let mut map = NodePinItemList::new();
@@ -184,6 +195,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
+            Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
         };
         if names.is_empty() {
             return false;
@@ -209,6 +221,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
+            Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
         };
         if names.is_empty() {
             return false;
@@ -234,6 +247,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
             Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
+            Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -255,6 +269,7 @@ impl ENodeSpecifier {
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
+            Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
     }

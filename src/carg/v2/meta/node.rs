@@ -10,10 +10,12 @@ use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
+use crate::carg::v2::mix::stereo::MixStereoProcessData;
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
 use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
+use crate::math::float::EFloatCommonPin;
 use crate::math::frequency::EFrequency;
 
 // ----------------------------------------------------------------------------
@@ -74,7 +76,7 @@ pub enum ENode {
     AnalyzerDFT { level: usize },
     /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-ad")]
-    AdapterEnvlopeAd {
+    AdapterEnvelopeAd {
         attack_time: f64,
         decay_time: f64,
         attack_curve: f64,
@@ -82,7 +84,7 @@ pub enum ENode {
     },
     /// 振幅をADSR(Attack-Delay-Sustain-Release)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-adsr")]
-    AdapterEnvlopeAdsr {
+    AdapterEnvelopeAdsr {
         attack_time: f64,
         decay_time: f64,
         sustain_time: f64,
@@ -96,6 +98,11 @@ pub enum ENode {
     /// バッファを全部合わせる。
     #[serde(rename = "adapter-wave-sum")]
     AdapterWaveSum,
+    #[serde(rename = "mix-stereo")]
+    MixStereo {
+        gain_0: EFloatCommonPin,
+        gain_1: EFloatCommonPin,
+    },
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
     OutputFile {
@@ -116,8 +123,8 @@ impl ENode {
             | ENode::EmitterTriangle { .. }
             | ENode::EmitterSquare { .. }
             | ENode::EmitterSawtooth { .. } => SineWaveEmitterProcessData::create_from(self, setting),
-            ENode::AdapterEnvlopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
-            ENode::AdapterEnvlopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
+            ENode::AdapterEnvelopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
+            ENode::AdapterEnvelopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFSProcessData::create_from(self, setting),
@@ -125,6 +132,7 @@ impl ENode {
             ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),
             ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
+            ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),
         }
     }
 }

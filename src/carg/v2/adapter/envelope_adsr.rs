@@ -36,8 +36,8 @@ impl TPinCategory for AdapterEnvelopeAdsrProcessData {
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::WAVE_BUFFER),
-            "out" => Some(pin_category::WAVE_BUFFER),
+            "in" => Some(pin_category::BUFFER_MONO),
+            "out" => Some(pin_category::BUFFER_MONO),
             _ => None,
         }
     }
@@ -45,7 +45,7 @@ impl TPinCategory for AdapterEnvelopeAdsrProcessData {
     /// Inputピンのコンテナフラグ
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::WAVE_BUFFER_PHANTOM),
+            "in" => Some(input::container_category::BUFFER_MONO_PHANTOM),
             _ => None,
         }
     }
@@ -54,7 +54,7 @@ impl TPinCategory for AdapterEnvelopeAdsrProcessData {
 impl AdapterEnvelopeAdsrProcessData {
     pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::AdapterEnvlopeAdsr {
+            ENode::AdapterEnvelopeAdsr {
                 attack_time,
                 decay_time,
                 sustain_time,
@@ -128,7 +128,7 @@ impl AdapterEnvelopeAdsrProcessData {
 
         let borrowed = linked_output_pin.borrow();
         let input = match &borrowed.output {
-            EProcessOutputContainer::WaveBuffer(v) => v,
+            EProcessOutputContainer::BufferMono(v) => v,
             _ => unreachable!("Unexpected branch"),
         };
 

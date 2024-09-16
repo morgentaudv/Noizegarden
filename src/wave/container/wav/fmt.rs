@@ -39,7 +39,7 @@ const_assert_eq!(LowWaveFormatHeader::STRUCTURE_SIZE, 24usize);
 /// @brief IMA-ADPCMへの変換は[`IMAADPCMWriter`]を使うこと。
 #[derive(Debug, Clone, Copy)]
 pub enum EBuilder {
-    Normal { samples_per_sec: u32, bits_per_sample: u16 }, // Linear-PCM
+    Normal { samples_per_sec: u32, bits_per_sample: u16, channels: usize }, // Linear-PCM
     PCMU,                                                  // u-lawの8kHz、8Bitsの特殊ビットスケールのPCM
     IMA_ADPCM { samples_per_sec: u32 },
 }
@@ -58,14 +58,17 @@ impl LowWaveFormatHeader {
             EBuilder::Normal {
                 samples_per_sec,
                 bits_per_sample,
+                channels,
             } => {
-                let block_size = (bits_per_sample >> 3) as u16;
+                // チャンネル数 * 1サンプルあたりのビット数 / 8で求める。
+                let block_size = (bits_per_sample >> 3) * (channels as u16);
+                // サンプリング周波数 * ブロックサイズで求める
                 let bytes_per_sec = (block_size as u32) * samples_per_sec;
                 Self {
                     fmt_chunk_id: Self::ID_SPECIFIER,
                     fmt_chunk_size: Self::NORMAL_CHUNK_SIZE,
                     wave_format_type: WAV_DATATYPE_LPCM,
-                    channel: 1,
+                    channel: channels as u16,
                     samples_per_sec,
                     bytes_per_sec,
                     block_size,

@@ -25,9 +25,9 @@ impl TPinCategory for AdapterWaveSumProcessData {
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
             "in_1" | "in_2" | "in_3" | "in_4" | "in_5" | "in_6" | "in_7" | "in_8" | "in_9" | "in_10" => {
-                Some(pin_category::WAVE_BUFFER)
+                Some(pin_category::BUFFER_MONO)
             }
-            "out" => Some(pin_category::WAVE_BUFFER),
+            "out" => Some(pin_category::BUFFER_MONO),
             _ => None,
         }
     }
@@ -35,7 +35,7 @@ impl TPinCategory for AdapterWaveSumProcessData {
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
             "in_1" | "in_2" | "in_3" | "in_4" | "in_5" | "in_6" | "in_7" | "in_8" | "in_9" | "in_10" => {
-                Some(input::container_category::WAVE_BUFFER_PHANTOM)
+                Some(input::container_category::BUFFER_MONO_PHANTOM)
             }
             _ => None,
         }
@@ -67,7 +67,7 @@ impl AdapterWaveSumProcessData {
             for output_pin in &output_pins {
                 let borrowed = output_pin.borrow();
                 let input = match &borrowed.output {
-                    EProcessOutputContainer::WaveBuffer(v) => v.clone(),
+                    EProcessOutputContainer::BufferMono(v) => v.clone(),
                     _ => unreachable!("Unexpected branch"),
                 };
                 inputs.push(input);
@@ -92,7 +92,7 @@ impl AdapterWaveSumProcessData {
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::WaveBuffer(ProcessOutputBuffer {
+                EProcessOutput::BufferMono(ProcessOutputBuffer {
                     buffer,
                     setting: self.setting.clone(),
                     range: EmitterRange{ start: 0.0, length: 0.0 },

@@ -137,7 +137,7 @@ fn process_v1(input: &Vec<v1::Input>, setting: &v1::Setting, output: &v1::Output
                             EBitsPerSample::Bits16 => 16,
                         },
                     }
-                    .build_container(processed_container)
+                    .build_mono(processed_container)
                     .unwrap()
                 }
             };

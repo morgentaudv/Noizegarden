@@ -32,7 +32,7 @@ impl TPinCategory for IDFTEmitterProcessData {
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
             "in" => Some(pin_category::FREQUENCY),
-            "out" => Some(pin_category::WAVE_BUFFER),
+            "out" => Some(pin_category::BUFFER_MONO),
             _ => None,
         }
     }
@@ -94,7 +94,7 @@ impl IDFTEmitterProcessData {
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::WaveBuffer(ProcessOutputBuffer {
+                EProcessOutput::BufferMono(ProcessOutputBuffer {
                     buffer,
                     setting: self.setting.clone(),
                     range: EmitterRange {

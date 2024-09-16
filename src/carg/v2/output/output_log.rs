@@ -1,9 +1,10 @@
-use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer, TextDynamicItem, BufferMonoDynamicItem};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
     ENode, EParsedOutputLogMode, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
+use crate::carg::v2::meta::output::EProcessOutputContainer;
 
 #[derive(Debug)]
 pub struct OutputLogProcessData {
@@ -40,7 +41,7 @@ impl TPinCategory for OutputLogProcessData {
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::WAVE_BUFFER | pin_category::TEXT),
+            "in" => Some(pin_category::BUFFER_MONO | pin_category::TEXT),
             _ => None,
         }
     }
@@ -105,3 +106,63 @@ impl TProcess for OutputLogProcessData {
         self.update_state(input)
     }
 }
+
+// ----------------------------------------------------------------------------
+// EOutputLogItem
+// ----------------------------------------------------------------------------
+
+/// [`EProcessInputContainer::OutputLog`]の内部コンテナ
+#[derive(Debug, Clone)]
+pub enum EOutputLogItem {
+    BuffersDynamic(BufferMonoDynamicItem),
+    TextDynamic(TextDynamicItem),
+}
+
+impl EOutputLogItem {
+    /// 今のセッティングで`output`が受け取れるか？
+    pub fn can_support(&self, output: &EProcessOutputContainer) -> bool {
+        match self {
+            EOutputLogItem::BuffersDynamic(_) => match output {
+                EProcessOutputContainer::Empty | EProcessOutputContainer::BufferMono(_) => true,
+                _ => false,
+            },
+            EOutputLogItem::TextDynamic(_) => match output {
+                EProcessOutputContainer::Empty | EProcessOutputContainer::Text(_) => true,
+                _ => false,
+            },
+        }
+    }
+
+    /// `output`からセッティングをリセットする。
+    pub fn reset_with(&mut self, output: &EProcessOutputContainer) {
+        if self.can_support(output) {
+            return;
+        }
+
+        match output {
+            EProcessOutputContainer::BufferMono(_) => {
+                *self = Self::BuffersDynamic(BufferMonoDynamicItem::new());
+            }
+            EProcessOutputContainer::Text(_) => {
+                *self = Self::TextDynamic(TextDynamicItem::new());
+            }
+            _ => unreachable!("Unexpected branch"),
+        }
+    }
+
+    /// 種類をかえずに中身だけをリセットする。
+    pub fn reset(&mut self) {
+        match self {
+            EOutputLogItem::BuffersDynamic(v) => {
+                *v = BufferMonoDynamicItem::new();
+            }
+            EOutputLogItem::TextDynamic(v) => {
+                v.buffer.clear();
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

@@ -265,7 +265,7 @@ pub struct WaveBuilder {
 }
 
 impl WaveBuilder {
-    pub fn build_container(&self, uniformed_samples: Vec<UniformedSample>) -> Option<WaveContainer> {
+    pub fn build_mono(&self, uniformed_samples: Vec<UniformedSample>) -> Option<WaveContainer> {
         if self.bits_per_sample != 8 && self.bits_per_sample != 16 {
             return None;
         }
@@ -278,6 +278,7 @@ impl WaveBuilder {
         let builder = fmt::EBuilder::Normal {
             samples_per_sec: self.samples_per_sec,
             bits_per_sample: self.bits_per_sample,
+            channels: 1,
         };
         let format_header = LowWaveFormatHeader::from_builder(builder);
         let data_chunk_size = (format_header.unit_block_size() * uniformed_samples.len()) as u32;
@@ -294,7 +295,7 @@ impl WaveBuilder {
     }
 
     /// [u-law](https://en.wikipedia.org/wiki/%CE%9C-law_algorithm)のPCMU形式のコンテナに変換する。
-    pub fn from_container_to_ulaw(container: &WaveContainer) -> Option<WaveContainer> {
+    pub fn from_container_to_ulaw_mono(container: &WaveContainer) -> Option<WaveContainer> {
         if container.channel() > 1 {
             return None;
         }
@@ -336,6 +337,43 @@ impl WaveBuilder {
             fact: None,
             data: data_chunk,
             uniformed_buffer: dst_container,
+        })
+    }
+
+    pub fn build_stereo(&self, left: Vec<UniformedSample>, right: Vec<UniformedSample>) -> Option<WaveContainer> {
+        if self.bits_per_sample != 8 && self.bits_per_sample != 16 {
+            return None;
+        }
+        if self.samples_per_sec == 0 {
+            return None;
+        }
+        assert_eq!(left.len(), right.len());
+
+        // 今はMONO、PCMで固定する。
+        // ローレベルのヘッダーの情報などを作る。
+        let builder = fmt::EBuilder::Normal {
+            samples_per_sec: self.samples_per_sec,
+            bits_per_sample: self.bits_per_sample,
+            channels: 2,
+        };
+        let format_header = LowWaveFormatHeader::from_builder(builder);
+        let data_chunk_size = (format_header.unit_block_size() * (left.len() + right.len())) as u32;
+        let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size);
+        let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
+
+        /// [`WaveContainer::uniformed_buffer`]はStereoなのでleft→rightのようにする。
+        let mut uniformed_buffer = vec![];
+        uniformed_buffer.reserve(left.len() + right.len());
+        for (l_s, r_s) in left.iter().zip(right.iter()) {
+            uniformed_buffer.push(*l_s);
+            uniformed_buffer.push(*r_s);
+        }
+        Some(WaveContainer {
+            riff: riff_header,
+            fmt: format_header,
+            fact: None,
+            data: data_chunk,
+            uniformed_buffer,
         })
     }
 }
