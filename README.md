@@ -1,3 +1,12 @@
+# Noizegarden
+
+> 前FourierPractice (Formerly, FourierPractice)
+
+Rust言語で作成中の、ノードベースのプロシージャルの音型生成、音型分析プログラムです。
+Node based musical analysis application written in Rustlang, also features making procedural sound waves, and so on.
+
+---
+
 # FourierPractice
 
 「サウンドプログラミング入門（青木　直史、著）」を読みながら内容をRustで実装したロジックの塊です。
