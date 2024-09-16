@@ -3,6 +3,7 @@
 > 前FourierPractice (Formerly, FourierPractice)
 
 Rust言語で作成中の、ノードベースのプロシージャルの音型生成、音型分析プログラムです。
+
 Node based musical analysis application written in Rustlang, also features making procedural sound waves, and so on.
 
 ---
