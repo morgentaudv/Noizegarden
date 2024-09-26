@@ -16,11 +16,11 @@ use crate::{
         v2::{EProcessState, ProcessControlItem, ProcessProcessorInput, TProcess},
     },
     wave::{
-        analyze::window::EWindowFunction,
         container::WaveBuilder,
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
+use crate::math::window::EWindowFunction;
 
 #[derive(Debug)]
 pub struct OutputFileProcessData {

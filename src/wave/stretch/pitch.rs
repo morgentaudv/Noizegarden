@@ -4,8 +4,9 @@ use derive_builder::Builder;
 
 use crate::{
     math::sinc,
-    wave::{analyze::window::EWindowFunction, sample::UniformedSample},
+    wave::{sample::UniformedSample},
 };
+use crate::math::window::EWindowFunction;
 
 /// `pitch_rate`にそって音源のプレイレートを変動しピッチをシフトする。
 #[derive(Default, Debug, Clone, Copy, PartialEq, Builder)]

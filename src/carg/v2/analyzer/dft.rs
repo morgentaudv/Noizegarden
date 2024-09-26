@@ -3,16 +3,17 @@ use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFla
 use crate::wave::analyze::{
     analyzer::{FrequencyAnalyzerV2, WaveContainerSetting},
     method::EAnalyzeMethod,
-    window::EWindowFunction,
 };
 use itertools::Itertools;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
+use crate::math::window::EWindowFunction;
 
 #[derive(Debug)]
 pub struct AnalyzerDFTProcessData {
     common: ProcessControlItem,
     level: usize,
+    window_function: EWindowFunction,
 }
 
 impl TPinCategory for AnalyzerDFTProcessData {
@@ -43,18 +44,15 @@ impl TPinCategory for AnalyzerDFTProcessData {
 impl AnalyzerDFTProcessData {
     pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::AnalyzerDFT { level } => {
-                let item = Self::new(*level);
+            ENode::AnalyzerDFT { level, window_function } => {
+                let item = Self {
+                    common: ProcessControlItem::new(ENodeSpecifier::AnalyzerDFT),
+                    level: *level,
+                    window_function: *window_function,
+                };
                 SItemSPtr::new(item)
             }
             _ => unreachable!("Unexpected branch."),
-        }
-    }
-
-    fn new(level: usize) -> Self {
-        Self {
-            common: ProcessControlItem::new(ENodeSpecifier::AnalyzerDFT),
-            level,
         }
     }
 
@@ -86,7 +84,7 @@ impl AnalyzerDFTProcessData {
                 frequency_start: 0.0,
                 frequency_width: sample_rate as f64,
                 frequency_bin_count: self.level as u32,
-                window_function: EWindowFunction::None,
+                window_function: self.window_function,
             };
 
             let setting = WaveContainerSetting {

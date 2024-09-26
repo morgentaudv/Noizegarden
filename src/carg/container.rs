@@ -5,7 +5,6 @@ use std::{
 };
 
 use crate::wave::{
-    analyze::window::EWindowFunction,
     container::WaveBuilder,
     sample::UniformedSample,
     sine::setting::{EBitsPerSample, WaveSound},
@@ -14,6 +13,7 @@ use crate::wave::{
 use itertools::Itertools;
 use crate::carg::v2::meta;
 use crate::carg::v2::meta::node::ENode;
+use crate::math::window::EWindowFunction;
 use super::{
     v1,
     v2::{self},

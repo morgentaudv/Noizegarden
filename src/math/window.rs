@@ -1,0 +1,43 @@
+use serde::{Deserialize, Serialize};
+use crate::wave::PI2;
+
+/// 窓関数（Windowing Function）の種類の値を持つ。
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum EWindowFunction {
+    /// Rectangular Window
+    #[serde(rename = "none")]
+    None,
+    /// [Hann Window](https://en.wikipedia.org/wiki/Window_function#Hann_and_Hamming_windows)
+    #[serde(rename = "hann")]
+    Hann,
+}
+
+impl Default for EWindowFunction {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl EWindowFunction {
+    /// 掛け算数値を計算する。もし範囲外なら、0だけを返す。
+    pub fn get_factor(&self, length: f64, time: f64) -> f64 {
+        let t = (time / length).clamp(0.0, 1.0);
+        match self {
+            Self::Hann => {
+                // もし範囲外なら0を返す。
+                if time < 0.0 || time > length {
+                    return 0f64;
+                }
+
+                // 中央が一番高く、両端が0に収束する。
+                (1f64 - (PI2 * t).cos()) * 0.5f64
+            }
+            Self::None => 1.0,
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------
+

@@ -5,6 +5,7 @@ use num_traits::{Float, FromPrimitive};
 pub mod frequency;
 pub mod timer;
 pub mod float;
+pub mod window;
 
 /// sinc関数。[`f32`]と[`f64`]のみサポート
 pub fn sinc<T>(v: T) -> T

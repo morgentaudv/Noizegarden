@@ -1,9 +1,9 @@
 use derive_builder::Builder;
 use itertools::Itertools;
-
+use crate::math::window::EWindowFunction;
 use crate::wave::{complex::Complex, container::WaveContainer, sample::UniformedSample, PI2};
 
-use super::{sine_freq::SineFrequency, window::EWindowFunction, EAnalyzeMethod};
+use super::{sine_freq::SineFrequency, EAnalyzeMethod};
 
 /// AnalyzerV2。
 #[derive(Default, Debug, Clone, Copy, PartialEq, Builder)]

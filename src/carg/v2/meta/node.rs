@@ -19,7 +19,7 @@ use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::math::float::EFloatCommonPin;
 use crate::math::frequency::EFrequency;
-
+use crate::math::window::EWindowFunction;
 // ----------------------------------------------------------------------------
 // ENode
 // ----------------------------------------------------------------------------
@@ -72,6 +72,7 @@ pub enum ENode {
     #[serde(rename = "emitter-idft")]
     EmitterIDFT {
         sample_length: usize,
+
     },
     /// 周波数情報から音波バッファを生成する。
     #[serde(rename = "emitter-ifft")]
@@ -80,7 +81,10 @@ pub enum ENode {
     },
     /// DFTで音波を分析する。
     #[serde(rename = "analyze-dft")]
-    AnalyzerDFT { level: usize },
+    AnalyzerDFT {
+        level: usize,
+        window_function: EWindowFunction,
+    },
     /// FFTで音波を分析する。
     #[serde(rename = "analyze-fft")]
     AnalyzerFFT { level: usize },
