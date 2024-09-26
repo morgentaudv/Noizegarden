@@ -14,6 +14,9 @@ pub enum EWindowFunction {
     /// Hamming Window部分を参考すること。
     #[serde(rename = "hamming")]
     Hamming,
+    /// [Blackman Window](https://en.wikipedia.org/wiki/Window_function#Blackman_window)
+    #[serde(rename = "blackman")]
+    Blackman,
 }
 
 impl Default for EWindowFunction {
@@ -49,6 +52,15 @@ impl EWindowFunction {
                 // Hammingは両サイドが0ではない、が、最初のSidelobeをなくす。
                 let c2pn_n = (PI2 * t).cos();
                 A0 + (A1 * c2pn_n)
+            }
+            Self::Blackman => {
+                const A0: f64 = 0.42;
+                const A1: f64 = 0.5;
+                const A2: f64 = 0.08;
+
+                let c2pn_n = (PI2 * t).cos();
+                let c4pn_n = (PI2 * 2.0 * t).cos();
+                A0 - (A1 * c2pn_n) + (A2 * c4pn_n)
             }
         }
     }
