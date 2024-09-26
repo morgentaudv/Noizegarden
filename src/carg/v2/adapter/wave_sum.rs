@@ -1,10 +1,13 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{EProcessOutput, EProcessState, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
-use itertools::Itertools;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::{
+    EProcessOutput, EProcessState, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
+    SItemSPtr, Setting, TProcess, TProcessItemPtr,
+};
 use crate::wave::sample::UniformedSample;
+use itertools::Itertools;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug)]
@@ -46,7 +49,7 @@ impl AdapterWaveSumProcessData {
     pub fn create_from(_node: &ENode, setting: &Setting) -> TProcessItemPtr {
         let item = Self {
             common: ProcessControlItem::new(ENodeSpecifier::AdapterWaveSum),
-            setting: setting.clone()
+            setting: setting.clone(),
         };
         SItemSPtr::new(item)
     }
@@ -92,11 +95,7 @@ impl AdapterWaveSumProcessData {
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::BufferMono(ProcessOutputBuffer {
-                    buffer,
-                    setting: self.setting.clone(),
-                    range: EmitterRange{ start: 0.0, length: 0.0 },
-                }),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
             )
             .unwrap();
 

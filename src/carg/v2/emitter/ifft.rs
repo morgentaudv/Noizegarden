@@ -92,14 +92,7 @@ impl IFFTEmitterProcessData {
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer {
-                    buffer,
-                    setting: self.setting.clone(),
-                    range: EmitterRange {
-                        start: 0.0,
-                        length: 0.0,
-                    }, // これいらなくね
-                }),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
             )
             .unwrap();
 

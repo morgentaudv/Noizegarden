@@ -15,24 +15,29 @@ pub struct IDFTEmitterProcessData {
     setting: Setting,
     common: ProcessControlItem,
     sample_length: usize,
+    /// 半分ずつ重ねるか
+    overlap: bool,
 }
+
+const INPUT_IN: &'static str = "in";
+const OUTPUT_OUT: &'static str = "out";
 
 impl TPinCategory for IDFTEmitterProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
     fn get_input_pin_names() -> Vec<&'static str> {
-        vec!["in"]
+        vec![INPUT_IN]
     }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
     fn get_output_pin_names() -> Vec<&'static str> {
-        vec!["out"]
+        vec![OUTPUT_OUT]
     }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::FREQUENCY),
-            "out" => Some(pin_category::BUFFER_MONO),
+            INPUT_IN => Some(pin_category::FREQUENCY),
+            OUTPUT_OUT => Some(pin_category::BUFFER_MONO),
             _ => None,
         }
     }
@@ -40,7 +45,7 @@ impl TPinCategory for IDFTEmitterProcessData {
     /// Inputピンのコンテナフラグ
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::FREQUENCY_PHANTOM),
+            INPUT_IN => Some(input::container_category::FREQUENCY_PHANTOM),
             _ => None,
         }
     }
@@ -49,11 +54,12 @@ impl TPinCategory for IDFTEmitterProcessData {
 impl IDFTEmitterProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::EmitterIDFT { sample_length } => {
+            ENode::EmitterIDFT { sample_length, overlap } => {
                 let item = IDFTEmitterProcessData {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::EmitterIDFT),
                     sample_length: *sample_length,
+                    overlap: *overlap,
                 };
                 SItemSPtr::new(item)
             }
@@ -66,7 +72,7 @@ impl IDFTEmitterProcessData {
         // これなに…
         let linked_output_pin = self
             .common
-            .get_input_pin("in")
+            .get_input_pin(INPUT_IN)
             .unwrap()
             .upgrade()
             .unwrap()
@@ -91,17 +97,17 @@ impl IDFTEmitterProcessData {
         .unwrap();
 
         // outputのどこかに保持する。
+        // もし`overlap`がtrueなら、半分ずつ重ねる。
+        let sample_offset = if self.overlap { self.sample_length >> 1 } else { 0usize };
+
         self.common
             .insert_to_output_pin(
-                "out",
-                EProcessOutput::BufferMono(ProcessOutputBuffer {
+                OUTPUT_OUT,
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new_sample_offset(
                     buffer,
-                    setting: self.setting.clone(),
-                    range: EmitterRange {
-                        start: 0.0,
-                        length: 0.0,
-                    }, // これいらなくね
-                }),
+                    self.setting.clone(),
+                    sample_offset,
+                )),
             )
             .unwrap();
 

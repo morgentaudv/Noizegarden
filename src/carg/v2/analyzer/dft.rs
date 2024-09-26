@@ -14,28 +14,34 @@ pub struct AnalyzerDFTProcessData {
     common: ProcessControlItem,
     level: usize,
     window_function: EWindowFunction,
+    /// 半分ずつ重ねるか
+    overlap: bool,
 }
+
+const INPUT_IN: &'static str = "in";
+const OUTPUT_INFO: &'static str = "out_info";
+const OUTPUT_FREQ: &'static str = "out_freq";
 
 impl TPinCategory for AnalyzerDFTProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
-    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+    fn get_input_pin_names() -> Vec<&'static str> { vec![INPUT_IN] }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec!["out_info", "out_freq"] }
+    fn get_output_pin_names() -> Vec<&'static str> { vec![OUTPUT_INFO, OUTPUT_FREQ] }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::BUFFER_MONO),
-            "out_info" => Some(pin_category::TEXT),
-            "out_freq" => Some(pin_category::FREQUENCY),
+            INPUT_IN => Some(pin_category::BUFFER_MONO),
+            OUTPUT_INFO => Some(pin_category::TEXT),
+            OUTPUT_FREQ => Some(pin_category::FREQUENCY),
             _ => None,
         }
     }
 
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::BUFFER_MONO_DYNAMIC),
+            INPUT_IN => Some(input::container_category::BUFFER_MONO_DYNAMIC),
             _ => None,
         }
     }
@@ -44,11 +50,12 @@ impl TPinCategory for AnalyzerDFTProcessData {
 impl AnalyzerDFTProcessData {
     pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::AnalyzerDFT { level, window_function } => {
+            ENode::AnalyzerDFT { level, window_function, overlap } => {
                 let item = Self {
                     common: ProcessControlItem::new(ENodeSpecifier::AnalyzerDFT),
                     level: *level,
                     window_function: *window_function,
+                    overlap: *overlap,
                 };
                 SItemSPtr::new(item)
             }
@@ -58,7 +65,7 @@ impl AnalyzerDFTProcessData {
 
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // チェックしてself.levelよりバッファが多くないと処理しない。
-        let can_process = match &*self.common.get_input_internal("in").unwrap() {
+        let can_process = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
             EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
             _ => false,
         };
@@ -66,10 +73,22 @@ impl AnalyzerDFTProcessData {
             return;
         }
 
-        let (buffer, sample_rate) = match &mut *self.common.get_input_internal_mut("in").unwrap() {
+        let (buffer, sample_rate) = match &mut *self.common.get_input_internal_mut(INPUT_IN).unwrap() {
             EProcessInputContainer::BufferMonoDynamic(v) => {
-                let buffer = v.buffer.drain(..self.level).collect_vec();
-                (buffer, v.setting.as_ref().unwrap().sample_rate)
+                if self.overlap {
+                    // 全体のdrainが使えない。
+                    // 前半分はdrainできるけど、残り半分はコピーする必要がある。
+                    let drain_samples = self.level >> 1;
+                    let mut buffer = v.buffer.drain(..drain_samples).collect_vec();
+
+                    // そして残りの半分をコピーしてbufferに追加する。
+                    buffer.append(&mut v.buffer.iter().take(drain_samples).copied().collect_vec());
+                    (buffer, v.setting.as_ref().unwrap().sample_rate)
+                }
+                else {
+                    let buffer = v.buffer.drain(..self.level).collect_vec();
+                    (buffer, v.setting.as_ref().unwrap().sample_rate)
+                }
             }
             _ => unreachable!("Unexpected input."),
         };
@@ -96,7 +115,7 @@ impl AnalyzerDFTProcessData {
         };
 
         // out_info関連出力処理
-        if self.common.is_output_pin_connected("out_info") {
+        if self.common.is_output_pin_connected(OUTPUT_INFO) {
             let mut log = "".to_owned();
             for frequency in &frequencies {
                 if frequency.amplitude < 5.0 {
@@ -107,19 +126,21 @@ impl AnalyzerDFTProcessData {
             }
 
             self.common
-                .insert_to_output_pin("out_info", EProcessOutput::Text(ProcessOutputText { text: log }))
+                .insert_to_output_pin(OUTPUT_INFO, EProcessOutput::Text(ProcessOutputText { text: log }))
                 .unwrap();
         }
 
         // out_freq関連出力処理
-        if self.common.is_output_pin_connected("out_freq") {
+        if self.common.is_output_pin_connected(OUTPUT_FREQ) {
             let analyzed_sample_len = self.level;
+
             self.common
                 .insert_to_output_pin(
-                    "out_freq",
+                    OUTPUT_FREQ,
                     EProcessOutput::Frequency(ProcessOutputFrequency {
                         frequencies,
                         analyzed_sample_len,
+                        overlap: self.overlap,
                     }),
                 )
                 .unwrap();

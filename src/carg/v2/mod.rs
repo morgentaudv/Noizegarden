@@ -525,15 +525,35 @@ impl EProcessOutput {
 #[derive(Debug, Clone)]
 pub struct ProcessOutputBuffer {
     buffer: Vec<UniformedSample>,
-    range: EmitterRange,
+    //range: EmitterRange,
     setting: Setting,
+    sample_offset: usize,
+}
+
+impl ProcessOutputBuffer {
+    pub fn new(buffer: Vec<UniformedSample>, setting: Setting) -> Self {
+        Self {
+            buffer,
+            setting,
+            //range: EmitterRange {
+            //    start: 0.0,
+            //    length: 0.0,
+            //},
+            sample_offset: 0usize,
+        }
+    }
+
+    pub fn new_sample_offset(buffer: Vec<UniformedSample>, setting: Setting, offset: usize) -> Self {
+        let mut item = Self::new(buffer, setting);
+        item.sample_offset = offset;
+        item
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ProcessOutputBufferStereo {
     ch_left: Vec<UniformedSample>,
     ch_right: Vec<UniformedSample>,
-    range: EmitterRange,
     setting: Setting,
 }
 
@@ -546,6 +566,7 @@ pub struct ProcessOutputText {
 pub struct ProcessOutputFrequency {
     frequencies: Vec<SineFrequency>,
     analyzed_sample_len: usize,
+    overlap: bool,
 }
 
 pub trait TProcess: std::fmt::Debug {

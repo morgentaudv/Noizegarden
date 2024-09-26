@@ -1,13 +1,13 @@
 use itertools::Itertools;
 use num_traits::Pow;
 
+use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
     ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
-use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug, Clone)]
@@ -79,10 +79,14 @@ pub struct AdapterEnvelopeAdProcessData {
 
 impl TPinCategory for AdapterEnvelopeAdProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
-    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+    fn get_input_pin_names() -> Vec<&'static str> {
+        vec!["in"]
+    }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec!["out"] }
+    fn get_output_pin_names() -> Vec<&'static str> {
+        vec!["out"]
+    }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
@@ -164,11 +168,7 @@ impl AdapterEnvelopeAdProcessData {
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::BufferMono(ProcessOutputBuffer {
-                    buffer,
-                    setting: input.setting.clone(),
-                    range: input.range,
-                }),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, input.setting.clone())),
             )
             .unwrap();
 

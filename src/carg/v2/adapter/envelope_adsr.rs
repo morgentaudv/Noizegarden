@@ -181,11 +181,7 @@ impl AdapterEnvelopeAdsrProcessData {
         }
 
         // outputのどこかに保持する。
-        self.output = Some(ProcessOutputBuffer {
-            buffer: applied_buffer,
-            setting: input.setting.clone(),
-            range: input.range,
-        });
+        self.output = Some(ProcessOutputBuffer::new(applied_buffer, input.setting.clone()));
 
         // 状態変更。
         if in_input.is_children_all_finished() {

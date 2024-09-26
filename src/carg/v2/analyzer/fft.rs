@@ -126,6 +126,7 @@ impl AnalyzerFFTProcessData {
                     EProcessOutput::Frequency(ProcessOutputFrequency {
                         frequencies,
                         analyzed_sample_len,
+                        overlap: false,
                     }),
                 )
                 .unwrap();

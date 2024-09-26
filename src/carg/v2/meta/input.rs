@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::output::output_file::EOutputFileInput;
 use crate::carg::v2::output::output_log::EOutputLogItem;
@@ -58,7 +59,6 @@ pub enum EProcessInputContainer {
 #[derive(Debug, Clone)]
 pub struct BufferMonoDynamicItem {
     pub buffer: Vec<UniformedSample>,
-    pub range: Option<EmitterRange>,
     pub setting: Option<Setting>,
 }
 
@@ -66,8 +66,35 @@ impl BufferMonoDynamicItem {
     pub fn new() -> Self {
         Self {
             buffer: vec![],
-            range: None,
             setting: None,
+        }
+    }
+
+    pub fn update(&mut self, output: &EProcessOutputContainer) {
+        // WaveBufferであるかをチェック。
+        match output {
+            // 記入する。
+            EProcessOutputContainer::BufferMono(v) => {
+                self.setting = Some(v.setting.clone());
+
+                // 24-09-27 `sample_offset`に気をつける。
+                let sample_offset = v.sample_offset.min(self.buffer.len());
+                if sample_offset == 0 {
+                    self.buffer.append(&mut v.buffer.clone());
+                }
+                else {
+                    // bufferのラストからsample_offset分を持ってくる。
+                    {
+                        let mut buffer_it = self.buffer.iter_mut().rev().take(sample_offset).rev();
+                        let v_it = v.buffer.iter().take(sample_offset);
+                        buffer_it.zip(v_it).for_each(|(dst, src)| *dst += *src);
+                    }
+
+                    // 残り分は全部Appendする。
+                    self.buffer.append(&mut v.buffer.iter().skip(sample_offset).copied().collect());
+                }
+            }
+            _ => unreachable!("Unexpected output"),
         }
     }
 }
@@ -77,7 +104,6 @@ impl BufferMonoDynamicItem {
 pub struct BufferStereoDynamicItem {
     pub ch_left: Vec<UniformedSample>,
     pub ch_right: Vec<UniformedSample>,
-    pub range: Option<EmitterRange>,
     pub setting: Option<Setting>,
 }
 
@@ -86,7 +112,6 @@ impl BufferStereoDynamicItem {
         Self {
             ch_left: vec![],
             ch_right: vec![],
-            range: None,
             setting: None,
         }
     }
@@ -170,16 +195,7 @@ impl EProcessInputContainer {
                 }
             }
             EProcessInputContainer::BufferMonoDynamic(dst) => {
-                // WaveBufferであるかをチェック。
-                match output {
-                    // 記入する。
-                    EProcessOutputContainer::BufferMono(v) => {
-                        dst.range = Some(v.range);
-                        dst.setting = Some(v.setting.clone());
-                        dst.buffer.append(&mut v.buffer.clone());
-                    }
-                    _ => unreachable!("Unexpected output"),
-                }
+                dst.update(output);
             }
             EProcessInputContainer::BufferStereoDynamic(dst) => {
                 // WaveBufferであるかをチェック。
@@ -188,7 +204,6 @@ impl EProcessInputContainer {
                     EProcessOutputContainer::BufferStereo(v) => {
                         dst.ch_left.append(&mut v.ch_left.clone());
                         dst.ch_right.append(&mut v.ch_right.clone());
-                        dst.range = Some(v.range);
                         dst.setting = Some(v.setting.clone());
                     }
                     _ => unreachable!("Unexpected output"),
@@ -208,18 +223,11 @@ impl EProcessInputContainer {
 
                 // そして入れる。ここからはタイプが同じであること前提。
                 match dst {
-                    EOutputFileInput::Mono(dst) => match output {
-                        // 記入する。
-                        EProcessOutputContainer::BufferMono(v) => {
-                            dst.range = Some(v.range);
-                            dst.setting = Some(v.setting.clone());
-                            dst.buffer.append(&mut v.buffer.clone());
-                        }
-                        _ => unreachable!("Unexpected output"),
+                    EOutputFileInput::Mono(dst) => {
+                        dst.update(output);
                     }
                     EOutputFileInput::Stereo(dst) => match output {
                         EProcessOutputContainer::BufferStereo(v) => {
-                            dst.range = Some(v.range);
                             dst.setting = Some(v.setting.clone());
                             dst.ch_left.append(&mut v.ch_left.clone());
                             dst.ch_right.append(&mut v.ch_right.clone());
@@ -241,7 +249,7 @@ impl EProcessInputContainer {
                         match output {
                             // 記入する。
                             EProcessOutputContainer::BufferMono(v) => {
-                                dst.range = Some(v.range);
+                                //dst.range = Some(v.range);
                                 dst.setting = Some(v.setting.clone());
                                 dst.buffer.append(&mut v.buffer.clone());
                             }

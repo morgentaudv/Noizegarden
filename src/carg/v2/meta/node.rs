@@ -72,6 +72,8 @@ pub enum ENode {
     #[serde(rename = "emitter-idft")]
     EmitterIDFT {
         sample_length: usize,
+        /// 半分ずつ重ねるか
+        overlap: bool,
 
     },
     /// 周波数情報から音波バッファを生成する。
@@ -84,6 +86,8 @@ pub enum ENode {
     AnalyzerDFT {
         level: usize,
         window_function: EWindowFunction,
+        /// 半分ずつ重ねるか
+        overlap: bool,
     },
     /// FFTで音波を分析する。
     #[serde(rename = "analyze-fft")]

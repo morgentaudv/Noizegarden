@@ -104,7 +104,6 @@ impl MixStereoProcessData {
                     ch_left: left_buffer,
                     ch_right: right_buffer,
                     setting: self.setting.clone(),
-                    range: EmitterRange{ start: 0.0, length: 0.0 },
                 }),
             )
             .unwrap();

@@ -301,11 +301,7 @@ impl TProcess for SineWaveEmitterProcessData {
         let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
         self.common.insert_to_output_pin(
             "out",
-            EProcessOutput::BufferMono(ProcessOutputBuffer {
-                buffer,
-                setting: self.setting.clone(),
-                range: self.range,
-            })
+            EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone()))
         ).unwrap();
 
         // 状態確認
