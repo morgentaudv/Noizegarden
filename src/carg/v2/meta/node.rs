@@ -6,7 +6,9 @@ use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
 use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
+use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
+use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
@@ -71,9 +73,17 @@ pub enum ENode {
     EmitterIDFT {
         sample_length: usize,
     },
+    /// 周波数情報から音波バッファを生成する。
+    #[serde(rename = "emitter-ifft")]
+    EmitterIFFT {
+        sample_length: usize,
+    },
     /// DFTで音波を分析する。
     #[serde(rename = "analyze-dft")]
     AnalyzerDFT { level: usize },
+    /// FFTで音波を分析する。
+    #[serde(rename = "analyze-fft")]
+    AnalyzerFFT { level: usize },
     /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-ad")]
     AdapterEnvelopeAd {
@@ -128,8 +138,10 @@ impl ENode {
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
+            ENode::AnalyzerFFT { .. } => AnalyzerFFTProcessData::create_from(self, setting),
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
             ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
+            ENode::EmitterIFFT { .. } => IFFTEmitterProcessData::create_from(self, setting),
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),
             ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
             ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),

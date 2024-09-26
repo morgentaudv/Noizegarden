@@ -16,6 +16,8 @@ use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
 use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
+use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
+use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 
 /// ピンのカテゴリのビットフラグ
@@ -78,7 +80,9 @@ pub enum ENodeSpecifier {
     EmitterTriangle,
     EmitterSquare,
     EmitterIDFT,
+    EmitterIFFT,
     AnalyzerDFT,
+    AnalyzerFFT,
     AdapterEnvelopeAd,
     AdapterEnvelopeAdsr,
     AdapterWaveSum,
@@ -100,7 +104,9 @@ impl ENodeSpecifier {
             ENode::EmitterTriangle { .. } => Self::EmitterTriangle,
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::EmitterIDFT { .. } => Self::EmitterIDFT,
+            ENode::EmitterIFFT { .. } => Self::EmitterIFFT,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
+            ENode::AnalyzerFFT { .. } => Self::AnalyzerFFT,
             ENode::AdapterEnvelopeAd { .. } => Self::AdapterEnvelopeAd,
             ENode::AdapterEnvelopeAdsr { .. } => Self::AdapterEnvelopeAdsr,
             ENode::OutputFile { .. } => Self::OutputFile,
@@ -125,9 +131,11 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
         };
 
@@ -156,9 +164,11 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
         };
 
@@ -192,9 +202,11 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
         };
         if names.is_empty() {
@@ -218,9 +230,11 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
         };
         if names.is_empty() {
@@ -244,9 +258,11 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_pin_categories(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_pin_categories(pin_name),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_pin_categories(pin_name),
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
             Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_pin_categories(pin_name),
             Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
         }
     }
@@ -266,9 +282,11 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_container_flag(pin_name),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_container_flag(pin_name),
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
