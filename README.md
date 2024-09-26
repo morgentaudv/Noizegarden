@@ -6,6 +6,15 @@ Rust言語で作成中の、ノードベースのプロシージャルの音型�
 
 Node based musical analysis application written in Rustlang, also features making procedural sound waves, and so on.
 
+## Todo List
+
+* FFT分析、IFFT変換ノードの実装
+* Delta Timeのモードの反映
+* LU測定ノード
+* LPFノード
+* HPFノード
+* リアルタイムプレビューノード
+
 ---
 
 # FourierPractice

@@ -1,0 +1,144 @@
+{
+    "version": 2,
+    "setting": {
+        "sample_count_frame": 4096,
+        "sample_rate": 44100
+    },
+    "node": {
+        "_start_pin": {
+            "type": "_start_pin"
+        },
+        "_dummy": {
+            "type": "_dummy"
+        },
+        "input_1": {
+            "type": "emitter-sine",
+            "frequency": {
+                "type": "a440",
+                "value": "C4"
+            },
+            "intensity": 0.75,
+            "range": {
+                "start": 0.0,
+                "length": 3.0
+            }
+        },
+        "input_2": {
+            "type": "emitter-sine",
+            "frequency": {
+                "type": "a440",
+                "value": "G4"
+            },
+            "intensity": 0.75,
+            "range": {
+                "start": 0.0,
+                "length": 3.0
+            }
+        },
+        "input_1_ad": {
+            "type": "adapter-envelope-ad",
+            "attack_time": 0.01,
+            "decay_time": 2.0,
+            "attack_curve": 1.0,
+            "decay_curve": 1.25
+        },
+        "input_2_ad": {
+            "type": "adapter-envelope-ad",
+            "attack_time": 0.05,
+            "decay_time": 2.5,
+            "attack_curve": 1.0,
+            "decay_curve": 1.25
+        },
+        "mixer": {
+            "type": "mix-stereo",
+            "gain_0": {
+                "type": "constant",
+                "value": 0.707
+            },
+            "gain_1": {
+                "type": "constant",
+                "value": 0.707
+            }
+        },
+        "output": {
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_envelope_adsr_stereo.wav"
+        }
+    },
+    "relation": [
+        {
+            "prev": {
+                "node": "_start_pin",
+                "pin": "out"
+            },
+            "next":{
+                "node": "input_1",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "_start_pin",
+                "pin": "out"
+            },
+            "next":{
+                "node": "input_2",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input_1",
+                "pin": "out"
+            },
+            "next": {
+                "node": "input_1_ad",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input_2",
+                "pin": "out"
+            },
+            "next": {
+                "node": "input_2_ad",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input_1_ad",
+                "pin": "out"
+            },
+            "next": {
+                "node": "mixer",
+                "pin": "in_1"
+            }
+        },
+        {
+            "prev": {
+                "node": "input_2_ad",
+                "pin": "out"
+            },
+            "next": {
+                "node": "mixer",
+                "pin": "in_2"
+            }
+        },
+        {
+            "prev": {
+                "node": "mixer",
+                "pin": "out"
+            },
+            "next": {
+                "node": "output",
+                "pin": "in"
+            }
+        }
+    ]
+}
