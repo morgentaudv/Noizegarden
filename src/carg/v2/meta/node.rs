@@ -5,7 +5,7 @@ use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, Setting, TProcessItemP
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
-use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
+use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
@@ -127,7 +127,7 @@ impl ENode {
             ENode::AdapterEnvelopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
-            ENode::AnalyzerDFT { .. } => AnalyzerDFSProcessData::create_from(self, setting),
+            ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
             ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),

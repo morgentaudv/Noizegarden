@@ -5,7 +5,6 @@ pub mod relation;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
-use crate::carg::v2::analyzer::AnalyzerDFSProcessData;
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
@@ -16,6 +15,7 @@ use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
+use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 
 /// ピンのカテゴリのビットフラグ
@@ -124,7 +124,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
-            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
@@ -155,7 +155,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
-            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_output_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
@@ -191,7 +191,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
-            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
@@ -217,7 +217,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
-            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_output_pin_names(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
@@ -243,7 +243,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_pin_categories(pin_name),
-            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_pin_categories(pin_name),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_pin_categories(pin_name),
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
             Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
@@ -265,7 +265,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_container_flag(pin_name),
-            Self::AnalyzerDFT => AnalyzerDFSProcessData::get_input_container_flag(pin_name),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_container_flag(pin_name),
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
