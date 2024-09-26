@@ -10,6 +10,10 @@ pub enum EWindowFunction {
     /// [Hann Window](https://en.wikipedia.org/wiki/Window_function#Hann_and_Hamming_windows)
     #[serde(rename = "hann")]
     Hann,
+    /// [Hann Window](https://en.wikipedia.org/wiki/Window_function#Hann_and_Hamming_windows)の
+    /// Hamming Window部分を参考すること。
+    #[serde(rename = "hamming")]
+    Hamming,
 }
 
 impl Default for EWindowFunction {
@@ -23,6 +27,7 @@ impl EWindowFunction {
     pub fn get_factor(&self, length: f64, time: f64) -> f64 {
         let t = (time / length).clamp(0.0, 1.0);
         match self {
+            Self::None => 1.0,
             Self::Hann => {
                 // もし範囲外なら0を返す。
                 if time < 0.0 || time > length {
@@ -32,7 +37,19 @@ impl EWindowFunction {
                 // 中央が一番高く、両端が0に収束する。
                 (1f64 - (PI2 * t).cos()) * 0.5f64
             }
-            Self::None => 1.0,
+            Self::Hamming => {
+                // もし範囲外なら0を返す。
+                if time < 0.0 || time > length {
+                    return 0f64;
+                }
+
+                const A0: f64 = 0.53836;
+                const A1: f64 = 1.0 - A0;
+
+                // Hammingは両サイドが0ではない、が、最初のSidelobeをなくす。
+                let c2pn_n = (PI2 * t).cos();
+                A0 + (A1 * c2pn_n)
+            }
         }
     }
 }
