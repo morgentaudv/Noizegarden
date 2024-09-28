@@ -44,7 +44,7 @@ impl TPinCategory for StartProcessData {
 
 impl TProcess for StartProcessData
 {
-    fn is_finished(&self) -> bool { self.common.state == EProcessState::Finished }
+    fn is_finished(&self) -> bool { self.common.common_state == EProcessState::Finished }
 
     /// いつも更新できる。
     fn can_process(&self) -> bool { true }

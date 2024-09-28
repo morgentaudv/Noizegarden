@@ -185,10 +185,10 @@ impl AdapterEnvelopeAdsrProcessData {
 
         // 状態変更。
         if in_input.is_children_all_finished() {
-            self.common.state = EProcessState::Finished;
+            self.common.common_state = EProcessState::Finished;
             return;
         } else {
-            self.common.state = EProcessState::Playing;
+            self.common.common_state = EProcessState::Playing;
             return;
         }
     }
@@ -196,7 +196,7 @@ impl AdapterEnvelopeAdsrProcessData {
 
 impl TProcess for AdapterEnvelopeAdsrProcessData {
     fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
+        self.common.common_state == EProcessState::Finished
     }
 
     fn can_process(&self) -> bool {
@@ -217,7 +217,7 @@ impl TProcess for AdapterEnvelopeAdsrProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        match self.common.state {
+        match self.common.common_state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
             _ => (),
         }

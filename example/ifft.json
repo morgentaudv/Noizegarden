@@ -1,8 +1,9 @@
 {
     "version": 2,
     "setting": {
+        "time_tick_mode": "realtime",
         "sample_count_frame": 4096,
-        "sample_rate": 44100
+        "sample_rate": 48000
     },
     "node": {
         "_start_pin": {

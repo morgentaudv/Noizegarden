@@ -99,7 +99,7 @@ impl OutputFileProcessData {
         };
 
         // 状態変更。
-        self.common.state = EProcessState::Finished;
+        self.common.common_state = EProcessState::Finished;
     }
 
     fn process_mono(&mut self, v: &BufferMonoDynamicItem) {
@@ -199,7 +199,7 @@ impl OutputFileProcessData {
 impl TProcess for OutputFileProcessData {
     /// データアイテムの処理が終わったか？
     fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
+        self.common.common_state == EProcessState::Finished
     }
 
     fn can_process(&self) -> bool {
@@ -218,7 +218,7 @@ impl TProcess for OutputFileProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        match self.common.state {
+        match self.common.common_state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
             _ => (),
         }

@@ -32,6 +32,9 @@ pub struct SineWaveEmitterProcessData {
     emitter: Option<SineUnitSampleEmitter>,
 }
 
+const INPUT_IN: &'static str = "in";
+const OUTPUT_OUT: &'static str = "out";
+
 impl SineWaveEmitterProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
         match node {
@@ -176,16 +179,16 @@ impl SineWaveEmitterProcessData {
 
 impl TPinCategory for SineWaveEmitterProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
-    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+    fn get_input_pin_names() -> Vec<&'static str> { vec![INPUT_IN] }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec!["out"] }
+    fn get_output_pin_names() -> Vec<&'static str> { vec![OUTPUT_OUT] }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::START),
-            "out" => Some(pin_category::BUFFER_MONO),
+            INPUT_IN => Some(pin_category::START),
+            OUTPUT_OUT => Some(pin_category::BUFFER_MONO),
             _ => None,
         }
     }
@@ -193,7 +196,7 @@ impl TPinCategory for SineWaveEmitterProcessData {
     /// Inputピンのコンテナフラグ
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::EMPTY),
+            INPUT_IN => Some(input::container_category::EMPTY),
             _ => None,
         }
     }
@@ -265,7 +268,7 @@ impl SineWaveEmitterProcessData {
 
 impl TProcess for SineWaveEmitterProcessData {
     fn is_finished(&self) -> bool {
-        self.common.state == EProcessState::Finished
+        self.common.common_state == EProcessState::Finished
     }
 
     /// 自分が処理可能なノードなのかを確認する。
@@ -288,8 +291,8 @@ impl TProcess for SineWaveEmitterProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        if self.common.state == EProcessState::Finished { return; }
-        if self.common.state == EProcessState::Stopped {
+        if self.common.common_state == EProcessState::Finished { return; }
+        if self.common.common_state == EProcessState::Stopped {
             // 初期化する。
             self.initialize();
             assert!(self.emitter.is_some());
@@ -300,16 +303,16 @@ impl TProcess for SineWaveEmitterProcessData {
         let buffer = self.next_samples();
         let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
         self.common.insert_to_output_pin(
-            "out",
+            OUTPUT_OUT,
             EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone()))
         ).unwrap();
 
         // 状態確認
         self.sample_elased_time += elapsed_time;
         if self.sample_elased_time < self.range.length {
-            self.common.state = EProcessState::Playing;
+            self.common.common_state = EProcessState::Playing;
         } else {
-            self.common.state = EProcessState::Finished;
+            self.common.common_state = EProcessState::Finished;
         }
     }
 }

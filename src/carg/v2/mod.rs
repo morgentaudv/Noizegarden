@@ -19,7 +19,7 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
 
 pub mod adapter;
 pub mod analyzer;
@@ -82,19 +82,14 @@ pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
     Ok(container)
 }
 
-/// フレームTickのモード
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ETimeTickMode {
-    Offline,
-    Realtime,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ProcessCommonInput {
     /// `elapsed_time`の解釈方法
     pub time_tick_mode: ETimeTickMode,
-    /// 前のフレーム処理から何秒経ったか
+    /// スタートから何秒経ったか
     pub elapsed_time: f64,
+    /// 前のフレーム処理から何秒経ったか
+    pub frame_time: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -326,7 +321,7 @@ impl NodePinItem {
 #[derive(Debug, Clone)]
 pub struct ProcessControlItem {
     /// アイテムの状態を表す。
-    pub state: EProcessState,
+    pub common_state: EProcessState,
     /// アイテムの識別子タイプ
     pub specifier: ENodeSpecifier,
     /// 経過した時間（秒単位）
@@ -340,7 +335,7 @@ pub struct ProcessControlItem {
 impl ProcessControlItem {
     pub fn new(specifier: ENodeSpecifier) -> Self {
         Self {
-            state: EProcessState::Stopped,
+            common_state: EProcessState::Stopped,
             specifier,
             elapsed_time: 0.0,
             input_pins: specifier.create_input_pins(),
@@ -639,13 +634,15 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     let mut node_queue = VecDeque::new();
     let mut elapsed_time = 0.0;
     loop {
+        let prev_to_now_time = tick_timer.tick().as_secs_f64();
         //elapsed_time += tick_timer.tick().as_secs_f64();
         elapsed_time += 5.0 / 1000.0;
 
         // 共通で使う処理時の入力。
         let input = ProcessCommonInput {
-            time_tick_mode: ETimeTickMode::Offline,
-            elapsed_time
+            time_tick_mode: setting.time_tick_mode,
+            elapsed_time,
+            frame_time: prev_to_now_time,
         };
         node_queue.push_back(start_node.clone());
 
@@ -668,6 +665,8 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
                 is_all_finished &= process_node.borrow().is_finished();
             }
         }
+
+        println!("{:?}s", prev_to_now_time);
 
         if is_all_finished {
             break;

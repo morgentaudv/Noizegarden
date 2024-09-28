@@ -3,6 +3,7 @@ use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Setting {
+    pub time_tick_mode: ETimeTickMode,
     /// 更新時の推奨されるサンプル数。
     /// たとえば48kHzだと約21ms弱ぐらいになる。
     /// この値は必ず2のべき乗数でなければならない。
@@ -26,6 +27,15 @@ impl Setting {
     pub fn get_default_tick_threshold(&self) -> f64 {
         (self.sample_count_frame as f64) / (self.sample_rate as f64)
     }
+}
+
+/// フレームTickのモード
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ETimeTickMode {
+    #[serde(rename = "offline")]
+    Offline,
+    #[serde(rename = "realtime")]
+    Realtime,
 }
 
 // ----------------------------------------------------------------------------
