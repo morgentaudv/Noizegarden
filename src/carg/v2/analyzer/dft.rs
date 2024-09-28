@@ -148,7 +148,19 @@ impl AnalyzerDFTProcessData {
 
         // 状態変更。
         if in_input.is_children_all_finished() {
-            self.common.state = EProcessState::Finished;
+            // 24-09-28 overlapしているときには前のEmitterの処理が終わっても
+            // こっちじゃまだ処理分があるので、バッファが残っている限り終わらせない。
+            let can_more_process = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+                EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
+                _ => false,
+            };
+            if !can_more_process {
+                self.common.state = EProcessState::Finished;
+            }
+            else {
+                self.common.state = EProcessState::Playing;
+            }
+
             return;
         } else {
             self.common.state = EProcessState::Playing;
@@ -163,7 +175,12 @@ impl TProcess for AnalyzerDFTProcessData {
     }
 
     fn can_process(&self) -> bool {
-        self.common.is_all_input_pins_update_notified()
+        let has_buffer = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
+            _ => false,
+        };
+
+        self.common.is_all_input_pins_update_notified() | has_buffer
     }
 
     fn get_common_ref(&self) -> &ProcessControlItem {
