@@ -2,6 +2,7 @@ pub mod input;
 pub mod node;
 pub mod output;
 pub mod relation;
+pub mod setting;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;

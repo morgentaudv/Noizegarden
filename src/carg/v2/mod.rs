@@ -19,6 +19,7 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
+use crate::carg::v2::meta::setting::Setting;
 
 pub mod adapter;
 pub mod analyzer;
@@ -44,17 +45,6 @@ impl SItemSPtr {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Setting {
-    /// 更新時の推奨されるサンプル数。
-    /// たとえば48kHzだと約21ms弱ぐらいになる。
-    /// この値は必ず2のべき乗数でなければならない。
-    sample_count_frame: usize,
-    /// 音生成のために使うサンプルレートを指す。0より上であること。
-    sample_rate: u64,
-}
-
-
 /// 発動条件を示す。
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
@@ -79,13 +69,7 @@ pub struct EmitterRange {
 /// v2バージョンにパーシングする。
 pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
     // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
-    let setting: Setting = serde_json::from_value(info["setting"].clone())?;
-    if !setting.sample_count_frame.is_power_of_two() {
-        return Err(anyhow::anyhow!(
-            "Given `sample_count_frame` is not power of two. (256, 512, 1024...)"
-        ));
-    }
-
+    let setting = Setting::from_serde_value(info["setting"].clone())?;
     let nodes: HashMap<String, ENode> = serde_json::from_value(info["node"].clone())?;
     let relations: Vec<Relation> = serde_json::from_value(info["relation"].clone())?;
 
@@ -648,7 +632,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
     // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
     let start_node = node_map.get("_start_pin").unwrap().clone();
-    let tick_threshold = (setting.sample_count_frame as f64) / (setting.sample_rate as f64);
+    let tick_threshold = setting.get_default_tick_threshold();
     let mut tick_timer = Timer::from_second(tick_threshold);
 
     // 終了条件は、すべてのノードが終わった時。
