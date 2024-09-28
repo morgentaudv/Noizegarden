@@ -2,7 +2,7 @@ use itertools::Itertools;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::output::output_file::EOutputFileInput;
 use crate::carg::v2::output::output_log::EOutputLogItem;
-use crate::carg::v2::{EmitterRange, Setting};
+use crate::carg::v2::{Setting};
 use crate::wave::sample::UniformedSample;
 
 /// [`EProcessInputContainer`]の各アイテムの識別子をまとめている。

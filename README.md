@@ -8,12 +8,18 @@ Node based musical analysis application written in Rustlang, also features makin
 
 ## Todo List
 
-* FFT分析、IFFT変換ノードの実装
+- [x] FFT分析、IFFT変換ノードの実装
+- [x] DFTの窓関数の適用
+- [x] DFTの50%Overlap適用
+- [ ] DFTの50%Overlapがバグっているので確認して修正すること。
+- [ ] FFTの窓関数の適用
+- [ ] FFTの50%Overlap適用
 * Delta Timeのモードの反映
 * LU測定ノード
 * LPFノード
 * HPFノード
 * リアルタイムプレビューノード
+* eguiの導入
 
 ---
 
