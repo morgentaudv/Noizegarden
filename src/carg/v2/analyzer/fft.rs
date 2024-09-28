@@ -6,6 +6,7 @@ use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, Process
 use crate::math::window::EWindowFunction;
 use crate::wave::analyze::analyzer::{FrequencyAnalyzerV2, WaveContainerSetting};
 use crate::wave::analyze::method::EAnalyzeMethod;
+use crate::wave::sample::UniformedSample;
 
 #[derive(Debug)]
 pub struct AnalyzerFFTProcessData {
@@ -64,35 +65,75 @@ impl AnalyzerFFTProcessData {
         }
     }
 
+    fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, u64) {
+        // チェックしてself.levelよりバッファが多くないと処理しない。
+        let mut now_buffer_len = 0usize;
+        let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+            EProcessInputContainer::BufferMonoDynamic(v) => {
+                now_buffer_len = v.buffer.len();
+                now_buffer_len >= self.level
+            }
+            _ => false,
+        };
+
+        let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
+        let v = &mut item.buffer_mono_dynamic_mut().unwrap();
+        let sample_rate = v.setting.as_ref().unwrap().sample_rate;
+
+        // バッファ0補充分岐
+        if !is_buffer_enough && in_input.is_children_all_finished() {
+            return if self.overlap {
+                let ideal_drain_samples = self.level >> 1;
+                let mut buffer = vec![];
+
+                buffer.append(&mut v.buffer.drain(..ideal_drain_samples.min(now_buffer_len)).collect());
+                let remained_samples = buffer.len();
+                buffer.append(
+                    &mut v
+                        .buffer
+                        .iter()
+                        .take(remained_samples.min(ideal_drain_samples))
+                        .copied()
+                        .collect_vec(),
+                );
+                buffer.resize(self.level, UniformedSample::MIN);
+
+                (buffer, sample_rate)
+            } else {
+                let mut buffer = v.buffer.drain(..now_buffer_len).collect_vec();
+                buffer.resize(self.level, UniformedSample::MIN);
+                (buffer, sample_rate)
+            };
+        }
+
+        // 通常分岐
+        if self.overlap {
+            // 全体のdrainが使えない。前半分はdrainできるけど、残り半分はコピーする必要がある。
+            let drain_samples = self.level >> 1;
+            let mut buffer = v.buffer.drain(..drain_samples).collect_vec();
+
+            // そして残りの半分をコピーしてbufferに追加する。
+            buffer.append(&mut v.buffer.iter().take(drain_samples).copied().collect_vec());
+            (buffer, sample_rate)
+        } else {
+            let buffer = v.buffer.drain(..self.level).collect_vec();
+            (buffer, sample_rate)
+        }
+    }
+
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // チェックしてself.levelよりバッファが多くないと処理しない。
-        let can_process = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+        let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
             EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
             _ => false,
         };
-        if !can_process {
+        if !is_buffer_enough && !in_input.is_children_all_finished() {
             return;
         }
 
-        let (buffer, sample_rate) = match &mut *self.common.get_input_internal_mut(INPUT_IN).unwrap() {
-            EProcessInputContainer::BufferMonoDynamic(v) => {
-                if self.overlap {
-                    // 全体のdrainが使えない。
-                    // 前半分はdrainできるけど、残り半分はコピーする必要がある。
-                    let drain_samples = self.level >> 1;
-                    let mut buffer = v.buffer.drain(..drain_samples).collect_vec();
-
-                    // そして残りの半分をコピーしてbufferに追加する。
-                    buffer.append(&mut v.buffer.iter().take(drain_samples).copied().collect_vec());
-                    (buffer, v.setting.as_ref().unwrap().sample_rate)
-                }
-                else {
-                    let buffer = v.buffer.drain(..self.level).collect_vec();
-                    (buffer, v.setting.as_ref().unwrap().sample_rate)
-                }
-            }
-            _ => unreachable!("Unexpected input."),
-        };
+        // もし前ノードからの更新はこれ以上ないはずなのに、バッファがたりなきゃ、
+        // 0値の余裕分を用意する。
+        let (buffer, sample_rate) = self.drain_buffer(in_input);
 
         // このノードでは最初からADを行う。
         // もし尺が足りなければ、そのまま終わる。
@@ -174,14 +215,7 @@ impl TProcess for AnalyzerFFTProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn can_process(&self) -> bool {
-        let has_buffer = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
-            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
-            _ => false,
-        };
-
-        self.common.is_all_input_pins_update_notified() | has_buffer
-    }
+    fn can_process(&self) -> bool { true }
 
     fn get_common_ref(&self) -> &ProcessControlItem {
         &self.common
@@ -192,9 +226,16 @@ impl TProcess for AnalyzerFFTProcessData {
     }
 
     fn try_process(&mut self, input: &ProcessProcessorInput) {
+        let has_buffer = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
+            _ => false,
+        };
+        if !(self.common.is_all_input_pins_update_notified() | input.is_children_all_finished() | has_buffer) {
+            return;
+        }
+
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
-
         match self.common.state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
             _ => (),

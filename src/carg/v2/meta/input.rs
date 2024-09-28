@@ -55,6 +55,26 @@ pub enum EProcessInputContainer {
     FrequencyPhantom,
 }
 
+impl EProcessInputContainer {
+    pub fn buffer_mono_dynamic(&self) -> Option<&BufferMonoDynamicItem> {
+        if let Self::BufferMonoDynamic(item) = self {
+            Some(item)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn buffer_mono_dynamic_mut(&mut self) -> Option<&mut BufferMonoDynamicItem> {
+        if let Self::BufferMonoDynamic(item) = self {
+            Some(item)
+        }
+        else {
+            None
+        }
+    }
+}
+
 /// [`EProcessInputContainer::BufferMonoDynamic`]の内部コンテナ
 #[derive(Debug, Clone)]
 pub struct BufferMonoDynamicItem {
