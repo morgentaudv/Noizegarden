@@ -100,10 +100,10 @@ impl AdapterWaveSumProcessData {
             .unwrap();
 
         if in_input.is_children_all_finished() {
-            self.common.common_state = EProcessState::Finished;
+            self.common.state = EProcessState::Finished;
             return;
         } else {
-            self.common.common_state = EProcessState::Playing;
+            self.common.state = EProcessState::Playing;
             return;
         }
     }
@@ -111,7 +111,7 @@ impl AdapterWaveSumProcessData {
 
 impl TProcess for AdapterWaveSumProcessData {
     fn is_finished(&self) -> bool {
-        self.common.common_state == EProcessState::Finished
+        self.common.state == EProcessState::Finished
     }
 
     fn can_process(&self) -> bool {
@@ -132,7 +132,7 @@ impl TProcess for AdapterWaveSumProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        match self.common.common_state {
+        match self.common.state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
             _ => (),
         }

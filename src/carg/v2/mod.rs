@@ -321,7 +321,9 @@ impl NodePinItem {
 #[derive(Debug, Clone)]
 pub struct ProcessControlItem {
     /// アイテムの状態を表す。
-    pub common_state: EProcessState,
+    pub state: EProcessState,
+    /// 状態からの細部制御ルーティン番号
+    pub state_rtn: [u64; 4],
     /// アイテムの識別子タイプ
     pub specifier: ENodeSpecifier,
     /// 経過した時間（秒単位）
@@ -335,7 +337,8 @@ pub struct ProcessControlItem {
 impl ProcessControlItem {
     pub fn new(specifier: ENodeSpecifier) -> Self {
         Self {
-            common_state: EProcessState::Stopped,
+            state: EProcessState::Stopped,
+            state_rtn: [0; 4],
             specifier,
             elapsed_time: 0.0,
             input_pins: specifier.create_input_pins(),
@@ -647,6 +650,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         node_queue.push_back(start_node.clone());
 
         //
+        let mut end_node_processed = false;
         let mut is_all_finished = true;
         while !node_queue.is_empty() {
             // 処理する。
@@ -662,13 +666,14 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
 
             // もしnextがなければ、自分をfinalだとみなしてstartから自分までの処理が終わってるかを確認する。
             if is_node_end {
+                end_node_processed = true;
                 is_all_finished &= process_node.borrow().is_finished();
             }
         }
 
         println!("{:?}s", prev_to_now_time);
 
-        if is_all_finished {
+        if end_node_processed && is_all_finished {
             break;
         }
     }

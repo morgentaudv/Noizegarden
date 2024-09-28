@@ -235,13 +235,13 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    fn next_samples(&mut self) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.emitter.is_some());
 
         // 設定のサンプル数ずつ吐き出す。
         // ただし今のと最終長さと比べて最終長さより長い分は0に埋める。
         let end_sample_index = {
-            let ideal_add_time = self.setting.sample_count_frame as f64 / self.setting.sample_rate as f64;
+            let ideal_add_time = self.setting.get_default_tick_threshold();
             let ideal_next_time = self.common.elapsed_time + ideal_add_time;
 
             let mut add_time = ideal_add_time;
@@ -268,13 +268,11 @@ impl SineWaveEmitterProcessData {
 
 impl TProcess for SineWaveEmitterProcessData {
     fn is_finished(&self) -> bool {
-        self.common.common_state == EProcessState::Finished
+        self.common.state == EProcessState::Finished
     }
 
     /// 自分が処理可能なノードなのかを確認する。
-    fn can_process(&self) -> bool {
-        self.common.is_all_input_pins_update_notified()
-    }
+    fn can_process(&self) -> bool { true }
 
     /// 共用アイテムの参照を返す。
     fn get_common_ref(&self) -> &ProcessControlItem {
@@ -291,8 +289,8 @@ impl TProcess for SineWaveEmitterProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        if self.common.common_state == EProcessState::Finished { return; }
-        if self.common.common_state == EProcessState::Stopped {
+        if self.common.state == EProcessState::Finished { return; }
+        if self.common.state == EProcessState::Stopped {
             // 初期化する。
             self.initialize();
             assert!(self.emitter.is_some());
@@ -300,7 +298,7 @@ impl TProcess for SineWaveEmitterProcessData {
 
         // 初期化した情報から設定分のOutputを更新する。
         // output_pinに入力。
-        let buffer = self.next_samples();
+        let buffer = self.next_samples(input);
         let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
         self.common.insert_to_output_pin(
             OUTPUT_OUT,
@@ -310,9 +308,9 @@ impl TProcess for SineWaveEmitterProcessData {
         // 状態確認
         self.sample_elased_time += elapsed_time;
         if self.sample_elased_time < self.range.length {
-            self.common.common_state = EProcessState::Playing;
+            self.common.state = EProcessState::Playing;
         } else {
-            self.common.common_state = EProcessState::Finished;
+            self.common.state = EProcessState::Finished;
         }
     }
 }

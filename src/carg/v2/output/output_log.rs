@@ -75,7 +75,7 @@ impl OutputLogProcessData {
         }
 
         // じゃなきゃPlayingに。
-        self.common.common_state = EProcessState::Playing;
+        self.common.state = EProcessState::Playing;
     }
 }
 

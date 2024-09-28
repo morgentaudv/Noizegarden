@@ -85,6 +85,7 @@ impl IDFTEmitterProcessData {
         let borrowed = linked_output_pin.borrow();
         let input = match &borrowed.output {
             EProcessOutputContainer::Frequency(v) => v,
+            EProcessOutputContainer::Empty => return,
             _ => unreachable!("Unexpected branch"),
         };
 
@@ -112,10 +113,10 @@ impl IDFTEmitterProcessData {
             .unwrap();
 
         if in_input.is_children_all_finished() {
-            self.common.common_state = EProcessState::Finished;
+            self.common.state = EProcessState::Finished;
             return;
         } else {
-            self.common.common_state = EProcessState::Playing;
+            self.common.state = EProcessState::Playing;
             return;
         }
     }
@@ -123,7 +124,7 @@ impl IDFTEmitterProcessData {
 
 impl TProcess for IDFTEmitterProcessData {
     fn is_finished(&self) -> bool {
-        self.common.common_state == EProcessState::Finished
+        self.common.state == EProcessState::Finished
     }
 
     /// 自分が処理可能なノードなのかを確認する。
@@ -146,7 +147,7 @@ impl TProcess for IDFTEmitterProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        match self.common.common_state {
+        match self.common.state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
             _ => (),
         }
