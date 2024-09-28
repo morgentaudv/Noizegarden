@@ -98,8 +98,17 @@ pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
     Ok(container)
 }
 
+/// フレームTickのモード
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ETimeTickMode {
+    Offline,
+    Realtime,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ProcessCommonInput {
+    /// `elapsed_time`の解釈方法
+    pub time_tick_mode: ETimeTickMode,
     /// 前のフレーム処理から何秒経ったか
     pub elapsed_time: f64,
 }
@@ -650,7 +659,10 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         elapsed_time += 5.0 / 1000.0;
 
         // 共通で使う処理時の入力。
-        let input = ProcessCommonInput { elapsed_time };
+        let input = ProcessCommonInput {
+            time_tick_mode: ETimeTickMode::Offline,
+            elapsed_time
+        };
         node_queue.push_back(start_node.clone());
 
         //
