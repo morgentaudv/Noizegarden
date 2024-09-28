@@ -26,7 +26,8 @@
         "analyze": {
             "type": "analyze-dft",
             "level": 4096,
-            "window_function": "hamming"
+            "window_function": "hann",
+            "overlap": true
         },
         "amplitude_env": {
             "type": "adapter-envelope-ad",
@@ -37,7 +38,8 @@
         },
         "invert": {
             "type": "emitter-idft",
-            "sample_length": 4096
+            "sample_length": 4096,
+            "overlap": true
         },
         "output": {
             "type": "output-file",
@@ -45,7 +47,7 @@
                 "type": "wav_lpcm16",
                 "sample_rate": 44100
             },
-            "file_name": "test_envelope_adsr_idft_hamming.wav"
+            "file_name": "test_envelope_adsr_idft.wav"
         }
     },
     "relation": [
