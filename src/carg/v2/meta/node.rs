@@ -80,6 +80,8 @@ pub enum ENode {
     #[serde(rename = "emitter-ifft")]
     EmitterIFFT {
         sample_length: usize,
+        /// 半分ずつ重ねるか
+        overlap: bool,
     },
     /// DFTで音波を分析する。
     #[serde(rename = "analyze-dft")]
@@ -91,7 +93,12 @@ pub enum ENode {
     },
     /// FFTで音波を分析する。
     #[serde(rename = "analyze-fft")]
-    AnalyzerFFT { level: usize },
+    AnalyzerFFT {
+        level: usize,
+        window_function: EWindowFunction,
+        /// 半分ずつ重ねるか
+        overlap: bool,
+    },
     /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-ad")]
     AdapterEnvelopeAd {

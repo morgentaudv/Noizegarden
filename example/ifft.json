@@ -25,7 +25,9 @@
         },
         "analyze_fft": {
             "type": "analyze-fft",
-            "level": 4096
+            "level": 8192,
+            "window_function": "hann",
+            "overlap": true
         },
         "amplitude_env": {
             "type": "adapter-envelope-ad",
@@ -36,7 +38,8 @@
         },
         "ifft": {
             "type": "emitter-ifft",
-            "sample_length": 4096
+            "sample_length": 8192,
+            "overlap": true
         },
         "output_ifft": {
             "type": "output-file",

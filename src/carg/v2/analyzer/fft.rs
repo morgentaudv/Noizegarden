@@ -11,6 +11,9 @@ use crate::wave::analyze::method::EAnalyzeMethod;
 pub struct AnalyzerFFTProcessData {
     common: ProcessControlItem,
     level: usize,
+    window_function: EWindowFunction,
+    /// 半分ずつ重ねるか
+    overlap: bool,
 }
 
 const INPUT_IN: &'static str = "in";
@@ -48,17 +51,16 @@ impl TPinCategory for AnalyzerFFTProcessData {
 impl AnalyzerFFTProcessData {
     pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::AnalyzerFFT { level } => {
-                SItemSPtr::new(Self::new(*level))
+            ENode::AnalyzerFFT { level, window_function, overlap } => {
+                let item= Self {
+                    common: ProcessControlItem::new(ENodeSpecifier::AnalyzerFFT),
+                    level: *level,
+                    window_function: *window_function,
+                    overlap: *overlap,
+                };
+                SItemSPtr::new(item)
             }
             _ => unreachable!("Unexpected branch."),
-        }
-    }
-
-    fn new(level: usize) -> Self {
-        Self {
-            common: ProcessControlItem::new(ENodeSpecifier::AnalyzerFFT),
-            level,
         }
     }
 
@@ -74,8 +76,20 @@ impl AnalyzerFFTProcessData {
 
         let (buffer, sample_rate) = match &mut *self.common.get_input_internal_mut(INPUT_IN).unwrap() {
             EProcessInputContainer::BufferMonoDynamic(v) => {
-                let buffer = v.buffer.drain(..self.level).collect_vec();
-                (buffer, v.setting.as_ref().unwrap().sample_rate)
+                if self.overlap {
+                    // 全体のdrainが使えない。
+                    // 前半分はdrainできるけど、残り半分はコピーする必要がある。
+                    let drain_samples = self.level >> 1;
+                    let mut buffer = v.buffer.drain(..drain_samples).collect_vec();
+
+                    // そして残りの半分をコピーしてbufferに追加する。
+                    buffer.append(&mut v.buffer.iter().take(drain_samples).copied().collect_vec());
+                    (buffer, v.setting.as_ref().unwrap().sample_rate)
+                }
+                else {
+                    let buffer = v.buffer.drain(..self.level).collect_vec();
+                    (buffer, v.setting.as_ref().unwrap().sample_rate)
+                }
             }
             _ => unreachable!("Unexpected input."),
         };
@@ -90,7 +104,7 @@ impl AnalyzerFFTProcessData {
                 frequency_start: 0.0,
                 frequency_width: sample_rate as f64,
                 frequency_bin_count: self.level as u32,
-                window_function: EWindowFunction::None,
+                window_function: self.window_function,
             };
 
             let setting = WaveContainerSetting {
@@ -134,7 +148,19 @@ impl AnalyzerFFTProcessData {
 
         // 状態変更。
         if in_input.is_children_all_finished() {
-            self.common.state = EProcessState::Finished;
+            // 24-09-28 overlapしているときには前のEmitterの処理が終わっても
+            // こっちじゃまだ処理分があるので、バッファが残っている限り終わらせない。
+            let can_more_process = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+                EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
+                _ => false,
+            };
+            if !can_more_process {
+                self.common.state = EProcessState::Finished;
+            }
+            else {
+                self.common.state = EProcessState::Playing;
+            }
+
             return;
         } else {
             self.common.state = EProcessState::Playing;
@@ -149,7 +175,12 @@ impl TProcess for AnalyzerFFTProcessData {
     }
 
     fn can_process(&self) -> bool {
-        self.common.is_all_input_pins_update_notified()
+        let has_buffer = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
+            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() >= self.level,
+            _ => false,
+        };
+
+        self.common.is_all_input_pins_update_notified() | has_buffer
     }
 
     fn get_common_ref(&self) -> &ProcessControlItem {

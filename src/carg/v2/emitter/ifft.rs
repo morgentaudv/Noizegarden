@@ -12,6 +12,7 @@ pub struct IFFTEmitterProcessData {
     setting: Setting,
     common: ProcessControlItem,
     sample_length: usize,
+    overlap: bool,
 }
 
 const INPUT_IN: &'static str = "in";
@@ -47,11 +48,12 @@ impl TPinCategory for IFFTEmitterProcessData {
 impl IFFTEmitterProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::EmitterIFFT { sample_length } => {
+            ENode::EmitterIFFT { sample_length, overlap } => {
                 let item = IFFTEmitterProcessData {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::EmitterIFFT),
                     sample_length: *sample_length,
+                    overlap: *overlap,
                 };
                 SItemSPtr::new(item)
             }
@@ -89,10 +91,17 @@ impl IFFTEmitterProcessData {
             .unwrap();
 
         // outputのどこかに保持する。
+        // もし`overlap`がtrueなら、半分ずつ重ねる。
+        let sample_offset = if self.overlap { self.sample_length >> 1 } else { 0usize };
+
+        // outputのどこかに保持する。
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new_sample_offset(
+                    buffer,
+                    self.setting.clone(),
+                    sample_offset)),
             )
             .unwrap();
 
