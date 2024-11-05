@@ -18,6 +18,7 @@ Node based musical analysis application written in Rustlang, also features makin
 - [ ] Delta Timeのモードの反映
 - [ ] LU測定ノード
 - [x] LPF(Edge, Delta) ノード
+- [x] IIRのLPFノード
 - [ ] HPFノード
 - [ ] リアルタイムプレビューノード
 - [ ] eguiの導入

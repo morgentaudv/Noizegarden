@@ -20,6 +20,7 @@ use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::filter::fir_lpf::FIRLPFProcessData;
+use crate::carg::v2::filter::iir_lpf::IIRLPFProcessData;
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 
 /// ピンのカテゴリのビットフラグ
@@ -89,6 +90,7 @@ pub enum ENodeSpecifier {
     AdapterEnvelopeAdsr,
     AdapterWaveSum,
     FilterFIRLPF,
+    FilterIIRLPF,
     MixStereo,
     OutputFile,
     OutputLog,
@@ -117,6 +119,7 @@ impl ENodeSpecifier {
             ENode::AdapterWaveSum => Self::AdapterWaveSum,
             ENode::MixStereo{ .. } => Self::MixStereo,
             ENode::FilterFIRLPF(_) => Self::FilterFIRLPF,
+            ENode::FilterIIRLPF(_) => Self::FilterIIRLPF,
         }
     }
 
@@ -142,6 +145,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_pin_names(),
+            Self::FilterIIRLPF => IIRLPFProcessData::get_input_pin_names(),
         };
 
         let mut map = NodePinItemList::new();
@@ -176,6 +180,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_output_pin_names(),
+            Self::FilterIIRLPF => IIRLPFProcessData::get_output_pin_names(),
         };
 
         let mut map = NodePinItemList::new();
@@ -215,6 +220,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_pin_names(),
+            Self::FilterIIRLPF => IIRLPFProcessData::get_input_pin_names(),
         };
         if names.is_empty() {
             return false;
@@ -244,6 +250,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_output_pin_names(),
+            Self::FilterIIRLPF => IIRLPFProcessData::get_output_pin_names(),
         };
         if names.is_empty() {
             return false;
@@ -273,6 +280,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_pin_categories(pin_name),
             Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
             Self::FilterFIRLPF => FIRLPFProcessData::get_pin_categories(pin_name),
+            Self::FilterIIRLPF => IIRLPFProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -298,7 +306,12 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_container_flag(pin_name),
+            Self::FilterIIRLPF => IIRLPFProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
     }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

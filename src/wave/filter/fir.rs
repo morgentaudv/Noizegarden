@@ -5,6 +5,7 @@ use crate::wave::{
 
 use super::FilterCommonSetting;
 
+#[deprecated]
 pub(super) struct FIRLowPassInternal {
     /// エッジ周波数
     pub(super) edge_frequency: f64,
@@ -13,6 +14,7 @@ pub(super) struct FIRLowPassInternal {
 }
 
 impl FIRLowPassInternal {
+    #[deprecated]
     pub(super) fn apply(
         &self,
         common_setting: &FilterCommonSetting,

@@ -54,7 +54,7 @@ impl FIRLPFProcessData {
         let edge = self.info.edge_frequency / sample_rate;
         let delta = self.info.delta_frequency / sample_rate;
 
-        let can_process = self.update_input_buffer(in_input);
+        let can_process = self.update_input_buffer();
         if !can_process {
             return;
         }
@@ -116,7 +116,7 @@ impl FIRLPFProcessData {
     }
 
     /// Input側のバッファと内部処理の情報を更新し、またフィルタリングの処理が行えるかを判定する。
-    fn update_input_buffer(&mut self, _in_input: &ProcessProcessorInput) -> bool {
+    fn update_input_buffer(&mut self) -> bool {
         // 処理するためのバッファが十分じゃないと処理できない。
         let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
             EProcessInputContainer::BufferMonoDynamic(v) => {

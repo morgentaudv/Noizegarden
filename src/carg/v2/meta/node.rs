@@ -11,6 +11,7 @@ use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::filter::fir_lpf::{FIRLPFProcessData, MetaFIRLPFInfo};
+use crate::carg::v2::filter::iir_lpf::{IIRLPFProcessData, MetaIIRLPFInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
@@ -127,6 +128,9 @@ pub enum ENode {
     /// 昔に作っておいたFIRのLPFフィルター（2次FIR）
     #[serde(rename = "filter-fir-lpf")]
     FilterFIRLPF(MetaFIRLPFInfo),
+    /// 昔に作っておいたIIRのLPFフィルター（2次IIR）
+    #[serde(rename = "filter-iir-lpf")]
+    FilterIIRLPF(MetaIIRLPFInfo),
     #[serde(rename = "mix-stereo")]
     MixStereo {
         gain_0: EFloatCommonPin,
@@ -165,6 +169,7 @@ impl ENode {
             ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
             ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),
             ENode::FilterFIRLPF(_) => FIRLPFProcessData::create_from(self, setting),
+            ENode::FilterIIRLPF(_) => IIRLPFProcessData::create_from(self, setting),
         }
     }
 }
