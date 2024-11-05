@@ -12,7 +12,7 @@ pub mod stretch;
 pub mod time;
 
 /// 2PIを示す。
-pub(crate) const PI2: f64 = 2.0 * PI;
+pub const PI2: f64 = 2.0 * PI;
 
 /// 秒を表す。
 #[repr(transparent)]
