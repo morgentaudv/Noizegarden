@@ -30,6 +30,7 @@ pub mod output;
 mod special;
 mod utility;
 pub mod mix;
+pub mod filter;
 
 /// シングルスレッド、通常参照
 pub type ItemSPtr<T> = Rc<RefCell<T>>;
