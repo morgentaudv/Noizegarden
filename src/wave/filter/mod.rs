@@ -2,8 +2,6 @@ use super::{container::WaveContainer, sample::UniformedSample};
 use crate::wave::PI2;
 use itertools::Itertools;
 mod dft;
-mod fir;
-mod iir;
 mod other;
 
 #[derive(Debug, Clone, Copy)]
@@ -165,48 +163,6 @@ impl EFilter {
     ) -> Vec<UniformedSample> {
         // ここで書くには長いのでInternal構造体に移して処理を行う。
         match self {
-            EFilter::FIRLowPass {
-                edge_frequency,
-                delta_frequency,
-            } => fir::FIRLowPassInternal {
-                edge_frequency: *edge_frequency,
-                delta_frequency: *delta_frequency,
-            }
-            .apply(common_setting, buffer),
-            EFilter::IIRLowPass {
-                edge_frequency,
-                quality_factor,
-                adsr,
-            } => iir::LowPassInternal {
-                edge_frequency: edge_frequency.clone(),
-                quality_factor: *quality_factor,
-                adsr: *adsr,
-            }
-            .apply(common_setting, buffer),
-            EFilter::IIRHighPass {
-                edge_frequency,
-                quality_factor,
-            } => iir::HighPassInternal {
-                edge_frequency: edge_frequency.clone(),
-                quality_factor: *quality_factor,
-            }
-            .apply(common_setting, buffer),
-            EFilter::IIRBandPass {
-                center_frequency,
-                quality_factor,
-            } => iir::BandPassInternal {
-                center_frequency: center_frequency.clone(),
-                quality_factor: *quality_factor,
-            }
-            .apply(common_setting, buffer),
-            EFilter::IIRBandEliminate {
-                center_frequency,
-                quality_factor,
-            } => iir::BandEliminateInternal {
-                center_frequency: center_frequency.clone(),
-                quality_factor: *quality_factor,
-            }
-            .apply(common_setting, buffer),
             EFilter::DFTLowPass {
                 edge_frequency,
                 delta_frequency,
@@ -222,6 +178,7 @@ impl EFilter {
                 use_overlap: *use_overlap,
             }
             .apply(common_setting, buffer),
+            _ => unreachable!(),
         }
     }
 
