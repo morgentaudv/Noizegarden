@@ -32,6 +32,7 @@ fn compute_sample(
     }
 }
 
+#[deprecated]
 pub(super) struct LowPassInternal {
     /// エッジ周波数
     pub(super) edge_frequency: EEdgeFrequency,
