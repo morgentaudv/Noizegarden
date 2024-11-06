@@ -20,7 +20,7 @@ Node based musical analysis application written in Rustlang, also features makin
 - [x] FIRのLPF(Edge, Delta) ノード
 - [x] IIRのLPFノード
 - [x] IIRのHPFノード
-- [ ] IIRのBPF
+- [x] IIRのBPF
 - [ ] IIRのBEPF
 - [ ] リアルタイムプレビューノード
 - [ ] eguiの導入

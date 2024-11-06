@@ -134,6 +134,9 @@ pub enum ENode {
     /// 昔に作っておいたIIRのHPFフィルター（2次IIR）
     #[serde(rename = "filter-iir-hpf")]
     FilterIIRHPF(MetaIIRInfo),
+    /// 昔に作っておいたIIRのバンドパスフィルター（2次IIR）
+    #[serde(rename = "filter-iir-bpf")]
+    FilterIIRBandPass(MetaIIRInfo),
     #[serde(rename = "mix-stereo")]
     MixStereo {
         gain_0: EFloatCommonPin,
@@ -174,6 +177,7 @@ impl ENode {
             ENode::FilterFIRLPF(_) => FIRLPFProcessData::create_from(self, setting),
             ENode::FilterIIRLPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::LowPass),
             ENode::FilterIIRHPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::HighPass),
+            ENode::FilterIIRBandPass(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandPass),
         }
     }
 }

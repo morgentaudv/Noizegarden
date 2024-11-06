@@ -71,6 +71,7 @@ impl HighPassInternal {
     }
 }
 
+#[deprecated]
 pub(super) struct BandPassInternal {
     /// 中心周波数
     pub(super) center_frequency: EEdgeFrequency,
@@ -79,60 +80,12 @@ pub(super) struct BandPassInternal {
 }
 
 impl BandPassInternal {
-    /// IIRに使う遅延機フィルターの伝達関数の特性を計算する。
-    fn compute_filter_asbs(center_frequency: f64, samples_per_sec: f64, quality_factor: f64) -> ([f64; 3], [f64; 3]) {
-        let analog_frequency = { 1.0 / PI2 * (center_frequency * PI / samples_per_sec).tan() };
-        // 4pi^2f_c^2
-        let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
-        // 2pif_c / Q
-        let pi2adivq = (PI2 * analog_frequency) / quality_factor;
-        let div_base = 1.0 + pi2adivq + pi24a2;
-
-        let b1 = pi2adivq / div_base;
-        let b2 = 0.0;
-        let b3 = b1 * -1.0;
-        let a1 = (2.0 * pi24a2 - 2.0) / div_base;
-        let a2 = (1.0 - pi2adivq + pi24a2) / div_base;
-
-        ([1.0, a1, a2], [b1, b2, b3])
-    }
-
     pub(super) fn apply(
         &self,
-        common_setting: &FilterCommonSetting,
-        read_buffer: &[UniformedSample],
+        _common_setting: &FilterCommonSetting,
+        _read_buffer: &[UniformedSample],
     ) -> Vec<UniformedSample> {
-        // はアナログの伝達関数を流用して（デジタルに適用できる形に変換）処理を行うけど
-        // デジタル周波数はアナログ周波数に変換して使う。
-        let samples_per_sec = common_setting.samples_per_second as f64;
-
-        // もしCenterFrequencyがサンプルによって動的に変わるのではなければ、BPFの伝達関数の各乗算器の係数を求める。
-        // まず共用の値を先に計算する。
-        let constant_filter_asbs = match self.center_frequency {
-            EEdgeFrequency::Constant(freq) => {
-                Some(Self::compute_filter_asbs(freq, samples_per_sec, self.quality_factor))
-            }
-            EEdgeFrequency::ChangeBySample(_) => None,
-        };
-
-        // 処理する。
-        // BPFではB側で遅延機が２個、A側で遅延にが２個。
-        let mut new_buffer = vec![];
-        new_buffer.resize(read_buffer.len(), UniformedSample::default());
-
-        let total_sample_count = new_buffer.len();
-        for i in 0..total_sample_count {
-            let (filter_as, filter_bs) = if let EEdgeFrequency::ChangeBySample(compute_func) = &self.center_frequency {
-                let edge_frequency = compute_func(i, total_sample_count, common_setting.samples_per_second as usize);
-                Self::compute_filter_asbs(edge_frequency, samples_per_sec, self.quality_factor)
-            } else {
-                constant_filter_asbs.clone().unwrap()
-            };
-
-            compute_sample(i, &mut new_buffer, read_buffer, &filter_as, &filter_bs);
-        }
-
-        new_buffer
+        vec![]
     }
 }
 
