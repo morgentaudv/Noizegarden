@@ -22,6 +22,7 @@ use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
+use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 
 /// ピンのカテゴリのビットフラグ
 pub mod pin_category {
@@ -84,6 +85,7 @@ pub enum ENodeSpecifier {
     EmitterSquare,
     EmitterIDFT,
     EmitterIFFT,
+    EmitterWavMono,
     AnalyzerDFT,
     AnalyzerFFT,
     AdapterEnvelopeAd,
@@ -113,6 +115,7 @@ impl ENodeSpecifier {
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::EmitterIDFT { .. } => Self::EmitterIDFT,
             ENode::EmitterIFFT { .. } => Self::EmitterIFFT,
+            ENode::EmitterWavMono(_) => Self::EmitterWavMono,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
             ENode::AnalyzerFFT { .. } => Self::AnalyzerFFT,
             ENode::AdapterEnvelopeAd { .. } => Self::AdapterEnvelopeAd,
@@ -143,6 +146,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::get_input_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
@@ -171,6 +175,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::get_output_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
@@ -248,6 +253,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_pin_categories(pin_name),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::get_pin_categories(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_pin_categories(pin_name),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_pin_categories(pin_name),
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
@@ -276,6 +282,7 @@ impl ENodeSpecifier {
             | Self::EmitterTriangle
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_container_flag(pin_name),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_container_flag(pin_name),
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),

@@ -10,6 +10,7 @@ use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
+use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo};
 use crate::carg::v2::filter::fir_lpf::{FIRLPFProcessData, MetaFIRLPFInfo};
 use crate::carg::v2::filter::iir::{EFilterMode, IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
@@ -76,7 +77,6 @@ pub enum ENode {
         sample_length: usize,
         /// 半分ずつ重ねるか
         overlap: bool,
-
     },
     /// 周波数情報から音波バッファを生成する。
     #[serde(rename = "emitter-ifft")]
@@ -85,6 +85,9 @@ pub enum ENode {
         /// 半分ずつ重ねるか
         overlap: bool,
     },
+    /// パスからサポートできるWavを読み込み、サンプルをバッファで出力する。
+    #[serde(rename = "emitter-wav-mono")]
+    EmitterWavMono(MetaWavInfo),
     /// DFTで音波を分析する。
     #[serde(rename = "analyze-dft")]
     AnalyzerDFT {
@@ -174,6 +177,7 @@ impl ENode {
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
             ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
             ENode::EmitterIFFT { .. } => IFFTEmitterProcessData::create_from(self, setting),
+            ENode::EmitterWavMono(_) => EmitterWavMonoProcessData::create_from(self, setting),
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),
             ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
             ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),

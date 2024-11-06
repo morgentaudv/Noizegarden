@@ -1,11 +1,14 @@
+use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
+use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::{
+    EProcessOutput, EProcessState, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
+    SItemSPtr, Setting, TProcess, TProcessItemPtr,
+};
 use crate::{
     math::frequency::EFrequency,
     wave::{sample::UniformedSample, sine::emitter::SineUnitSampleEmitter},
 };
-use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
-use crate::carg::v2::{EProcessOutput, EProcessState, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
-use crate::carg::v2::meta::node::ENode;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ESineWaveEmitterType {
@@ -27,7 +30,7 @@ pub struct SineWaveEmitterProcessData {
     intensity: f64,
     frequency: f64,
     range: EmitterRange,
-    sample_elased_time: f64,
+    sample_elapsed_time: f64,
     /// 波形を出力するEmitter。
     emitter: Option<SineUnitSampleEmitter>,
 }
@@ -94,7 +97,7 @@ impl SineWaveEmitterProcessData {
             intensity,
             frequency: 0.0,
             range,
-            sample_elased_time: 0.0,
+            sample_elapsed_time: 0.0,
             setting,
             emitter: None,
         }
@@ -108,7 +111,7 @@ impl SineWaveEmitterProcessData {
             intensity,
             frequency: 0.0,
             range,
-            sample_elased_time: 0.0,
+            sample_elapsed_time: 0.0,
             setting,
             emitter: None,
         }
@@ -122,7 +125,7 @@ impl SineWaveEmitterProcessData {
             intensity,
             frequency: frequency.to_frequency(),
             range,
-            sample_elased_time: 0.0,
+            sample_elapsed_time: 0.0,
             setting,
             emitter: None,
         }
@@ -136,7 +139,7 @@ impl SineWaveEmitterProcessData {
             intensity,
             frequency: frequency.to_frequency(),
             range,
-            sample_elased_time: 0.0,
+            sample_elapsed_time: 0.0,
             setting,
             emitter: None,
         }
@@ -150,7 +153,7 @@ impl SineWaveEmitterProcessData {
             intensity,
             frequency: frequency.to_frequency(),
             range,
-            sample_elased_time: 0.0,
+            sample_elapsed_time: 0.0,
             setting,
             emitter: None,
         }
@@ -172,17 +175,21 @@ impl SineWaveEmitterProcessData {
             range,
             setting,
             emitter: None,
-            sample_elased_time: 0.0,
+            sample_elapsed_time: 0.0,
         }
     }
 }
 
 impl TPinCategory for SineWaveEmitterProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
-    fn get_input_pin_names() -> Vec<&'static str> { vec![INPUT_IN] }
+    fn get_input_pin_names() -> Vec<&'static str> {
+        vec![INPUT_IN]
+    }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec![OUTPUT_OUT] }
+    fn get_output_pin_names() -> Vec<&'static str> {
+        vec![OUTPUT_OUT]
+    }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
@@ -272,7 +279,9 @@ impl TProcess for SineWaveEmitterProcessData {
     }
 
     /// 自分が処理可能なノードなのかを確認する。
-    fn can_process(&self) -> bool { true }
+    fn can_process(&self) -> bool {
+        true
+    }
 
     /// 共用アイテムの参照を返す。
     fn get_common_ref(&self) -> &ProcessControlItem {
@@ -289,7 +298,9 @@ impl TProcess for SineWaveEmitterProcessData {
         self.common.elapsed_time = input.common.elapsed_time;
         self.common.process_input_pins();
 
-        if self.common.state == EProcessState::Finished { return; }
+        if self.common.state == EProcessState::Finished {
+            return;
+        }
         if self.common.state == EProcessState::Stopped {
             // 初期化する。
             self.initialize();
@@ -300,14 +311,16 @@ impl TProcess for SineWaveEmitterProcessData {
         // output_pinに入力。
         let buffer = self.next_samples(input);
         let elapsed_time = buffer.len() as f64 / self.setting.sample_rate as f64;
-        self.common.insert_to_output_pin(
-            OUTPUT_OUT,
-            EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone()))
-        ).unwrap();
+        self.common
+            .insert_to_output_pin(
+                OUTPUT_OUT,
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
+            )
+            .unwrap();
 
         // 状態確認
-        self.sample_elased_time += elapsed_time;
-        if self.sample_elased_time < self.range.length {
+        self.sample_elapsed_time += elapsed_time;
+        if self.sample_elapsed_time < self.range.length {
             self.common.state = EProcessState::Playing;
         } else {
             self.common.state = EProcessState::Finished;
