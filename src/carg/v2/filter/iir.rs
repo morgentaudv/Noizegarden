@@ -22,7 +22,7 @@ pub enum EFilterMode {
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaIIRLPFInfo {
+pub struct MetaIIRInfo {
     /// エッジ周波数（境界）
     pub edge_frequency: f64,
     /// 精密度
@@ -39,17 +39,17 @@ struct InternalInfo {
 }
 
 #[derive(Debug)]
-pub struct IIRLPFProcessData {
+pub struct IIRProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    info: MetaIIRLPFInfo,
+    info: MetaIIRInfo,
     internal: InternalInfo,
 }
 
 const INPUT_IN: &'static str = "in";
 const OUTPUT_OUT: &'static str = "out";
 
-impl TPinCategory for IIRLPFProcessData {
+impl TPinCategory for IIRProcessData {
     fn get_input_pin_names() -> Vec<&'static str> {
         vec![INPUT_IN]
     }
@@ -74,7 +74,7 @@ impl TPinCategory for IIRLPFProcessData {
     }
 }
 
-impl TProcess for IIRLPFProcessData {
+impl TProcess for IIRProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished
     }
@@ -102,7 +102,7 @@ impl TProcess for IIRLPFProcessData {
     }
 }
 
-impl IIRLPFProcessData {
+impl IIRProcessData {
     pub fn create_from(node: &ENode, setting: &Setting, mode: EFilterMode) -> TProcessItemPtr {
         match node {
             ENode::FilterIIRLPF(v) => {
@@ -208,7 +208,7 @@ impl IIRLPFProcessData {
     }
 }
 
-/// IIRのLPFに使う遅延機フィルターの伝達関数の特性を計算する。
+/// IIRのフィルタリングに使う遅延機フィルターの伝達関数の特性を計算する。
 fn compute_filter_asbs(
     mode: EFilterMode,
     edge_frequency: f64,
