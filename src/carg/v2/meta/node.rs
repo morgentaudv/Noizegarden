@@ -11,7 +11,7 @@ use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::filter::fir_lpf::{FIRLPFProcessData, MetaFIRLPFInfo};
-use crate::carg::v2::filter::iir_lpf::{EFilterMode, IIRLPFProcessData, MetaIIRLPFInfo};
+use crate::carg::v2::filter::iir::{EFilterMode, IIRLPFProcessData, MetaIIRLPFInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;

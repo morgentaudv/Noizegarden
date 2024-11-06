@@ -1,8 +1,7 @@
 use crate::wave::sample::UniformedSample;
 
 pub mod fir_lpf;
-pub mod iir_lpf;
-pub mod iir_hpf;
+pub mod iir;
 
 /// `input_buffer`から`filter_as`と`filter_bs`を使って
 /// `output_buffer[write_sample_i]`にフィルタリングしたサンプルを記録する。
