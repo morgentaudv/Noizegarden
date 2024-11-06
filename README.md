@@ -14,7 +14,8 @@ Node based musical analysis application written in Rustlang, also features makin
 - [x] DFTの50%Overlapがバグっているので確認して修正すること。
 - [x] FFTの窓関数の適用
 - [x] FFTの50%Overlap適用
-- [ ] 音源(wav, 16bit, mono)Emitterノードの追加
+- [x] 音源(wav, 16bit, mono)Emitterノードの追加
+- [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
 - [ ] Delta Timeのモードの反映
 - [ ] LU測定ノード
 - [x] FIRのLPF(Edge, Delta) ノード

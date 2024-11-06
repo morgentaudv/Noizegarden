@@ -1,0 +1,65 @@
+{
+    "version": 2,
+    "setting": {
+        "time_tick_mode": "realtime",
+        "sample_count_frame": 1024,
+        "sample_rate": 44100
+    },
+    "node": {
+        "_start_pin": {
+            "type": "_start_pin"
+        },
+        "_dummy": {
+            "type": "_dummy"
+        },
+        "input_1": {
+            "type": "emitter-wav-mono",
+            "path": "./sample01.wav"
+        },
+        "filter": {
+            "type": "filter-iir-lpf",
+            "edge_frequency": 1500.0,
+            "quality_factor": 1.0
+        },
+        "output": {
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "test_wav_mono.wav"
+        }
+    },
+    "relation": [
+        {
+            "prev": {
+                "node": "_start_pin",
+                "pin": "out"
+            },
+            "next":{
+                "node": "input_1",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input_1",
+                "pin": "out"
+            },
+            "next": {
+                "node": "filter",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "filter",
+                "pin": "out"
+            },
+            "next": {
+                "node": "output",
+                "pin": "in"
+            }
+        }
+    ]
+}
