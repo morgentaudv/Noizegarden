@@ -104,16 +104,29 @@ impl TProcess for IIRLPFProcessData {
 
 impl IIRLPFProcessData {
     pub fn create_from(node: &ENode, setting: &Setting, mode: EFilterMode) -> TProcessItemPtr {
-        if let ENode::FilterIIRLPF(v) = node {
-            let item = Self {
-                setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::FilterIIRLPF),
-                info: v.clone(),
-                internal: InternalInfo { next_start_i: 0, mode },
-            };
-            return SItemSPtr::new(item);
+        match node {
+            ENode::FilterIIRLPF(v) => {
+                let item = Self {
+                    setting: setting.clone(),
+                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRLPF),
+                    info: v.clone(),
+                    internal: InternalInfo { next_start_i: 0, mode },
+                };
+
+                SItemSPtr::new(item)
+            }
+            ENode::FilterIIRHPF(v) => {
+                let item = Self {
+                    setting: setting.clone(),
+                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRHPF),
+                    info: v.clone(),
+                    internal: InternalInfo { next_start_i: 0, mode },
+                };
+
+                SItemSPtr::new(item)
+            }
+            _ => unreachable!("Unexpected branch"),
         }
-        unreachable!("Unexpected branch");
     }
 
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
