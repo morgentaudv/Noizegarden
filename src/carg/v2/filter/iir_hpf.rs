@@ -104,51 +104,6 @@ impl IIRHPFProcessData {
     }
 
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
-        let can_process = self.update_input_buffer();
-        if !can_process {
-            return;
-        }
-
-        // IIRの演算のための係数を計算する。
-        let sample_rate = self.setting.sample_rate as f64;
-        let (filter_as, filter_bs) =
-            compute_filter_asbs(self.info.edge_frequency, sample_rate, self.info.quality_factor);
-
-        let (buffer, setting) = {
-            let start_i = self.internal.next_start_i;
-            let item = self.common.get_input_internal(INPUT_IN).unwrap();
-            let item = item.buffer_mono_dynamic().unwrap();
-            let buffer = &item.buffer;
-            let sample_range = start_i..buffer.len();
-
-            let mut output_buffer = vec![];
-            output_buffer.resize(sample_range.len(), UniformedSample::default());
-
-            for sample_i in sample_range {
-                let output_i = sample_i - start_i;
-                iir_compute_sample(output_i, sample_i, &mut output_buffer, buffer, &filter_as, &filter_bs);
-            }
-
-            (output_buffer, item.setting.clone().unwrap())
-        };
-
-        // 処理が終わったら出力する。
-        self.internal.next_start_i += buffer.len();
-        self.common
-            .insert_to_output_pin(
-                OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, setting)),
-            )
-            .unwrap();
-
-        // 自分を終わるかしないかのチェック
-        if in_input.is_children_all_finished() {
-            self.common.state = EProcessState::Finished;
-            return;
-        } else {
-            self.common.state = EProcessState::Playing;
-            return;
-        }
     }
 
     /// Input側のバッファと内部処理の情報を更新し、またフィルタリングの処理が行えるかを判定する。
@@ -176,23 +131,6 @@ impl IIRHPFProcessData {
         // 処理可能。
         true
     }
-}
-
-/// IIRのHPFに使う遅延機フィルターの伝達関数の特性を計算する。
-fn compute_filter_asbs(edge_frequency: f64, samples_per_sec: f64, quality_factor: f64) -> ([f64; 3], [f64; 3]) {
-    let analog_frequency = { 1.0 / PI2 * (edge_frequency * PI / samples_per_sec).tan() };
-    // 4pi^2f_c^2
-    let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
-    // 2pif_c / Q
-    let pi2adivq = (PI2 * analog_frequency) / quality_factor;
-
-    let b1 = 1.0 / (1.0 + pi2adivq + pi24a2);
-    let b2 = -2.0 * b1;
-    let b3 = b1;
-    let a1 = (2.0 * pi24a2 - 2.0) * b1;
-    let a2 = (1.0 - pi2adivq + pi24a2) * b1;
-
-    ([1.0, a1, a2], [b1, b2, b3])
 }
 
 // ----------------------------------------------------------------------------

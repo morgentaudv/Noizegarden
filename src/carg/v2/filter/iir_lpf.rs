@@ -1,3 +1,4 @@
+use crate::carg::v2::filter::iir_compute_sample;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
@@ -10,7 +11,14 @@ use crate::wave::sample::UniformedSample;
 use crate::wave::PI2;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
-use crate::carg::v2::filter::iir_compute_sample;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum EFilterMode {
+    LowPass,
+    HighPass,
+    BandPass,
+    BandRemove,
+}
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -22,10 +30,12 @@ pub struct MetaIIRLPFInfo {
 }
 
 /// 内部変数の保持構造体
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct InternalInfo {
     /// 次のフィルタリング処理で入力バッファのスタート地点インデックス
     next_start_i: usize,
+    /// モード
+    mode: EFilterMode,
 }
 
 #[derive(Debug)]
@@ -93,13 +103,13 @@ impl TProcess for IIRLPFProcessData {
 }
 
 impl IIRLPFProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
+    pub fn create_from(node: &ENode, setting: &Setting, mode: EFilterMode) -> TProcessItemPtr {
         if let ENode::FilterIIRLPF(v) = node {
             let item = Self {
                 setting: setting.clone(),
                 common: ProcessControlItem::new(ENodeSpecifier::FilterIIRLPF),
                 info: v.clone(),
-                internal: InternalInfo::default(),
+                internal: InternalInfo { next_start_i: 0, mode },
             };
             return SItemSPtr::new(item);
         }
@@ -114,8 +124,12 @@ impl IIRLPFProcessData {
 
         // IIRの演算のための係数を計算する。
         let sample_rate = self.setting.sample_rate as f64;
-        let (filter_as, filter_bs) =
-            compute_filter_asbs(self.info.edge_frequency, sample_rate, self.info.quality_factor);
+        let (filter_as, filter_bs) = compute_filter_asbs(
+            self.internal.mode,
+            self.info.edge_frequency,
+            sample_rate,
+            self.info.quality_factor,
+        );
 
         let (buffer, setting) = {
             let start_i = self.internal.next_start_i;
@@ -182,18 +196,44 @@ impl IIRLPFProcessData {
 }
 
 /// IIRのLPFに使う遅延機フィルターの伝達関数の特性を計算する。
-fn compute_filter_asbs(edge_frequency: f64, samples_per_sec: f64, quality_factor: f64) -> ([f64; 3], [f64; 3]) {
-    let analog_frequency = { 1.0 / PI2 * (edge_frequency * PI / samples_per_sec).tan() };
-    let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
-    let pi2adivq = (PI2 * analog_frequency) / quality_factor;
+fn compute_filter_asbs(
+    mode: EFilterMode,
+    edge_frequency: f64,
+    samples_per_sec: f64,
+    quality_factor: f64,
+) -> ([f64; 3], [f64; 3]) {
+    match mode {
+        EFilterMode::LowPass => {
+            let analog_frequency = { 1.0 / PI2 * (edge_frequency * PI / samples_per_sec).tan() };
+            let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
+            let pi2adivq = (PI2 * analog_frequency) / quality_factor;
 
-    let b1 = pi24a2 / (1.0 + pi2adivq + pi24a2);
-    let b2 = 2.0 * b1;
-    let b3 = b1;
-    let a1 = (2.0 * pi24a2 - 2.0) / (1.0 + pi2adivq + pi24a2);
-    let a2 = (1.0 - pi2adivq + pi24a2) / (1.0 + pi2adivq + pi24a2);
+            let b1 = pi24a2 / (1.0 + pi2adivq + pi24a2);
+            let b2 = 2.0 * b1;
+            let b3 = b1;
+            let a1 = (2.0 * pi24a2 - 2.0) / (1.0 + pi2adivq + pi24a2);
+            let a2 = (1.0 - pi2adivq + pi24a2) / (1.0 + pi2adivq + pi24a2);
 
-    ([1.0, a1, a2], [b1, b2, b3])
+            ([1.0, a1, a2], [b1, b2, b3])
+        }
+        EFilterMode::HighPass => {
+            let analog_frequency = { 1.0 / PI2 * (edge_frequency * PI / samples_per_sec).tan() };
+            // 4pi^2f_c^2
+            let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
+            // 2pif_c / Q
+            let pi2adivq = (PI2 * analog_frequency) / quality_factor;
+
+            let b1 = 1.0 / (1.0 + pi2adivq + pi24a2);
+            let b2 = -2.0 * b1;
+            let b3 = b1;
+            let a1 = (2.0 * pi24a2 - 2.0) * b1;
+            let a2 = (1.0 - pi2adivq + pi24a2) * b1;
+
+            ([1.0, a1, a2], [b1, b2, b3])
+        }
+        EFilterMode::BandPass => unimplemented!(),
+        EFilterMode::BandRemove => unimplemented!(),
+    }
 }
 
 // ----------------------------------------------------------------------------

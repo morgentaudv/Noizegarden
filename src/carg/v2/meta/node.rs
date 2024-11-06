@@ -12,7 +12,7 @@ use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::filter::fir_lpf::{FIRLPFProcessData, MetaFIRLPFInfo};
 use crate::carg::v2::filter::iir_hpf::{IIRHPFProcessData, MetaIIRHPFInfo};
-use crate::carg::v2::filter::iir_lpf::{IIRLPFProcessData, MetaIIRLPFInfo};
+use crate::carg::v2::filter::iir_lpf::{EFilterMode, IIRLPFProcessData, MetaIIRLPFInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
@@ -173,7 +173,7 @@ impl ENode {
             ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
             ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),
             ENode::FilterFIRLPF(_) => FIRLPFProcessData::create_from(self, setting),
-            ENode::FilterIIRLPF(_) => IIRLPFProcessData::create_from(self, setting),
+            ENode::FilterIIRLPF(_) => IIRLPFProcessData::create_from(self, setting, EFilterMode::LowPass),
             ENode::FilterIIRHPF(_) => IIRHPFProcessData::create_from(self, setting),
         }
     }
