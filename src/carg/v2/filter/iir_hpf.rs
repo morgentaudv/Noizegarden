@@ -1,20 +1,17 @@
-use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
-use crate::carg::v2::meta::node::ENode;
+use std::f64::consts::PI;
+use serde::{Deserialize, Serialize};
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{
-    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
-    TProcessItemPtr,
-};
-use crate::wave::sample::UniformedSample;
-use crate::wave::PI2;
-use serde::{Deserialize, Serialize};
-use std::f64::consts::PI;
+use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
 use crate::carg::v2::filter::iir_compute_sample;
+use crate::carg::v2::meta::node::ENode;
+use crate::wave::PI2;
+use crate::wave::sample::UniformedSample;
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaIIRLPFInfo {
+pub struct MetaIIRHPFInfo {
     /// エッジ周波数（境界）
     pub edge_frequency: f64,
     /// 精密度
@@ -29,17 +26,17 @@ struct InternalInfo {
 }
 
 #[derive(Debug)]
-pub struct IIRLPFProcessData {
+pub struct IIRHPFProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    info: MetaIIRLPFInfo,
+    info: MetaIIRHPFInfo,
     internal: InternalInfo,
 }
 
 const INPUT_IN: &'static str = "in";
 const OUTPUT_OUT: &'static str = "out";
 
-impl TPinCategory for IIRLPFProcessData {
+impl TPinCategory for IIRHPFProcessData {
     fn get_input_pin_names() -> Vec<&'static str> {
         vec![INPUT_IN]
     }
@@ -64,7 +61,7 @@ impl TPinCategory for IIRLPFProcessData {
     }
 }
 
-impl TProcess for IIRLPFProcessData {
+impl TProcess for IIRHPFProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished
     }
@@ -92,9 +89,9 @@ impl TProcess for IIRLPFProcessData {
     }
 }
 
-impl IIRLPFProcessData {
+impl IIRHPFProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::FilterIIRLPF(v) = node {
+        if let ENode::FilterIIRHPF(v) = node {
             let item = Self {
                 setting: setting.clone(),
                 common: ProcessControlItem::new(ENodeSpecifier::FilterIIRLPF),
@@ -181,17 +178,19 @@ impl IIRLPFProcessData {
     }
 }
 
-/// IIRのLPFに使う遅延機フィルターの伝達関数の特性を計算する。
+/// IIRのHPFに使う遅延機フィルターの伝達関数の特性を計算する。
 fn compute_filter_asbs(edge_frequency: f64, samples_per_sec: f64, quality_factor: f64) -> ([f64; 3], [f64; 3]) {
     let analog_frequency = { 1.0 / PI2 * (edge_frequency * PI / samples_per_sec).tan() };
+    // 4pi^2f_c^2
     let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
+    // 2pif_c / Q
     let pi2adivq = (PI2 * analog_frequency) / quality_factor;
 
-    let b1 = pi24a2 / (1.0 + pi2adivq + pi24a2);
-    let b2 = 2.0 * b1;
+    let b1 = 1.0 / (1.0 + pi2adivq + pi24a2);
+    let b2 = -2.0 * b1;
     let b3 = b1;
-    let a1 = (2.0 * pi24a2 - 2.0) / (1.0 + pi2adivq + pi24a2);
-    let a2 = (1.0 - pi2adivq + pi24a2) / (1.0 + pi2adivq + pi24a2);
+    let a1 = (2.0 * pi24a2 - 2.0) * b1;
+    let a2 = (1.0 - pi2adivq + pi24a2) * b1;
 
     ([1.0, a1, a2], [b1, b2, b3])
 }

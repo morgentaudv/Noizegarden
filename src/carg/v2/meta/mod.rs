@@ -20,6 +20,7 @@ use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::filter::fir_lpf::FIRLPFProcessData;
+use crate::carg::v2::filter::iir_hpf::IIRHPFProcessData;
 use crate::carg::v2::filter::iir_lpf::IIRLPFProcessData;
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 
@@ -91,6 +92,7 @@ pub enum ENodeSpecifier {
     AdapterWaveSum,
     FilterFIRLPF,
     FilterIIRLPF,
+    FilterIIRHPF,
     MixStereo,
     OutputFile,
     OutputLog,
@@ -120,12 +122,13 @@ impl ENodeSpecifier {
             ENode::MixStereo{ .. } => Self::MixStereo,
             ENode::FilterFIRLPF(_) => Self::FilterFIRLPF,
             ENode::FilterIIRLPF(_) => Self::FilterIIRLPF,
+            ENode::FilterIIRHPF(_) => Self::FilterIIRHPF,
         }
     }
 
-    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンのリストを生成して返す。
-    pub fn create_input_pins(&self) -> NodePinItemList {
-        let names = match self {
+    /// 入力ピンの名前のリストを取得する。
+    pub fn get_input_pin_names(&self) -> Vec<&'static str> {
+        match self {
             Self::InternalStartPin => StartProcessData::get_input_pin_names(),
             Self::InternalDummy => DummyProcessData::get_input_pin_names(),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
@@ -146,21 +149,13 @@ impl ENodeSpecifier {
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_pin_names(),
             Self::FilterIIRLPF => IIRLPFProcessData::get_input_pin_names(),
-        };
-
-        let mut map = NodePinItemList::new();
-        for name in names {
-            map.insert(
-                name.to_owned(),
-                NodePinItem::new_item(name, self.get_pin_categories(name).unwrap(), false, self.get_input_flag(name)),
-            );
+            Self::FilterIIRHPF => IIRHPFProcessData::get_input_pin_names(),
         }
-        map
     }
 
-    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンのリストを生成して返す。
-    pub fn create_output_pins(&self) -> NodePinItemList {
-        let names = match self {
+    /// 出力ピンの名前リストを取得する。
+    pub fn get_output_pin_names(&self) -> Vec<&'static str> {
+        match self {
             Self::InternalStartPin => StartProcessData::get_output_pin_names(),
             Self::InternalDummy => DummyProcessData::get_output_pin_names(),
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
@@ -181,8 +176,26 @@ impl ENodeSpecifier {
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_output_pin_names(),
             Self::FilterIIRLPF => IIRLPFProcessData::get_output_pin_names(),
-        };
+            Self::FilterIIRHPF => IIRHPFProcessData::get_output_pin_names(),
+        }
+    }
 
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンのリストを生成して返す。
+    pub fn create_input_pins(&self) -> NodePinItemList {
+        let names = self.get_input_pin_names();
+        let mut map = NodePinItemList::new();
+        for name in names {
+            map.insert(
+                name.to_owned(),
+                NodePinItem::new_item(name, self.get_pin_categories(name).unwrap(), false, self.get_input_flag(name)),
+            );
+        }
+        map
+    }
+
+    /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンのリストを生成して返す。
+    pub fn create_output_pins(&self) -> NodePinItemList {
+        let names = self.get_output_pin_names();
         let mut map = NodePinItemList::new();
         for name in names {
             map.insert(
@@ -200,28 +213,7 @@ impl ENodeSpecifier {
 
     /// 自分のinputピンに`pin_name`と一致する名前のピンがあるか？
     pub fn is_valid_input_pin(&self, pin_name: &str) -> bool {
-        let names = match self {
-            Self::InternalStartPin => StartProcessData::get_input_pin_names(),
-            Self::InternalDummy => DummyProcessData::get_input_pin_names(),
-            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
-            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
-            Self::AdapterWaveSum => AdapterWaveSumProcessData::get_input_pin_names(),
-            Self::EmitterPinkNoise
-            | Self::EmitterSawtooth
-            | Self::EmitterSquare
-            | Self::EmitterTriangle
-            | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
-            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
-            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_pin_names(),
-            Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
-            Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
-            Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
-            Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
-            Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
-            Self::FilterFIRLPF => FIRLPFProcessData::get_input_pin_names(),
-            Self::FilterIIRLPF => IIRLPFProcessData::get_input_pin_names(),
-        };
+        let names = self.get_input_pin_names();
         if names.is_empty() {
             return false;
         }
@@ -230,28 +222,7 @@ impl ENodeSpecifier {
 
     /// 自分のoutputピンに`pin_name`と一致する名前のピンがあるか？
     pub fn is_valid_output_pin(&self, pin_name: &str) -> bool {
-        let names = match self {
-            Self::InternalStartPin => StartProcessData::get_output_pin_names(),
-            Self::InternalDummy => DummyProcessData::get_output_pin_names(),
-            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
-            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
-            Self::AdapterWaveSum => AdapterWaveSumProcessData::get_output_pin_names(),
-            Self::EmitterPinkNoise
-            | Self::EmitterSawtooth
-            | Self::EmitterSquare
-            | Self::EmitterTriangle
-            | Self::EmitterWhiteNoise
-            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
-            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
-            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_output_pin_names(),
-            Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
-            Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
-            Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
-            Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
-            Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
-            Self::FilterFIRLPF => FIRLPFProcessData::get_output_pin_names(),
-            Self::FilterIIRLPF => IIRLPFProcessData::get_output_pin_names(),
-        };
+        let names = self.get_output_pin_names();
         if names.is_empty() {
             return false;
         }
@@ -281,6 +252,7 @@ impl ENodeSpecifier {
             Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
             Self::FilterFIRLPF => FIRLPFProcessData::get_pin_categories(pin_name),
             Self::FilterIIRLPF => IIRLPFProcessData::get_pin_categories(pin_name),
+            Self::FilterIIRHPF => IIRHPFProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -307,6 +279,7 @@ impl ENodeSpecifier {
             Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_container_flag(pin_name),
             Self::FilterIIRLPF => IIRLPFProcessData::get_input_container_flag(pin_name),
+            Self::FilterIIRHPF => IIRHPFProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
     }
