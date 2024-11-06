@@ -17,7 +17,7 @@ pub enum EFilterMode {
     LowPass,
     HighPass,
     BandPass,
-    BandRemove,
+    BandStop,
 }
 
 /// ノードの設定情報
@@ -129,6 +129,16 @@ impl IIRProcessData {
                 let item = Self {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::FilterIIRBandPass),
+                    info: v.clone(),
+                    internal: InternalInfo { next_start_i: 0, mode },
+                };
+
+                SItemSPtr::new(item)
+            }
+            ENode::FilterIIRBandStop(v) => {
+                let item = Self {
+                    setting: setting.clone(),
+                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRBandStop),
                     info: v.clone(),
                     internal: InternalInfo { next_start_i: 0, mode },
                 };
@@ -270,7 +280,22 @@ fn compute_filter_asbs(
 
             ([1.0, a1, a2], [b1, b2, b3])
         }
-        EFilterMode::BandRemove => unimplemented!(),
+        EFilterMode::BandStop => {
+            let analog_frequency = { 1.0 / PI2 * (edge_frequency * PI / samples_per_sec).tan() };
+            // 4pi^2f_c^2
+            let pi24a2 = 4.0 * PI.powi(2) * analog_frequency.powi(2);
+            // 2pif_c / Q
+            let pi2adivq = (PI2 * analog_frequency) / quality_factor;
+            let div_base = 1.0 + pi2adivq + pi24a2;
+
+            let b1 = (pi24a2 + 1.0) / div_base;
+            let b2 = (2.0 * pi24a2 - 2.0) / div_base;
+            let b3 = b1;
+            let a1 = b2;
+            let a2 = (1.0 - pi2adivq + pi24a2) / div_base;
+
+            ([1.0, a1, a2], [b1, b2, b3])
+        }
     }
 }
 

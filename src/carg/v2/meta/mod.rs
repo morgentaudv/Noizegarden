@@ -93,6 +93,7 @@ pub enum ENodeSpecifier {
     FilterIIRLPF,
     FilterIIRHPF,
     FilterIIRBandPass,
+    FilterIIRBandStop,
     MixStereo,
     OutputFile,
     OutputLog,
@@ -124,6 +125,7 @@ impl ENodeSpecifier {
             ENode::FilterIIRLPF(_) => Self::FilterIIRLPF,
             ENode::FilterIIRHPF(_) => Self::FilterIIRHPF,
             ENode::FilterIIRBandPass(_) => Self::FilterIIRBandPass,
+            ENode::FilterIIRBandStop(_) => Self::FilterIIRBandStop,
         }
     }
 
@@ -149,7 +151,9 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_pin_names(),
-            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass => IIRProcessData::get_input_pin_names(),
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
+                IIRProcessData::get_input_pin_names()
+            }
         }
     }
 
@@ -175,7 +179,9 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
             Self::FilterFIRLPF => FIRLPFProcessData::get_output_pin_names(),
-            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass => IIRProcessData::get_output_pin_names(),
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
+                IIRProcessData::get_output_pin_names()
+            }
         }
     }
 
@@ -250,7 +256,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_pin_categories(pin_name),
             Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
             Self::FilterFIRLPF => FIRLPFProcessData::get_pin_categories(pin_name),
-            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass => {
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_pin_categories(pin_name)
             }
         }
@@ -278,7 +284,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
             Self::FilterFIRLPF => FIRLPFProcessData::get_input_container_flag(pin_name),
-            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass => {
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_input_container_flag(pin_name)
             }
         }
