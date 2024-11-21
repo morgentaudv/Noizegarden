@@ -224,7 +224,7 @@ impl IIRProcessData {
         }
 
         // 処理可能。
-        true
+        return true;
     }
 }
 

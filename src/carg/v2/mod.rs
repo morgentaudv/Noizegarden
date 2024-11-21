@@ -672,7 +672,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
             }
         }
 
-        println!("{:?}s", prev_to_now_time);
+        //println!("{:?}s", prev_to_now_time);
 
         if end_node_processed && is_all_finished {
             break;
