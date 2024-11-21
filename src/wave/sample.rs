@@ -1,4 +1,6 @@
 use std::fmt;
+use num_traits::real::Real;
+use crate::wave::EBitDepth;
 
 /// 共通化したサンプルの振幅を表す。
 ///
@@ -78,6 +80,22 @@ impl UniformedSample {
         Self((sample as f64) / (i16::MAX as f64))
     }
 
+    /// 任意のデシベルから`depth`範囲に合わせて変換する。
+    pub fn from_db(decibel: f64, depth: EBitDepth, is_plus: bool) -> Self {
+        match depth {
+            EBitDepth::Linear16 => {
+                let decibel = depth.clamp_decibel(decibel);
+                let absed = 10.0.powf(decibel / 20.0);
+                if is_plus {
+                    Self::from_f64(absed)
+                }
+                else {
+                    Self::from_f64(absed * -1.0)
+                }
+            }
+        }
+    }
+
     /// [`UniformedSample`]から量子化16ビットの[`i16`]に変換する。<br>
     /// [`i16`]で表現できない振幅値は削られて一番近い下の値に変換される。
     pub fn to_16bits(self) -> i16 {
@@ -141,4 +159,32 @@ impl UniformedSample {
     pub fn to_f64_clamped(self) -> f64 {
         self.0.clamp(-1.0, 1.0)
     }
+
+    /// [`EBitDepth`]から適切なDecibelに変換する。
+    /// 1もしくは-1の値は0dBに変換される。
+    ///
+    /// ```
+    /// # use soundprog::wave::sample::UniformedSample;
+    /// # use soundprog::wave::EBitDepth;
+    /// assert_eq!(UniformedSample::from_f64(0f64).apply_bit_depth(EBitDepth::Linear16) as i32, -96);
+    /// assert_eq!(UniformedSample::from_f64(1f64).apply_bit_depth(EBitDepth::Linear16), 0.0);
+    /// assert_eq!(UniformedSample::from_f64(-1f64).apply_bit_depth(EBitDepth::Linear16), 0.0);
+    /// ```
+    pub fn apply_bit_depth(self, depth: EBitDepth) -> f64 {
+        match depth {
+            EBitDepth::Linear16 => {
+                // [0, 32768]範囲に収まるはず。
+                let absed = (self.to_16bits().abs() as f64) + 1.0;
+                let factor = absed / ((u16::MAX >> 1) as f64);
+
+                // 変換。
+                // [-96.32~, 0]dB
+                factor.log10() * 20.0
+            }
+        }
+    }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

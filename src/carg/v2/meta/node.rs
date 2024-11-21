@@ -2,11 +2,13 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::carg::v1::EOutputFileFormat;
 use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, Setting, TProcessItemPtr};
+use crate::carg::v2::adapter::compressor::{AdapterCompressorProcessData, MetaCompressorInfo};
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
 use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
+use crate::carg::v2::analyzer::lufs::{AnalyzeLUFSProcessData, MetaLufsInfo};
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
@@ -104,6 +106,9 @@ pub enum ENode {
         /// 半分ずつ重ねるか
         overlap: bool,
     },
+    /// 音を分析しLUFSを測定する。
+    #[serde(rename = "analyze-lufs")]
+    AnalyzerLUFS(MetaLufsInfo),
     /// 振幅をAD(Attack-Delay)Envelopeを使って調整する。
     #[serde(rename = "adapter-envelope-ad")]
     AdapterEnvelopeAd {
@@ -128,6 +133,8 @@ pub enum ENode {
     /// バッファを全部合わせる。
     #[serde(rename = "adapter-wave-sum")]
     AdapterWaveSum,
+    #[serde(rename = "adapter-compressor")]
+    AdapterCompressor(MetaCompressorInfo),
     /// 昔に作っておいたFIRのLPFフィルター（2次FIR）
     #[serde(rename = "filter-fir-lpf")]
     FilterFIRLPF(MetaFIRLPFInfo),
@@ -170,6 +177,7 @@ impl ENode {
             | ENode::EmitterSawtooth { .. } => SineWaveEmitterProcessData::create_from(self, setting),
             ENode::AdapterEnvelopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
             ENode::AdapterEnvelopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
+            ENode::AdapterCompressor(_) => AdapterCompressorProcessData::create_from(self, setting),
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
@@ -186,6 +194,7 @@ impl ENode {
             ENode::FilterIIRHPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::HighPass),
             ENode::FilterIIRBandPass(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandPass),
             ENode::FilterIIRBandStop(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandStop),
+            ENode::AnalyzerLUFS(_) => AnalyzeLUFSProcessData::create_from(self, setting),
         }
     }
 }

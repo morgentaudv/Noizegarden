@@ -22,6 +22,8 @@ use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
+use crate::carg::v2::adapter::compressor::AdapterCompressorProcessData;
+use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 
 /// ピンのカテゴリのビットフラグ
@@ -88,9 +90,11 @@ pub enum ENodeSpecifier {
     EmitterWavMono,
     AnalyzerDFT,
     AnalyzerFFT,
+    AnalyzerLUFS,
     AdapterEnvelopeAd,
     AdapterEnvelopeAdsr,
     AdapterWaveSum,
+    AdapterCompressor,
     FilterFIRLPF,
     FilterIIRLPF,
     FilterIIRHPF,
@@ -118,8 +122,10 @@ impl ENodeSpecifier {
             ENode::EmitterWavMono(_) => Self::EmitterWavMono,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
             ENode::AnalyzerFFT { .. } => Self::AnalyzerFFT,
+            ENode::AnalyzerLUFS(_) => Self::AnalyzerLUFS,
             ENode::AdapterEnvelopeAd { .. } => Self::AdapterEnvelopeAd,
             ENode::AdapterEnvelopeAdsr { .. } => Self::AdapterEnvelopeAdsr,
+            ENode::AdapterCompressor(_) => Self::AdapterCompressor,
             ENode::OutputFile { .. } => Self::OutputFile,
             ENode::OutputLog { .. } => Self::OutputLog,
             ENode::AdapterWaveSum => Self::AdapterWaveSum,
@@ -140,6 +146,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_pin_names(),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_input_pin_names(),
+            Self::AdapterCompressor => AdapterCompressorProcessData::get_input_pin_names(),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -149,6 +156,7 @@ impl ENodeSpecifier {
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_input_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_pin_names(),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
@@ -169,6 +177,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_output_pin_names(),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_output_pin_names(),
+            Self::AdapterCompressor => AdapterCompressorProcessData::get_output_pin_names(),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -178,6 +187,7 @@ impl ENodeSpecifier {
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_output_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_output_pin_names(),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
@@ -247,6 +257,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_pin_categories(pin_name),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_pin_categories(pin_name),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_pin_categories(pin_name),
+            Self::AdapterCompressor => AdapterCompressorProcessData::get_pin_categories(pin_name),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -256,6 +267,7 @@ impl ENodeSpecifier {
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_pin_categories(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_pin_categories(pin_name),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_pin_categories(pin_name),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_pin_categories(pin_name),
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
             Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
@@ -276,6 +288,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_input_container_flag(pin_name),
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_container_flag(pin_name),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_input_container_flag(pin_name),
+            Self::AdapterCompressor => AdapterCompressorProcessData::get_input_container_flag(pin_name),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -285,6 +298,7 @@ impl ENodeSpecifier {
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_container_flag(pin_name),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_input_container_flag(pin_name),
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
