@@ -23,6 +23,7 @@ use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ENode, NodePinItem, NodePinItemList};
 use num_traits::Zero;
 use crate::carg::v2::adapter::compressor::AdapterCompressorProcessData;
+use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 
@@ -95,6 +96,7 @@ pub enum ENodeSpecifier {
     AdapterEnvelopeAdsr,
     AdapterWaveSum,
     AdapterCompressor,
+    AdapterLimiter,
     FilterFIRLPF,
     FilterIIRLPF,
     FilterIIRHPF,
@@ -135,6 +137,7 @@ impl ENodeSpecifier {
             ENode::FilterIIRHPF(_) => Self::FilterIIRHPF,
             ENode::FilterIIRBandPass(_) => Self::FilterIIRBandPass,
             ENode::FilterIIRBandStop(_) => Self::FilterIIRBandStop,
+            ENode::AdapterLimiter(_) => Self::AdapterLimiter,
         }
     }
 
@@ -147,6 +150,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_pin_names(),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_input_pin_names(),
             Self::AdapterCompressor => AdapterCompressorProcessData::get_input_pin_names(),
+            Self::AdapterLimiter => AdapterLimiterProcessData::get_input_pin_names(),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -178,6 +182,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_output_pin_names(),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_output_pin_names(),
             Self::AdapterCompressor => AdapterCompressorProcessData::get_output_pin_names(),
+            Self::AdapterLimiter => AdapterLimiterProcessData::get_output_pin_names(),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -258,6 +263,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_pin_categories(pin_name),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_pin_categories(pin_name),
             Self::AdapterCompressor => AdapterCompressorProcessData::get_pin_categories(pin_name),
+            Self::AdapterLimiter => AdapterLimiterProcessData::get_pin_categories(pin_name),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare
@@ -289,6 +295,7 @@ impl ENodeSpecifier {
             Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_input_container_flag(pin_name),
             Self::AdapterWaveSum => AdapterWaveSumProcessData::get_input_container_flag(pin_name),
             Self::AdapterCompressor => AdapterCompressorProcessData::get_input_container_flag(pin_name),
+            Self::AdapterLimiter => AdapterLimiterProcessData::get_input_container_flag(pin_name),
             Self::EmitterPinkNoise
             | Self::EmitterSawtooth
             | Self::EmitterSquare

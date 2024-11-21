@@ -9,32 +9,30 @@ use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::wave::EBitDepth;
 use crate::wave::sample::UniformedSample;
 
-/// Compressorノードの設定入力情報
+/// Limiterノードの設定入力情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaCompressorInfo {
-    /// Compressor動作の基準dB
+pub struct MetaLimiterInfo {
+    /// Limiter動作の基準dB
     pub threshold_db: f64,
     /// 遷移帯域幅の総周波数範囲
     pub makeup_gain_db: f64,
     /// `threshold_db`前後の和らげさのdB範囲
     pub knee_width_db: f64,
-    /// `threshold_db`からのボリュームの増加比率の分母
-    pub ratio: f64,
     /// 基準Depth
     pub bit_depth: EBitDepth,
 }
 
 #[derive(Debug)]
-pub struct AdapterCompressorProcessData {
+pub struct AdapterLimiterProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    info: MetaCompressorInfo,
+    info: MetaLimiterInfo,
 }
 
 const INPUT_IN: &'static str = "in";
 const OUTPUT_OUT: &'static str = "out";
 
-impl TPinCategory for AdapterCompressorProcessData {
+impl TPinCategory for AdapterLimiterProcessData {
     fn get_input_pin_names() -> Vec<&'static str> {
         vec![INPUT_IN]
     }
@@ -59,7 +57,7 @@ impl TPinCategory for AdapterCompressorProcessData {
     }
 }
 
-impl TProcess for AdapterCompressorProcessData {
+impl TProcess for AdapterLimiterProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished
     }
@@ -87,12 +85,12 @@ impl TProcess for AdapterCompressorProcessData {
     }
 }
 
-impl AdapterCompressorProcessData {
+impl AdapterLimiterProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::AdapterCompressor(v) = node {
+        if let ENode::AdapterLimiter(v) = node {
             let item= Self {
                 setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::AdapterCompressor),
+                common: ProcessControlItem::new(ENodeSpecifier::AdapterLimiter),
                 info: v.clone(),
             };
 
@@ -134,11 +132,10 @@ impl AdapterCompressorProcessData {
             let is_plus = v.to_f64().is_sign_positive();
             let aligned_db = match v.apply_bit_depth(bit_depth) {
                 v if v < interp_min => v,
-                v if v >= interp_max => {
-                    (v - self.info.threshold_db) * self.info.ratio.recip() + self.info.threshold_db
-                },
+                v if v >= interp_max => self.info.threshold_db,
                 v => {
-                    // cubic-hermite splineで何とかする。
+                    // Compressorとは違って、Ratioが無限に近いと思ってもいいので
+                    // cubic-hermiteの一部項がなくなる。
                     let f = (v - interp_min) / interp_range;
                     let fpow3 = f.powf(3.0);
                     let fpow2 = f.powf(2.0);
@@ -146,16 +143,14 @@ impl AdapterCompressorProcessData {
                     let l = (2.0 * fpow3) - (3.0 * fpow2) + 1.0;
                     let m = fpow3 - (2.0 * fpow2) + f;
                     let n = (-2.0 * fpow3) + (3.0 * fpow2);
-                    let o = fpow3 - fpow2;
 
                     let a = v;
-                    let b = (v - self.info.threshold_db) * self.info.ratio.recip() + self.info.threshold_db;
+                    let b = self.info.threshold_db;
 
-                    (l * a) + m + (n * b) + (o * self.info.ratio.recip())
+                    (l * a) + m + (n * b)
                 }
             };
 
-            //dbg!(v, aligned_db);
             UniformedSample::from_db(aligned_db + self.info.makeup_gain_db, bit_depth, is_plus)
         }).collect_vec();
 

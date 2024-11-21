@@ -18,6 +18,7 @@ Node based musical analysis application written in Rustlang, also features makin
 - [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
 - [ ] 48000kHz LUFS測定ノード
 - [ ] 44100kHz LUFS測定ノード
+- [x] Limiterノード
 - [x] Compressorノード
 - [x] FIRのLPF(Edge, Delta) ノード
 - [x] IIRのLPFノード

@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "setting": {
+    "time_tick_mode": "realtime",
+    "sample_count_frame": 1024,
+    "sample_rate": 48000
+  },
+  "node": {
+    "_start_pin": {
+      "type": "_start_pin"
+    },
+    "_dummy": {
+      "type": "_dummy"
+    },
+    "input": {
+      "type": "emitter-sine",
+      "frequency": {
+        "type": "a440",
+        "value": "A4"
+      },
+      "intensity": 1.0,
+      "range": {
+        "start": 0.0,
+        "length": 3.0
+      }
+    },
+    "limiter": {
+      "type": "adapter-limiter",
+      "threshold_db": -1.5,
+      "makeup_gain_db": -1.5,
+      "knee_width_db": 10.0,
+      "bit_depth": "linear_16"
+    },
+    "output": {
+      "type": "output-file",
+      "format": {
+        "type": "wav_lpcm16",
+        "sample_rate": 48000
+      },
+      "file_name": "test_envelope_limiter.wav"
+    }
+  },
+  "relation": [
+    {
+      "prev": {
+        "node": "_start_pin",
+        "pin": "out"
+      },
+      "next":{
+        "node": "input",
+        "pin": "in"
+      }
+    },
+    {
+      "prev": {
+        "node": "input",
+        "pin": "out"
+      },
+      "next": {
+        "node": "limiter",
+        "pin": "in"
+      }
+    },
+    {
+      "prev": {
+        "node": "limiter",
+        "pin": "out"
+      },
+      "next": {
+        "node": "output",
+        "pin": "in"
+      }
+    }
+  ]
+}

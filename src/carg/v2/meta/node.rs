@@ -5,6 +5,7 @@ use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, Setting, TProcessItemP
 use crate::carg::v2::adapter::compressor::{AdapterCompressorProcessData, MetaCompressorInfo};
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
+use crate::carg::v2::adapter::limiter::{AdapterLimiterProcessData, MetaLimiterInfo};
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
 use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
@@ -135,6 +136,8 @@ pub enum ENode {
     AdapterWaveSum,
     #[serde(rename = "adapter-compressor")]
     AdapterCompressor(MetaCompressorInfo),
+    #[serde(rename = "adapter-limiter")]
+    AdapterLimiter(MetaLimiterInfo),
     /// 昔に作っておいたFIRのLPFフィルター（2次FIR）
     #[serde(rename = "filter-fir-lpf")]
     FilterFIRLPF(MetaFIRLPFInfo),
@@ -178,6 +181,7 @@ impl ENode {
             ENode::AdapterEnvelopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
             ENode::AdapterEnvelopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
             ENode::AdapterCompressor(_) => AdapterCompressorProcessData::create_from(self, setting),
+            ENode::AdapterLimiter(_) => AdapterLimiterProcessData::create_from(self, setting),
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
