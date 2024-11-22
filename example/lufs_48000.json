@@ -1,0 +1,48 @@
+{
+    "version": 2,
+    "setting": {
+        "time_tick_mode": "realtime",
+        "sample_count_frame": 1024,
+        "sample_rate": 48000
+    },
+    "node": {
+        "_start_pin": {
+            "type": "_start_pin"
+        },
+        "_dummy": {
+            "type": "_dummy"
+        },
+        "input": {
+            "type": "emitter-wav-mono",
+            "path": "./sample05_48000.wav"
+        },
+        "lufs": {
+            "type": "analyze-lufs",
+            "use_input": false,
+            "slide_length": 0.05,
+            "block_length": 0.1
+        }
+    },
+    "relation": [
+        {
+            "prev": {
+                "node": "_start_pin",
+                "pin": "out"
+            },
+            "next":{
+                "node": "input",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input",
+                "pin": "out"
+            },
+            "next": {
+                "node": "lufs",
+                "pin": "in"
+            }
+        }
+    ]
+}
