@@ -212,7 +212,7 @@ impl AnalyzeLUFSProcessData {
         let slide_sample_len = (self.info.slide_length as f64 * sample_rate).floor() as usize;
         self.internal.next_start_i += slide_sample_len;
 
-        if (self.internal.processed_time <= 0.0) {
+        if self.internal.processed_time <= 0.0 {
             let sample_range_time = (block_sample_len as f64) / sample_rate;
             self.internal.processed_time += sample_range_time;
         }

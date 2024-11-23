@@ -7,8 +7,6 @@ use crate::wave::sample::UniformedSample;
 
 /// [`EProcessInputContainer`]の各アイテムの識別子をまとめている。
 pub mod container_category {
-    use crate::carg::v2::meta::pin_category;
-
     pub const UNINITIALIZED: u64 = 0;
 
     /// 空

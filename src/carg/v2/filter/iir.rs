@@ -1,4 +1,4 @@
-use crate::carg::v2::filter::iir_compute_sample;
+use crate::carg::v2::filter::{iir_compute_sample, EFilterMode};
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
@@ -11,14 +11,6 @@ use crate::wave::sample::UniformedSample;
 use crate::wave::PI2;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum EFilterMode {
-    LowPass,
-    HighPass,
-    BandPass,
-    BandStop,
-}
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]

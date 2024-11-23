@@ -21,9 +21,11 @@
             }
         },
         "filter": {
-            "type": "filter-fir-lpf",
+            "type": "filter-fir",
             "edge_frequency": 1000.0,
-            "delta_frequency": 1000.0
+            "delta_frequency": 1000.0,
+            "frequency_width": 0.0,
+            "mode": "low-pass"
         },
         "output": {
             "type": "output-file",

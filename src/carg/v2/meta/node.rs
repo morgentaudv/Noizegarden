@@ -14,8 +14,9 @@ use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo};
-use crate::carg::v2::filter::fir_lpf::{FIRLPFProcessData, MetaFIRLPFInfo};
-use crate::carg::v2::filter::iir::{EFilterMode, IIRProcessData, MetaIIRInfo};
+use crate::carg::v2::filter::EFilterMode;
+use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
+use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
@@ -139,8 +140,8 @@ pub enum ENode {
     #[serde(rename = "adapter-limiter")]
     AdapterLimiter(MetaLimiterInfo),
     /// 昔に作っておいたFIRのLPFフィルター（2次FIR）
-    #[serde(rename = "filter-fir-lpf")]
-    FilterFIRLPF(MetaFIRLPFInfo),
+    #[serde(rename = "filter-fir")]
+    FilterFIR(MetaFIRInfo),
     /// 昔に作っておいたIIRのLPFフィルター（2次IIR）
     #[serde(rename = "filter-iir-lpf")]
     FilterIIRLPF(MetaIIRInfo),
@@ -193,7 +194,7 @@ impl ENode {
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),
             ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
             ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),
-            ENode::FilterFIRLPF(_) => FIRLPFProcessData::create_from(self, setting),
+            ENode::FilterFIR(_) => FIRProcessData::create_from(self, setting),
             ENode::FilterIIRLPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::LowPass),
             ENode::FilterIIRHPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::HighPass),
             ENode::FilterIIRBandPass(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandPass),

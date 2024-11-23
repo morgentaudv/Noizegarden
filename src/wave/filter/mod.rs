@@ -115,8 +115,8 @@ pub enum EFilter {
     },
 }
 
-///
-fn compute_fir_lpf_filters_count(delta: f64) -> usize {
+/// FIRのフィルターカウント計算。
+pub fn compute_fir_filters_count(delta: f64) -> usize {
     let mut filters_count = ((3.1 / delta).round() as isize) - 1;
     if (filters_count % 2) != 0 {
         filters_count += 1;

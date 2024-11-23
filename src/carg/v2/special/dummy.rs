@@ -1,7 +1,6 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
 
 /// ダミーノード

@@ -3,7 +3,7 @@ use itertools::Itertools;
 use crate::wave::analyze::transformer::FrequencyTransformer;
 use crate::wave::{
     analyze::{analyzer::FrequencyAnalyzer, method::*, sine_freq::SineFrequency},
-    filter::{compute_fir_lpf_filters_count, compute_fir_lpf_response},
+    filter::{compute_fir_filters_count, compute_fir_lpf_response},
     sample::UniformedSample,
 };
 
@@ -39,7 +39,7 @@ impl DFTLowPassInternal {
         // フィルタ係数の数を計算する。
         // フィルタ係数の数は整数になるしかないし、またfilters_count+1が奇数じゃなきゃならない。
         // (Window Functionをちゃんと決めるため)
-        let filters_count = compute_fir_lpf_filters_count(delta);
+        let filters_count = compute_fir_filters_count(delta);
         let filter_responses = compute_fir_lpf_response(filters_count, edge);
         assert!(self.max_input_samples_count + filters_count <= self.transform_compute_count);
 

@@ -242,7 +242,7 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, _input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.emitter.is_some());
 
         // 設定のサンプル数ずつ吐き出す。

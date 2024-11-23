@@ -1,45 +1,52 @@
+use crate::carg::v2::filter::{compute_fir_response, EFilterMode};
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
+use crate::carg::v2::{
+    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
+    TProcessItemPtr,
+};
 use crate::wave::sample::UniformedSample;
-use crate::wave::PI2;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use crate::wave::filter::compute_fir_filters_count;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaFIRLPFInfo {
-    /// エッジ周波数
+pub struct MetaFIRInfo {
+    /// エッジ周波数（境界）
     pub edge_frequency: f64,
+    /// BPF、BEFでedgeを基点にした総範囲。
+    pub frequency_width: f64,
     /// 遷移帯域幅の総周波数範囲
     pub delta_frequency: f64,
+    /// 処理モード
+    pub mode: EFilterMode,
 }
 
 /// 内部変数の保持構造体
 #[derive(Debug, Clone, Default)]
 struct InternalInfo {
-    /// 次のFIRLPF処理で入力バッファのスタート地点インデックス
+    /// 次のFIR処理で入力バッファのスタート地点インデックス
     next_start_i: usize,
 }
 
 #[derive(Debug)]
-pub struct FIRLPFProcessData {
+pub struct FIRProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    info: MetaFIRLPFInfo,
+    info: MetaFIRInfo,
     internal: InternalInfo,
 }
 
 const INPUT_IN: &'static str = "in";
 const OUTPUT_OUT: &'static str = "out";
 
-impl FIRLPFProcessData {
+impl FIRProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::FilterFIRLPF(v) = node {
+        if let ENode::FilterFIR(v) = node {
             let item = Self {
                 setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::FilterFIRLPF),
+                common: ProcessControlItem::new(ENodeSpecifier::FilterFIR),
                 info: v.clone(),
                 internal: InternalInfo::default(),
             };
@@ -49,9 +56,10 @@ impl FIRLPFProcessData {
     }
 
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
-        // まずLPFでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
+        // まずFIRでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
         let sample_rate = self.setting.sample_rate as f64;
         let edge = self.info.edge_frequency / sample_rate;
+        let width = self.info.frequency_width / sample_rate;
         let delta = self.info.delta_frequency / sample_rate;
 
         let can_process = self.update_input_buffer();
@@ -62,8 +70,11 @@ impl FIRLPFProcessData {
         // フィルタ係数の数を計算する。
         // フィルタ係数の数は整数になるしかないし、またfilters_count+1が奇数じゃなきゃならない。
         // (Window Functionをちゃんと決めるため)
-        let filters_count = compute_fir_lpf_filters_count(delta);
-        let filter_responses = compute_fir_lpf_response(filters_count, edge);
+        let filters_count = compute_fir_filters_count(delta);
+        let filter_responses = compute_fir_response(filters_count,
+            edge,
+            width,
+            self.info.mode);
 
         // また設定によってfilters_countが変わるので、ほかのノードのようにDrainすることはできない。
         // ただし今進行した分をIndexとして入れて、
@@ -97,13 +108,12 @@ impl FIRLPFProcessData {
 
         // 処理が終わったら出力する。
         self.internal.next_start_i += buffer.len();
-        self.common.insert_to_output_pin(
-            OUTPUT_OUT,
-            EProcessOutput::BufferMono(ProcessOutputBuffer::new(
-                buffer,
-                setting
-            ))
-        ).unwrap();
+        self.common
+            .insert_to_output_pin(
+                OUTPUT_OUT,
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, setting)),
+            )
+            .unwrap();
 
         // 自分を終わるかしないかのチェック
         if in_input.is_children_all_finished() {
@@ -119,9 +129,7 @@ impl FIRLPFProcessData {
     fn update_input_buffer(&mut self) -> bool {
         // 処理するためのバッファが十分じゃないと処理できない。
         let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
-            EProcessInputContainer::BufferMonoDynamic(v) => {
-                v.buffer.len() > 0
-            }
+            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() > 0,
             _ => false,
         };
         if !is_buffer_enough {
@@ -144,7 +152,7 @@ impl FIRLPFProcessData {
     }
 }
 
-impl TPinCategory for FIRLPFProcessData {
+impl TPinCategory for FIRProcessData {
     fn get_input_pin_names() -> Vec<&'static str> {
         vec![INPUT_IN]
     }
@@ -169,12 +177,14 @@ impl TPinCategory for FIRLPFProcessData {
     }
 }
 
-impl TProcess for FIRLPFProcessData {
+impl TProcess for FIRProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished
     }
 
-    fn can_process(&self) -> bool { true }
+    fn can_process(&self) -> bool {
+        true
+    }
 
     fn get_common_ref(&self) -> &ProcessControlItem {
         &self.common
@@ -193,46 +203,6 @@ impl TProcess for FIRLPFProcessData {
             _ => (),
         }
     }
-}
-
-/// FIRのLPFのフィルターカウント計算。
-fn compute_fir_lpf_filters_count(delta: f64) -> usize {
-    let mut filters_count = ((3.1 / delta).round() as isize) - 1;
-    if (filters_count % 2) != 0 {
-        filters_count += 1;
-    }
-
-    filters_count as usize
-}
-
-/// FIRのLPFの応答計算。
-fn compute_fir_lpf_response(filters_count: usize, edge: f64) -> Vec<f64> {
-    // isizeに変更する理由としては、responseを計算する際に負の数のIndexにも接近するため
-    let filters_count = filters_count as isize;
-
-    // -filters_count/2からfilters_count/2までにEWindowFunction(Hann)の値リストを求める。
-    let windows = (0..=filters_count)
-        .map(|v| {
-            let sine = PI2 * ((v as f64) + 0.5) / ((filters_count + 1) as f64);
-            (1.0 - sine) * 0.5
-        })
-        .collect_vec();
-
-    // フィルタ係数の週はす特性bを計算する。
-    let mut bs = (((filters_count >> 1) * -1)..=(filters_count >> 1))
-        .map(|v| {
-            let input = PI2 * edge * (v as f64);
-            let sinc = if input == 0.0 { 1.0 } else { input.sin() / input };
-
-            2.0 * edge * sinc
-        })
-        .collect_vec();
-
-    assert_eq!(bs.len(), windows.len());
-    for i in 0..windows.len() {
-        bs[i] *= windows[i];
-    }
-    bs
 }
 
 // ----------------------------------------------------------------------------
