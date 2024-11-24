@@ -1,4 +1,5 @@
 use miniaudio::{Device, DeviceConfig, DeviceType, Format, Waveform, WaveformConfig, WaveformType};
+use crate::miniaudio::wait_for_enter;
 
 pub const DEVICE_FORMAT: Format = Format::F32;
 pub const DEVICE_CHANNELS: u32 = 2;
@@ -10,7 +11,7 @@ fn test_miniaudio_playback_sine() {
     let sine_wave_config = WaveformConfig::new(
         DEVICE_FORMAT,
         DEVICE_CHANNELS,
-        miniaudio::SAMPLE_RATE_44100,
+        DEVICE_SAMPLE_RATE,
         WaveformType::Sine,
         0.2,
         440.0
@@ -22,6 +23,13 @@ fn test_miniaudio_playback_sine() {
     device_config.playback_mut().set_channels(DEVICE_CHANNELS);
     device_config.set_sample_rate(DEVICE_SAMPLE_RATE);
 
+    // デバイスの設定が変わるとストップされるらしい。
+    // 理想的にはストップコールバックから通知して、デバイスを作り直す。というのが望ましいかと。
+    // デバイスが作り直せなかったらサイレントにするとか。クラッシュはさけたいかな。。
+    // (↑) 別のテストで実装してみる。
+    device_config.set_stop_callback(|_| {
+       println!("Stopped");
+    });
     device_config.set_data_callback(move |_device, output, input| {
         sine_wave.read_pcm_frames(output);
     });
@@ -33,19 +41,6 @@ fn test_miniaudio_playback_sine() {
     println!("Device Sample Rate: {}Hz", device.sample_rate());
     wait_for_enter();
 
-}
-
-/// Shows a prompt and waits for input on stdin.
-fn wait_for_enter() {
-    use std::io::Write;
-
-    print!("Press ENTER/RETURN to exit...");
-    // Make sure the line above is displayed:
-    std::io::stdout().flush().expect("failed to flush stdout");
-    // Just read some random line off of stdin and discard it:
-    std::io::stdin()
-        .read_line(&mut String::new())
-        .expect("failed to wait for line");
 }
 
 // ----------------------------------------------------------------------------
