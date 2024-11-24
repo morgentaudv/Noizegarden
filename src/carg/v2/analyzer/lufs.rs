@@ -3,7 +3,7 @@ use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputCon
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputText, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
+use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputText, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 
@@ -123,22 +123,31 @@ impl TProcess for AnalyzeLUFSProcessData {
     }
 }
 
-impl AnalyzeLUFSProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::AnalyzerLUFS(v) = node {
+impl TProcessItem for AnalyzeLUFSProcessData {
+    fn can_create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<TProcessItemPtr> {
+        // これで関数実行は行うようにするけど変数は受け取らないことができる。
+        let _is_ok = Self::can_create_item(&setting)?;
+
+        if let ENode::AnalyzerLUFS(v) = setting.node {
             let item = Self {
-                setting: setting.clone(),
+                setting: setting.setting.clone(),
                 common: ProcessControlItem::new(ENodeSpecifier::AnalyzerLUFS),
                 info: v.clone(),
                 internal: InternalInfo::default(),
             };
 
-            return SItemSPtr::new(item);
+            return Ok(SItemSPtr::new(item));
         }
 
         unreachable!("Unexpected branch");
     }
+}
 
+impl AnalyzeLUFSProcessData {
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         let can_process = self.update_input_buffer();
         if !can_process {

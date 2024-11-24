@@ -577,6 +577,24 @@ pub trait TProcess: std::fmt::Debug {
     fn try_process(&mut self, input: &ProcessProcessorInput);
 }
 
+/// [`TProcessItem`]traitで使う構造体。
+pub struct ProcessItemCreateSetting<'a> {
+    pub node: &'a ENode,
+    pub setting: &'a Setting,
+}
+
+/// アイテムの生成の処理をまとめるためのtrait。
+/// 処理アイテム自体はこれを持っても、もたなくてもいいができればこれも[`TProcess`]と一緒に実装した方がいい。
+pub trait TProcessItem: TProcess {
+
+    /// アイテムの作成ができるかを確認するための関数。
+    fn can_create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<()>;
+
+
+    /// 処理アイテムを生成するための関数。
+    fn create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<TProcessItemPtr>;
+}
+
 /// [`TProcess`]を実装しているアイテムの外部表示タイプ
 pub type TProcessItemPtr = ItemSPtr<dyn TProcess>;
 

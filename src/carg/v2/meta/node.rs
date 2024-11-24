@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::carg::v1::EOutputFileFormat;
-use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, Setting, TProcessItemPtr};
+use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, ProcessItemCreateSetting, Setting, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::adapter::compressor::{AdapterCompressorProcessData, MetaCompressorInfo};
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
@@ -17,6 +17,7 @@ use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo}
 use crate::carg::v2::filter::EFilterMode;
 use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
 use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
+use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
@@ -154,6 +155,8 @@ pub enum ENode {
     /// 昔に作っておいたIIRのバンドストップフィルター（2次IIR）
     #[serde(rename = "filter-iir-bsf")]
     FilterIIRBandStop(MetaIIRInfo),
+    #[serde(rename = "filter-irconv")]
+    FilterIRConvolution(MetaIRConvInfo),
     #[serde(rename = "mix-stereo")]
     MixStereo {
         gain_0: EFloatCommonPin,
@@ -199,7 +202,14 @@ impl ENode {
             ENode::FilterIIRHPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::HighPass),
             ENode::FilterIIRBandPass(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandPass),
             ENode::FilterIIRBandStop(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandStop),
-            ENode::AnalyzerLUFS(_) => AnalyzeLUFSProcessData::create_from(self, setting),
+            ENode::FilterIRConvolution(_) => IRConvolutionProcessData::create_from(self, setting),
+            ENode::AnalyzerLUFS(_) => {
+                let setting = ProcessItemCreateSetting{
+                    node: &self,
+                    setting,
+                };
+                AnalyzeLUFSProcessData::create_item(&setting).expect("Failed to create item")
+            }
         }
     }
 }
