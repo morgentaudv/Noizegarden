@@ -7,6 +7,7 @@ use std::f64::consts::PI;
 
 pub mod fir;
 pub mod iir;
+pub mod irconv;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum EFilterMode {

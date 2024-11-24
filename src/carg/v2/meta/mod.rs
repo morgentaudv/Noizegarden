@@ -26,6 +26,7 @@ use crate::carg::v2::adapter::compressor::AdapterCompressorProcessData;
 use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
+use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
 
 /// ピンのカテゴリのビットフラグ
 pub mod pin_category {
@@ -102,6 +103,7 @@ pub enum ENodeSpecifier {
     FilterIIRHPF,
     FilterIIRBandPass,
     FilterIIRBandStop,
+    FilterIRConvolution,
     MixStereo,
     OutputFile,
     OutputLog,
@@ -137,6 +139,7 @@ impl ENodeSpecifier {
             ENode::FilterIIRHPF(_) => Self::FilterIIRHPF,
             ENode::FilterIIRBandPass(_) => Self::FilterIIRBandPass,
             ENode::FilterIIRBandStop(_) => Self::FilterIIRBandStop,
+            ENode::FilterIRConvolution(_) => Self::FilterIRConvolution,
             ENode::AdapterLimiter(_) => Self::AdapterLimiter,
         }
     }
@@ -170,6 +173,7 @@ impl ENodeSpecifier {
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_input_pin_names()
             }
+            Self::FilterIRConvolution => IRConvolutionProcessData::get_input_pin_names(),
         }
     }
 
@@ -202,6 +206,7 @@ impl ENodeSpecifier {
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_output_pin_names()
             }
+            Self::FilterIRConvolution => IRConvolutionProcessData::get_output_pin_names(),
         }
     }
 
@@ -282,7 +287,8 @@ impl ENodeSpecifier {
             Self::FilterFIR => FIRProcessData::get_pin_categories(pin_name),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_pin_categories(pin_name)
-            }
+            },
+            Self::FilterIRConvolution => IRConvolutionProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -314,7 +320,8 @@ impl ENodeSpecifier {
             Self::FilterFIR => FIRProcessData::get_input_container_flag(pin_name),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_input_container_flag(pin_name)
-            }
+            },
+            Self::FilterIRConvolution => IRConvolutionProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
     }
