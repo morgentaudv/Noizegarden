@@ -17,6 +17,16 @@ mod hz48000 {
     pub const IIR_DS: [f64; 3] = [1.0, -2.0, 1.0];
 }
 
+/// 44.1kHzの時の数値の参考は
+/// https://www.wizard-notes.com/entry/music-analysis/k-weighting
+mod hz44100 {
+    pub const IIR_AS: [f64; 3] = [1.0, -1.69066543, 0.73246971];
+    pub const IIR_BS: [f64; 3] = [1.53517731, -2.69174966, 1.19837662];
+
+    pub const IIR_CS: [f64; 3] = [1.0, -1.99431068, 0.99433471];
+    pub const IIR_DS: [f64; 3] = [0.99716135, -1.99432269, 0.99716135];
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaLufsInfo {
     /// インプットとして入力されるサンプルバッファのサンプルレートを代わりに使うか否か
@@ -145,6 +155,13 @@ impl AnalyzeLUFSProcessData {
         } else {
             self.setting.sample_rate as f64
         };
+        let (iir_as, iir_bs, iir_cs, iir_ds) = {
+            match sample_rate {
+                48000.0 => (hz48000::IIR_AS, hz48000::IIR_BS, hz48000::IIR_CS, hz48000::IIR_DS),
+                44100.0 => (hz44100::IIR_AS, hz44100::IIR_BS, hz44100::IIR_CS, hz44100::IIR_DS),
+                _ => unreachable!("Unexpected branch"),
+            }
+        };
 
         // `block_length`から処理ができるかを確認する。
         // もしインプットが終わったなら、尺が足りなくてもそのまま処理する。
@@ -168,8 +185,8 @@ impl AnalyzeLUFSProcessData {
                     sample_i,
                     &mut output_buffer,
                     buffer,
-                    &hz48000::IIR_AS,
-                    &hz48000::IIR_BS,
+                    &iir_as,
+                    &iir_bs,
                 );
             }
 
@@ -186,8 +203,8 @@ impl AnalyzeLUFSProcessData {
                     sample_i,
                     &mut output_buffer,
                     &after_k_weight,
-                    &hz48000::IIR_CS,
-                    &hz48000::IIR_DS,
+                    &iir_cs,
+                    &iir_ds,
                 );
             }
 
