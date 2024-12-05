@@ -1,7 +1,5 @@
 use std::io;
 
-use crate::wave::sine::setting::WaveSound;
-
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub(crate) struct LowWaveDataChunk {
@@ -18,18 +16,6 @@ impl LowWaveDataChunk {
     pub fn from_chunk_size(data_chunk_size: u32) -> Self {
         Self {
             data_chunk_id: LowWaveDataChunk::ID_SPECIFIER,
-            data_chunk_size,
-        }
-    }
-
-    /// [`WaveSound`]から[`LowWaveDataChunk`]を生成する。
-    pub fn from_wave_sound(sound: &WaveSound) -> Self {
-        let uniformed_unit_samples_count = sound.completed_samples_count() as u32;
-        let bytes_of_converted = sound.format.bits_per_sample.to_u32() / 8;
-        let data_chunk_size = uniformed_unit_samples_count * bytes_of_converted;
-
-        Self {
-            data_chunk_id: Self::ID_SPECIFIER,
             data_chunk_size,
         }
     }

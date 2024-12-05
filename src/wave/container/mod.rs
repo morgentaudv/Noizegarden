@@ -8,7 +8,6 @@ use wav::{
 
 use super::{
     sample::UniformedSample,
-    sine::setting::WaveSound,
     stretch::time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
 };
 use std::io;
@@ -96,24 +95,6 @@ impl WaveContainer {
             fact: wave_fact_chunk,
             data: wave_data_chunk,
             //raw_buffer: buffer,
-            uniformed_buffer,
-        })
-    }
-
-    /// [`WaveSound`]から[`WaveContainer`]を生成します。
-    pub fn from_wavesound(sound: &WaveSound) -> Option<Self> {
-        let data = LowWaveDataChunk::from_wave_sound(sound);
-        let riff = LowWaveRiffHeader::from_data_chunk(&data);
-        let fmt = LowWaveFormatHeader::from_wave_sound(sound);
-
-        // まず、WaveSoundから各WaveFragmentを収集して単一のバッファーを作る必要がある。
-        let uniformed_buffer = sound.get_completed_samples();
-
-        Some(Self {
-            riff,
-            fmt,
-            fact: None,
-            data,
             uniformed_buffer,
         })
     }

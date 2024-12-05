@@ -1,7 +1,5 @@
 use std::io;
 
-use crate::wave::sine::setting::WaveSound;
-
 pub const WAV_DATATYPE_LPCM: u16 = 1;
 pub const WAV_DATATYPE_PCMU: u16 = 7;
 pub const WAV_DATATYPE_IMA_ADPCM: u16 = 17;
@@ -97,24 +95,6 @@ impl LowWaveFormatHeader {
                 block_size: WAV_IMA_ADPCM_BLOCK_SIZE, // 252Bytes (504Samples) + 4Bytes (Headers)
                 bits_per_sample: 4,
             },
-        }
-    }
-
-    /// [`WaveSound`]から[`LowWaveFormatHeader`]を生成する。
-    pub fn from_wave_sound(sound: &WaveSound) -> Self {
-        let channel = 1;
-        let unit_block_size = sound.format.bits_per_sample.to_byte_size();
-        let block_size = (unit_block_size as u16) * channel;
-
-        Self {
-            fmt_chunk_id: Self::ID_SPECIFIER,
-            fmt_chunk_size: Self::NORMAL_CHUNK_SIZE,
-            wave_format_type: WAV_DATATYPE_LPCM,
-            channel,
-            samples_per_sec: sound.format.samples_per_sec,
-            bytes_per_sec: (block_size as u32) * sound.format.samples_per_sec,
-            block_size,
-            bits_per_sample: sound.format.bits_per_sample.to_u32() as u16,
         }
     }
 

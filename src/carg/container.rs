@@ -1,24 +1,10 @@
-use std::{
-    collections::HashMap,
-    fs,
-    io::{self, Write},
-};
+use std::collections::HashMap;
 
-use crate::wave::{
-    container::WaveBuilder,
-    sample::UniformedSample,
-    sine::setting::{EBitsPerSample, WaveSound},
-    stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
-};
-use itertools::Itertools;
+use super::v2::{self};
 use crate::carg::v2::meta;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::math::window::EWindowFunction;
-use super::{
-    v1,
-    v2::{self},
-};
+use crate::wave::sample::UniformedSample;
 
 /// @brief パーシングされたノードのコンテナ。
 /// これだけで一連の処理ができる。

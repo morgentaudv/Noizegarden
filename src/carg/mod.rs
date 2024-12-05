@@ -6,7 +6,6 @@ use container::ENodeContainer;
 
 pub mod app_test;
 pub mod container;
-pub mod v1;
 pub mod v2;
 
 #[derive(Parser, Debug)]
