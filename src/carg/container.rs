@@ -37,6 +37,9 @@ pub enum ENodeContainer {
     },
 }
 
+unsafe impl Sync for ENodeContainer {}
+unsafe impl Send for ENodeContainer {}
+
 impl ENodeContainer {
     pub fn process(&self) -> anyhow::Result<()> {
         match self {

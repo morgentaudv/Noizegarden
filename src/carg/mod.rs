@@ -53,7 +53,7 @@ impl CommandArgs {
 }
 
 /// @brief コマンド引数をパーシングする。
-pub fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
+pub async fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
     let cli = CommandArgs::parse();
     let parsed_info = cli.try_parse_info()?;
 

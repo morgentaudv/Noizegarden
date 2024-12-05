@@ -16,3 +16,9 @@ serde = { version = "1.0.208", features = ["derive"] }
 serde_json = "1.0.125"
 anyhow = "1.0.86"
 om-fork-miniaudio = "0.12.1" # https://miniaud.io/
+# https://zenn.dev/woden/articles/9a6c3b26b89e0a
+tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
+
+# ----------------------------------------------------------------------------
+# EOF
+# ----------------------------------------------------------------------------

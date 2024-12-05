@@ -12,8 +12,16 @@ pub mod math;
 pub mod wave;
 
 fn main() -> anyhow::Result<()> {
-    let container = parse_command_arguments()?;
+    // @todo 24-12-05 後でParseを非同期で行うなど。
+    let container = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(parse_command_arguments())?;
     container.process()?;
 
     Ok(())
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------
