@@ -35,6 +35,16 @@ pub mod container_category {
 
     /// [`ENodeSpecifier::OutputLog`]専用
     pub const OUTPUT_LOG: u64 = BUFFER_MONO_DYNAMIC | TEXT_DYNAMIC;
+
+    /// [`ENodeSpecifier::OutputDevice`]専用
+    pub const OUTPUT_DEVICE: u64 = BUFFER_MONO_DYNAMIC | BUFFER_STEREO_DYNAMIC | OUTPUT_DEVICE_INTERNAL_TAG;
+
+    // ------------------------------------------------------------------------
+    // 内部用
+    // ------------------------------------------------------------------------
+
+    /// 内部識別区別タグ
+    const OUTPUT_DEVICE_INTERNAL_TAG: u64 = 1 << 48;
 }
 
 pub type EInputContainerCategoryFlag = u64;

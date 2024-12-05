@@ -1,5 +1,6 @@
-mod enumeration;
-mod playback_sine;
+//mod enumeration;
+//mod playback_sine;
+mod playback_simple_thread;
 
 /// Shows a prompt and waits for input on stdin.
 pub fn wait_for_enter() {

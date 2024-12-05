@@ -21,6 +21,7 @@ use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
+use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
 use crate::carg::v2::special::dummy::DummyProcessData;
@@ -170,6 +171,8 @@ pub enum ENode {
     },
     #[serde(rename = "output-log")]
     OutputLog { mode: EParsedOutputLogMode },
+    #[serde(rename = "output-device")]
+    OutputDevice(MetaOutputDeviceInfo),
 }
 
 impl ENode {
@@ -209,6 +212,13 @@ impl ENode {
                     setting,
                 };
                 AnalyzeLUFSProcessData::create_item(&setting).expect("Failed to create item")
+            }
+            ENode::OutputDevice(_) => {
+                let setting = ProcessItemCreateSetting{
+                    node: &self,
+                    setting,
+                };
+                OutputDeviceProcessData::create_item(&setting).expect("Failed to create item")
             }
         }
     }

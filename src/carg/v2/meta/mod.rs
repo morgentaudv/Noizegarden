@@ -27,6 +27,7 @@ use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
+use crate::carg::v2::output::output_device::OutputDeviceProcessData;
 
 /// ピンのカテゴリのビットフラグ
 pub mod pin_category {
@@ -107,6 +108,7 @@ pub enum ENodeSpecifier {
     MixStereo,
     OutputFile,
     OutputLog,
+    OutputDevice,
 }
 
 impl ENodeSpecifier {
@@ -132,6 +134,7 @@ impl ENodeSpecifier {
             ENode::AdapterCompressor(_) => Self::AdapterCompressor,
             ENode::OutputFile { .. } => Self::OutputFile,
             ENode::OutputLog { .. } => Self::OutputLog,
+            ENode::OutputDevice(_) => Self::OutputDevice,
             ENode::AdapterWaveSum => Self::AdapterWaveSum,
             ENode::MixStereo { .. } => Self::MixStereo,
             ENode::FilterFIR(_) => Self::FilterFIR,
@@ -166,6 +169,7 @@ impl ENodeSpecifier {
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_input_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_input_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_input_pin_names(),
+            Self::OutputDevice => OutputDeviceProcessData::get_input_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
@@ -199,6 +203,7 @@ impl ENodeSpecifier {
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_output_pin_names(),
             Self::OutputFile => OutputFileProcessData::get_output_pin_names(),
             Self::OutputLog => OutputLogProcessData::get_output_pin_names(),
+            Self::OutputDevice => OutputDeviceProcessData::get_output_pin_names(),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
@@ -281,6 +286,7 @@ impl ENodeSpecifier {
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_pin_categories(pin_name),
             Self::OutputFile => OutputFileProcessData::get_pin_categories(pin_name),
             Self::OutputLog => OutputLogProcessData::get_pin_categories(pin_name),
+            Self::OutputDevice => OutputDeviceProcessData::get_pin_categories(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_pin_categories(pin_name),
             Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
@@ -314,6 +320,7 @@ impl ENodeSpecifier {
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_input_container_flag(pin_name),
             Self::OutputFile => OutputFileProcessData::get_input_container_flag(pin_name),
             Self::OutputLog => OutputLogProcessData::get_input_container_flag(pin_name),
+            Self::OutputDevice => OutputDeviceProcessData::get_input_container_flag(pin_name),
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
