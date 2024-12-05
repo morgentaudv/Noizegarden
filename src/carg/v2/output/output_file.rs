@@ -10,9 +10,9 @@ use crate::carg::v2::meta::input::{
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
+
 use crate::{
     carg::{
-        v1::EOutputFileFormat,
         v2::{EProcessState, ProcessControlItem, ProcessProcessorInput, TProcess},
     },
     wave::{
@@ -20,6 +20,7 @@ use crate::{
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
+use crate::carg::v2::output::EOutputFileFormat;
 use crate::math::window::EWindowFunction;
 
 #[derive(Debug)]

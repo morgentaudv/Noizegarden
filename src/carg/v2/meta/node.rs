@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use crate::carg::v1::EOutputFileFormat;
 use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, ProcessItemCreateSetting, Setting, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::adapter::compressor::{AdapterCompressorProcessData, MetaCompressorInfo};
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
@@ -21,6 +20,7 @@ use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
+use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
