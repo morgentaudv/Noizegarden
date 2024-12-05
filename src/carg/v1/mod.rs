@@ -164,37 +164,6 @@ impl Input {
     }
 }
 
-/// @brief 設定ノード
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Setting {
-    pub sample_rate: u64,
-    pub bit_depth: String,
-}
-
-impl Setting {
-    /// [`WaveFormatSetting`]に変換する。
-    pub fn as_wave_format_setting(&self) -> WaveFormatSetting {
-        WaveFormatSetting {
-            samples_per_sec: self.sample_rate as u32,
-            bits_per_sample: {
-                assert!(self.bit_depth == "linear-16");
-                EBitsPerSample::Bits16
-            },
-        }
-    }
-}
-
-/// @brief 出力ノード
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "type", content = "value")]
-pub enum Output {
-    #[serde(rename = "file")]
-    File {
-        format: EOutputFileFormat,
-        file_name: String,
-    },
-}
-
 /// ファイルとして出力するときのノード。
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
@@ -203,14 +172,3 @@ pub enum EOutputFileFormat {
     WavLPCM16 { sample_rate: u64 },
 }
 
-/// v1バージョンにパーシングする。
-pub fn parse_v1(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
-    // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
-    let input: Vec<Input> = serde_json::from_value(info["input"].clone())?;
-    let setting: Setting = serde_json::from_value(info["setting"].clone())?;
-    let output: Output = serde_json::from_value(info["output"].clone())?;
-
-    // まとめて出力。
-    let container = ENodeContainer::V1 { input, setting, output };
-    return Ok(container);
-}

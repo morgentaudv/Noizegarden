@@ -60,9 +60,6 @@ pub async fn parse_command_arguments() -> anyhow::Result<ENodeContainer> {
     // チェック。
     let version = parsed_info["version"].as_i64().expect("version should be interger.");
     match version {
-        1 => {
-            return v1::parse_v1(&parsed_info);
-        }
         2 => {
             return v2::parse_v2(&parsed_info);
         }
