@@ -11,6 +11,7 @@ use crate::wave::sample::UniformedSample;
 use crate::wave::PI2;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -65,6 +66,8 @@ impl TPinCategory for IIRProcessData {
         }
     }
 }
+
+impl TSystemCategory for IIRProcessData {}
 
 impl TProcess for IIRProcessData {
     fn is_finished(&self) -> bool {

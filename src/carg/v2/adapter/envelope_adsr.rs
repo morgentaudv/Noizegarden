@@ -9,6 +9,7 @@ use crate::{
 };
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 #[derive(Debug)]
 pub struct AdapterEnvelopeAdsrProcessData {
@@ -193,6 +194,8 @@ impl AdapterEnvelopeAdsrProcessData {
         }
     }
 }
+
+impl TSystemCategory for AdapterEnvelopeAdsrProcessData {}
 
 impl TProcess for AdapterEnvelopeAdsrProcessData {
     fn is_finished(&self) -> bool {

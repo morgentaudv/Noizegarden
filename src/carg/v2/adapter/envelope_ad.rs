@@ -8,6 +8,7 @@ use crate::carg::v2::{
     ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
+use crate::carg::v2::meta::system::TSystemCategory;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug, Clone)]
@@ -181,6 +182,8 @@ impl AdapterEnvelopeAdProcessData {
         }
     }
 }
+
+impl TSystemCategory for AdapterEnvelopeAdProcessData {}
 
 impl TProcess for AdapterEnvelopeAdProcessData {
     fn is_finished(&self) -> bool {

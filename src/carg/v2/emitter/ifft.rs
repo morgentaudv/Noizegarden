@@ -3,6 +3,7 @@ use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::wave::analyze::method::ETransformMethod;
 use crate::wave::analyze::transformer::{EExportSampleCountMode, FrequencyTransformer};
 
@@ -114,6 +115,8 @@ impl IFFTEmitterProcessData {
         }
     }
 }
+
+impl TSystemCategory for IFFTEmitterProcessData {}
 
 impl TProcess for IFFTEmitterProcessData {
     fn is_finished(&self) -> bool {

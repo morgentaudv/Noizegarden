@@ -2,6 +2,7 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
+use crate::carg::v2::meta::system::TSystemCategory;
 
 /// ダミーノード
 #[derive(Debug)]
@@ -45,6 +46,8 @@ impl DummyProcessData {
         SItemSPtr::new(item)
     }
 }
+
+impl TSystemCategory for DummyProcessData {}
 
 impl TProcess for DummyProcessData {
     fn is_finished(&self) -> bool {

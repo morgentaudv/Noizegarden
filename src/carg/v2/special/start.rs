@@ -1,6 +1,7 @@
 use crate::carg::v2::{ENode, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
 use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 /// スタートノード
 #[derive(Debug)]
@@ -20,6 +21,8 @@ impl StartProcessData
         SItemSPtr::new(item)
     }
 }
+
+impl TSystemCategory for StartProcessData {}
 
 impl TPinCategory for StartProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。

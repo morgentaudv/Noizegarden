@@ -20,6 +20,7 @@ use std::{
     rc::Rc,
 };
 use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
+use crate::carg::v2::meta::system::TSystemCategory;
 
 pub mod adapter;
 pub mod analyzer;

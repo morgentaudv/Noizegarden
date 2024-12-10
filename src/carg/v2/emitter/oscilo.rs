@@ -9,6 +9,7 @@ use crate::{
     math::frequency::EFrequency,
     wave::{sample::UniformedSample, sine::emitter::SineUnitSampleEmitter},
 };
+use crate::carg::v2::meta::system::TSystemCategory;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ESineWaveEmitterType {
@@ -272,6 +273,8 @@ impl SineWaveEmitterProcessData {
         samples
     }
 }
+
+impl TSystemCategory for SineWaveEmitterProcessData {}
 
 impl TProcess for SineWaveEmitterProcessData {
     fn is_finished(&self) -> bool {

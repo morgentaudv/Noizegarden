@@ -6,6 +6,7 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::wave::EBitDepth;
 use crate::wave::sample::UniformedSample;
 
@@ -58,6 +59,8 @@ impl TPinCategory for AdapterCompressorProcessData {
         }
     }
 }
+
+impl TSystemCategory for AdapterCompressorProcessData {}
 
 impl TProcess for AdapterCompressorProcessData {
     fn is_finished(&self) -> bool {

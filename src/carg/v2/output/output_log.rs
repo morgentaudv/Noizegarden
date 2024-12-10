@@ -5,6 +5,7 @@ use crate::carg::v2::{
     Setting, TProcess, TProcessItemPtr,
 };
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 #[derive(Debug)]
 pub struct OutputLogProcessData {
@@ -78,6 +79,8 @@ impl OutputLogProcessData {
         self.common.state = EProcessState::Playing;
     }
 }
+
+impl TSystemCategory for OutputLogProcessData {}
 
 impl TProcess for OutputLogProcessData {
     fn is_finished(&self) -> bool {

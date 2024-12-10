@@ -6,6 +6,7 @@ use crate::carg::v2::{
     EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
     SItemSPtr, Setting, TProcess, TProcessItemPtr,
 };
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::wave::analyze::method::ETransformMethod;
 use crate::wave::analyze::transformer::{EExportSampleCountMode, FrequencyTransformer};
 
@@ -121,6 +122,8 @@ impl IDFTEmitterProcessData {
         }
     }
 }
+
+impl TSystemCategory for IDFTEmitterProcessData {}
 
 impl TProcess for IDFTEmitterProcessData {
     fn is_finished(&self) -> bool {

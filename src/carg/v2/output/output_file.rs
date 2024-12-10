@@ -20,6 +20,7 @@ use crate::{
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::output::EOutputFileFormat;
 use crate::math::window::EWindowFunction;
 
@@ -196,6 +197,8 @@ impl OutputFileProcessData {
         }
     }
 }
+
+impl TSystemCategory for OutputFileProcessData {}
 
 impl TProcess for OutputFileProcessData {
     /// データアイテムの処理が終わったか？

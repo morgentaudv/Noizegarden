@@ -3,6 +3,7 @@ use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputCon
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::math::window::EWindowFunction;
 use crate::wave::analyze::analyzer::{FrequencyAnalyzerV2, WaveContainerSetting};
 use crate::wave::analyze::method::EAnalyzeMethod;
@@ -209,6 +210,8 @@ impl AnalyzerFFTProcessData {
         }
     }
 }
+
+impl TSystemCategory for AnalyzerFFTProcessData {}
 
 impl TProcess for AnalyzerFFTProcessData {
     fn is_finished(&self) -> bool {

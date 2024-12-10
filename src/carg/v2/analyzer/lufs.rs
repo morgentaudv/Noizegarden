@@ -6,6 +6,7 @@ use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFla
 use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputText, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
+use crate::carg::v2::meta::system::TSystemCategory;
 
 mod hz48000 {
     /// HRTFのIIRフィルター（おおむねハイシェルブ）
@@ -94,6 +95,8 @@ impl TPinCategory for AnalyzeLUFSProcessData {
         }
     }
 }
+
+impl TSystemCategory for AnalyzeLUFSProcessData {}
 
 impl TProcess for AnalyzeLUFSProcessData {
     fn is_finished(&self) -> bool {

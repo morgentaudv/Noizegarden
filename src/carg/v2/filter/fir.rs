@@ -9,6 +9,7 @@ use crate::carg::v2::{
 };
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::wave::filter::compute_fir_filters_count;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -176,6 +177,8 @@ impl TPinCategory for FIRProcessData {
         }
     }
 }
+
+impl TSystemCategory for FIRProcessData {}
 
 impl TProcess for FIRProcessData {
     fn is_finished(&self) -> bool {

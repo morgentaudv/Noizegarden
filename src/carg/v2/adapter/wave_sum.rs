@@ -8,6 +8,7 @@ use crate::carg::v2::{
 };
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug)]
@@ -108,6 +109,8 @@ impl AdapterWaveSumProcessData {
         }
     }
 }
+
+impl TSystemCategory for AdapterWaveSumProcessData {}
 
 impl TProcess for AdapterWaveSumProcessData {
     fn is_finished(&self) -> bool {

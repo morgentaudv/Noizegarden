@@ -3,6 +3,7 @@ pub mod node;
 pub mod output;
 pub mod relation;
 pub mod setting;
+pub mod system;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
@@ -27,6 +28,7 @@ use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
+use crate::carg::v2::meta::system::{ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::output::output_device::OutputDeviceProcessData;
 
 /// ピンのカテゴリのビットフラグ
@@ -331,6 +333,39 @@ impl ENodeSpecifier {
             Self::FilterIRConvolution => IRConvolutionProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
+    }
+
+    pub fn get_dependent_system_cateogries(&self) -> ESystemCategoryFlag {
+        match self {
+            Self::InternalStartPin => StartProcessData::get_dependent_system_categories(),
+            Self::InternalDummy => DummyProcessData::get_dependent_system_categories(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::get_dependent_system_categories(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::get_dependent_system_categories(),
+            Self::AdapterWaveSum => AdapterWaveSumProcessData::get_dependent_system_categories(),
+            Self::AdapterCompressor => AdapterCompressorProcessData::get_dependent_system_categories(),
+            Self::AdapterLimiter => AdapterLimiterProcessData::get_dependent_system_categories(),
+            Self::EmitterPinkNoise
+            | Self::EmitterSawtooth
+            | Self::EmitterSquare
+            | Self::EmitterTriangle
+            | Self::EmitterWhiteNoise
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::get_dependent_system_categories(),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::get_dependent_system_categories(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::get_dependent_system_categories(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::get_dependent_system_categories(),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_dependent_system_categories(),
+            Self::OutputFile => OutputFileProcessData::get_dependent_system_categories(),
+            Self::OutputLog => OutputLogProcessData::get_dependent_system_categories(),
+            Self::OutputDevice => OutputDeviceProcessData::get_dependent_system_categories(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::get_dependent_system_categories(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::get_dependent_system_categories(),
+            Self::MixStereo => MixStereoProcessData::get_dependent_system_categories(),
+            Self::FilterFIR => FIRProcessData::get_dependent_system_categories(),
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
+                IIRProcessData::get_dependent_system_categories()
+            }
+            Self::FilterIRConvolution => IRConvolutionProcessData::get_dependent_system_categories(),
+        }
     }
 }
 

@@ -4,6 +4,7 @@ use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFla
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaIRConvInfo {
@@ -47,6 +48,8 @@ impl TPinCategory for IRConvolutionProcessData {
         }
     }
 }
+
+impl TSystemCategory for IRConvolutionProcessData {}
 
 impl TProcess for IRConvolutionProcessData {
     fn is_finished(&self) -> bool {

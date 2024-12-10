@@ -11,6 +11,7 @@ use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufReader;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaWavInfo {
@@ -60,6 +61,8 @@ impl TPinCategory for EmitterWavMonoProcessData {
         }
     }
 }
+
+impl TSystemCategory for EmitterWavMonoProcessData {}
 
 impl TProcess for EmitterWavMonoProcessData {
     fn is_finished(&self) -> bool {

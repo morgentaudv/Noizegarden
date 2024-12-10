@@ -12,6 +12,7 @@ use crate::wave::analyze::{
 };
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
+use crate::carg::v2::meta::system::TSystemCategory;
 
 #[derive(Debug)]
 pub struct AnalyzerDFTProcessData {
@@ -219,6 +220,8 @@ impl AnalyzerDFTProcessData {
         }
     }
 }
+
+impl TSystemCategory for AnalyzerDFTProcessData {}
 
 impl TProcess for AnalyzerDFTProcessData {
     fn is_finished(&self) -> bool {

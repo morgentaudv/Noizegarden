@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::carg::v2::{EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, TProcess, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::meta::{input, pin_category, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaOutputDeviceInfo {
@@ -36,6 +37,12 @@ impl TPinCategory for OutputDeviceProcessData {
             INPUT_IN => Some(input::container_category::OUTPUT_DEVICE),
             _ => None,
         }
+    }
+}
+
+impl TSystemCategory for OutputDeviceProcessData {
+    fn get_dependent_system_categories() -> ESystemCategoryFlag {
+        system_category::AUDIO_DEVICE
     }
 }
 
