@@ -19,6 +19,7 @@ use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
@@ -283,5 +284,16 @@ impl MetaNodeContainer {
             .get_pin_categories(&relation.next)
             .expect(&format!("({:?}) must be have pin categories", relation.next));
         SPinCategory::can_support(output_pin, input_pin)
+    }
+
+    /// このマップで必要となるシステムのカテゴリ全体フラグを返す。
+    pub fn get_dependent_system_categories(&self) -> ESystemCategoryFlag {
+
+        let mut categories = system_category::NONE;
+        for (_, v) in &self.map {
+            categories |= ENodeSpecifier::from_node(v).get_dependent_system_cateogries();
+        }
+
+        categories
     }
 }

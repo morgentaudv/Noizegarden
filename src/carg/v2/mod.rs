@@ -3,7 +3,7 @@ use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputCon
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag};
-use crate::carg::v2::utility::validate_node_relations;
+use crate::carg::v2::utility::{validate_node_relations};
 use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{
     math::timer::Timer,
@@ -19,8 +19,10 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
+use num_traits::{One, Zero};
+use soundprog::device::{AudioDevice, AudioDeviceConfig};
 use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{system_category, TSystemCategory};
 
 pub mod adapter;
 pub mod analyzer;
@@ -604,6 +606,20 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     let node_container = MetaNodeContainer { map: nodes };
     validate_node_relations(&node_container, &relations)?;
 
+    // 依存システムの初期化
+    let dependent_systems = node_container.get_dependent_system_categories();
+    if dependent_systems != system_category::NONE {
+        // AudioDeviceの初期化
+        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+            let mut config = AudioDeviceConfig::new();
+            config
+                .set_channels(1)
+                .set_sample_rate(setting.sample_rate as usize);
+
+            AudioDevice::initialize(config);
+        }
+    }
+
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
     let node_map = {
@@ -699,6 +715,15 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     }
 
     println!("{:?}s", elapsed_time);
+
+    // 依存システムの解放
+    if dependent_systems != system_category::NONE {
+        // AudioDeviceの解放
+        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+            AudioDevice::cleanup();
+        }
+
+    }
 
     Ok(())
 }

@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 static AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 
+/// [`AudioDevice`]を生成するための初期設定のための構造体。
 pub struct AudioDeviceConfig {
     /// @brief 初期チャンネル数
     channels: usize,
@@ -11,6 +12,14 @@ pub struct AudioDeviceConfig {
 }
 
 impl AudioDeviceConfig {
+    /// デフォルトインスタンスの生成。
+    pub fn new() -> Self {
+        Self {
+            channels: 0,
+            sample_rate: 0,
+        }
+    }
+    
     /// @brief 初期チャンネル数の指定
     pub fn set_channels(&mut self, channels: usize) -> &mut Self {
         self.channels = channels;
@@ -32,7 +41,28 @@ pub struct AudioDevice {
 }
 
 impl AudioDevice {
-    pub fn new(config: AudioDeviceConfig) -> Self {
+    /// システムを初期化する。
+    pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
+        assert!(AUDIO_DEVICE.get().is_none());
+
+        let device = AUDIO_DEVICE.get_or_init(move || {
+            let device = Self::new(config);
+            Arc::new(Mutex::new(device))
+        });
+
+        let weak_device = Arc::downgrade(&device);
+        todo!()
+    }
+
+    /// システムを解放する。
+    pub fn cleanup() {
+        assert!(AUDIO_DEVICE.get().is_some());
+
+        todo!()
+        //AUDIO_DEVICE.take()
+    }
+
+    fn new(config: AudioDeviceConfig) -> Self {
         assert!(config.channels > 0);
         assert!(config.sample_rate > 0);
 
@@ -48,18 +78,6 @@ impl AudioDevice {
             low_device,
             original_proxy: None, // これはあとで初期化する。
         }
-    }
-
-    pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
-        assert!(AUDIO_DEVICE.get().is_none());
-
-        let device = AUDIO_DEVICE.get_or_init(move || {
-            let device = Self::new(config);
-            Arc::new(Mutex::new(device))
-        });
-
-        let weak_device = Arc::downgrade(&device);
-        todo!()
     }
 
     fn on_update_device_callback(_device: &miniaudio::RawDevice, _output: &mut FramesMut, _input: &miniaudio::Frames) {}
