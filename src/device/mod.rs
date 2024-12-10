@@ -1,7 +1,10 @@
 use miniaudio::{DeviceType, FramesMut};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-static AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
+/// 24-12-10
+/// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
+/// 他に良い方法があればそれにしてmutをなくしたい。
+static mut AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 
 /// [`AudioDevice`]を生成するための初期設定のための構造体。
 pub struct AudioDeviceConfig {
@@ -19,7 +22,7 @@ impl AudioDeviceConfig {
             sample_rate: 0,
         }
     }
-    
+
     /// @brief 初期チャンネル数の指定
     pub fn set_channels(&mut self, channels: usize) -> &mut Self {
         self.channels = channels;
@@ -42,24 +45,58 @@ pub struct AudioDevice {
 
 impl AudioDevice {
     /// システムを初期化する。
+    /// すべての処理（レンダリング）が始まる前に処理すべき。
     pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
-        assert!(AUDIO_DEVICE.get().is_none());
+        // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
+        // こっからProxyを作って、weakを渡してから
+        let original_proxy = unsafe {
+            assert!(AUDIO_DEVICE.get().is_none());
 
-        let device = AUDIO_DEVICE.get_or_init(move || {
-            let device = Self::new(config);
-            Arc::new(Mutex::new(device))
-        });
+            // デバイスの初期化
+            let device = AUDIO_DEVICE.get_or_init(move || {
+                let device = Self::new(config);
+                Arc::new(Mutex::new(device))
+            });
+            let weak_device = Arc::downgrade(&device);
 
-        let weak_device = Arc::downgrade(&device);
-        todo!()
+            let original_proxy = AudioDeviceProxy::new(weak_device);
+            original_proxy
+        };
+
+        // Proxyの登録。
+        let weak_proxy = Arc::downgrade(&original_proxy);
+        unsafe {
+            // Mutexがおそらく内部Internal Mutabilityを実装しているかと。
+            let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            instance.lock().unwrap().original_proxy = Some(original_proxy);
+        }
+
+        // Proxyを返す。本体は絶対返さない。
+        weak_proxy
+    }
+
+    /// システムの対応。
+    pub fn get_proxy() -> Option<AudioDeviceProxyWeakPtr> {
+        // これは大丈夫か。。。。
+        unsafe {
+            match AUDIO_DEVICE.get() {
+                None => None,
+                Some(v) => Some(Arc::downgrade(v.lock().unwrap().original_proxy.as_ref()?)),
+            }
+        }
     }
 
     /// システムを解放する。
+    /// すべての関連処理が終わった後に解放すべき。
     pub fn cleanup() {
-        assert!(AUDIO_DEVICE.get().is_some());
+        unsafe {
+            assert!(AUDIO_DEVICE.get().is_some());
 
-        todo!()
-        //AUDIO_DEVICE.take()
+            // ここでdropするので、もう1回解放してはいけない。
+            if let Some(device) = AUDIO_DEVICE.take() {
+                drop(device)
+            }
+        }
     }
 
     fn new(config: AudioDeviceConfig) -> Self {
@@ -100,12 +137,14 @@ pub struct AudioDeviceProxy {
 }
 
 impl AudioDeviceProxy {
-    fn new(device: Weak<Mutex<AudioDevice>>) -> Self {
-        Self { device }
+    /// 親元となるProxyのマルチスレッド版のインスタンスを生成する。
+    fn new(device: Weak<Mutex<AudioDevice>>) -> AudioDeviceProxyPtr {
+        let instance = Self { device };
+        Arc::new(Mutex::new(instance))
     }
 }
 
-type AudioDeviceProxyPtr = Arc<Mutex<AudioDevice>>;
+type AudioDeviceProxyPtr = Arc<Mutex<AudioDeviceProxy>>;
 type AudioDeviceProxyWeakPtr = Weak<Mutex<AudioDeviceProxy>>;
 
 // ----------------------------------------------------------------------------
