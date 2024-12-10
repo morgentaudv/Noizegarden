@@ -1,9 +1,4 @@
-use derive_builder::Builder;
-use itertools::Itertools;
-
-use crate::wave::{filter::FilterADSR, sample::UniformedSample, PI2};
-
-use super::emitter::SineUnitSampleEmitter;
+use crate::wave::filter::FilterADSR;
 
 /// 各サンプルの量子化レベルを表す。
 ///
