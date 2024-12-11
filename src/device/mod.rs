@@ -1,6 +1,7 @@
-use miniaudio::{DeviceType, FramesMut};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
 use crate::wave::sample::UniformedSample;
+use miniaudio::{DeviceType, FramesMut, RingBufferRecv, RingBufferSend};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
+use itertools::Itertools;
 
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
@@ -9,9 +10,9 @@ static mut AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 
 /// [`AudioDevice`]を生成するための初期設定のための構造体。
 pub struct AudioDeviceConfig {
-    /// @brief 初期チャンネル数
+    /// 初期チャンネル数
     channels: usize,
-    /// @brief 初期サンプルレート
+    /// 初期サンプルレート
     sample_rate: usize,
 }
 
@@ -24,13 +25,13 @@ impl AudioDeviceConfig {
         }
     }
 
-    /// @brief 初期チャンネル数の指定
+    /// 初期チャンネル数の指定
     pub fn set_channels(&mut self, channels: usize) -> &mut Self {
         self.channels = channels;
         self
     }
 
-    /// @brief 初期サンプルレートの指定
+    /// 初期サンプルレートの指定
     pub fn set_sample_rate(&mut self, sample_rate: usize) -> &mut Self {
         self.sample_rate = sample_rate;
         self
@@ -38,16 +39,24 @@ impl AudioDeviceConfig {
 }
 
 pub struct AudioDevice {
-    /// @brief ローレベルのデバイス
+    /// ローレベルのデバイス
     low_device: miniaudio::Device,
-    /// @brief プロキシの親元。ほかのところでは全部Weakタイプで共有する。
+    /// プロキシの親元。ほかのところでは全部Weakタイプで共有する。
     original_proxy: Option<AudioDeviceProxyPtr>,
+    /// リングバッファのレシーバー
+    buffer_receiver: Option<RingBufferRecv<f32>>,
 }
 
 impl AudioDevice {
     /// システムを初期化する。
     /// すべての処理（レンダリング）が始まる前に処理すべき。
     pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
+        // RingBufferの登録。
+        // RingBufferのタイプはf32にして、あとで受け取る側でいい変換して送る。
+        //
+        // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
+        let (send, recv) = miniaudio::ring_buffer::<f32>(1024, 16).expect("Failed to create audio ring buffer.");
+
         // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
         // こっからProxyを作って、weakを渡してから
         let original_proxy = unsafe {
@@ -60,7 +69,7 @@ impl AudioDevice {
             });
             let weak_device = Arc::downgrade(&device);
 
-            let original_proxy = AudioDeviceProxy::new(weak_device);
+            let original_proxy = AudioDeviceProxy::new(weak_device, send);
             original_proxy
         };
 
@@ -69,7 +78,10 @@ impl AudioDevice {
         unsafe {
             // Mutexがおそらく内部Internal Mutabilityを実装しているかと。
             let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
-            instance.lock().unwrap().original_proxy = Some(original_proxy);
+            let mut accessor = instance.lock().unwrap();
+
+            accessor.original_proxy = Some(original_proxy);
+            accessor.buffer_receiver = Some(recv);
         }
 
         // Proxyを返す。本体は絶対返さない。
@@ -118,6 +130,7 @@ impl AudioDevice {
         Self {
             low_device,
             original_proxy: None, // これはあとで初期化する。
+            buffer_receiver: None,
         }
     }
 
@@ -125,6 +138,12 @@ impl AudioDevice {
     fn get_required_samples(&self, _frame_time: f64) -> usize {
         // @todo まず固定にして動いたら変動させてみる。
         1024
+    }
+
+    /// 今デバイスに設定しているチャンネルの数を返す。
+    /// もしデバイスが無効になっているのであれば、`0`を返す。
+    pub fn get_channels(&self) -> usize {
+        self.low_device.playback().channels() as usize
     }
 
     fn on_update_device_callback(_device: &miniaudio::RawDevice, _output: &mut FramesMut, _input: &miniaudio::Frames) {}
@@ -142,14 +161,16 @@ impl Drop for AudioDevice {
 
 /// レンダリングアイテムからデバイスに接近するためのプロキシ。
 pub struct AudioDeviceProxy {
-    /// @brief デバイスに接近するためのもの。
+    /// デバイスに接近するためのもの。
     device: Weak<Mutex<AudioDevice>>,
+    /// 最終オーディオレンダリングに使うためのリングバッファ。
+    buffer_sender: RingBufferSend<f32>,
 }
 
 impl AudioDeviceProxy {
     /// 親元となるProxyのマルチスレッド版のインスタンスを生成する。
-    fn new(device: Weak<Mutex<AudioDevice>>) -> AudioDeviceProxyPtr {
-        let instance = Self { device };
+    fn new(device: Weak<Mutex<AudioDevice>>, buffer_sender: RingBufferSend<f32>) -> AudioDeviceProxyPtr {
+        let instance = Self { device, buffer_sender };
         Arc::new(Mutex::new(instance))
     }
 
@@ -162,9 +183,98 @@ impl AudioDeviceProxy {
         device.get_required_samples(frame_time)
     }
 
+    /// 今デバイスに設定しているチャンネルの数を返す。
+    /// もしデバイスが無効になっているのであれば、`0`を返す。
+    pub fn get_channels(&self) -> usize {
+        match self.device.upgrade() {
+            None => 0,
+            Some(v) => v.lock().unwrap().get_channels(),
+        }
+    }
+
     /// デバイスの設定に合わせて適切にサンプルを送信する。
-    pub fn send_sample_buffer(&self, requiring_samples: usize, channel_buffers: EDrainedChannelBuffers) -> bool {
-        false
+    pub fn send_sample_buffer(&self, requiring_samples: usize, channel_buffers: EDrainedChannelBuffers) {
+        let channels = self.get_channels();
+        if channels == 0 {
+            return;
+        }
+
+        // 返されるbufferで設定した各チャンネルのサンプルが入るようにする。
+        // 場合によってアップ・ダウンミックスするかも。
+        //
+        // Channels : 5なら、
+        // [0,1,2,3,4][0,1,2,3,4]...のようにバッファのサンプル構成を入れる。
+        self.buffer_sender.write_with(requiring_samples, move |buffer| {
+            // 1. inputをforにして、frame_iを増加する。
+            // 2. frame_iがframe_countより同じか大きければ、抜ける。
+            let buffer_len = buffer.len();
+            let frame_count = buffer_len / channels;
+            if frame_count <= 0 {
+                return;
+            }
+            let mut frame_i = 0usize;
+
+            match channel_buffers {
+                EDrainedChannelBuffers::Mono { channel } => {
+                    for sample in channel {
+                        let start_i = frame_i * channels;
+                        let end_i = start_i + channels;
+                        remix_mono_to(sample, channels, &mut buffer[start_i..end_i]);
+
+                        frame_i += 1;
+                        if frame_i >= frame_count { break; }
+                    }
+                }
+                EDrainedChannelBuffers::Stereo { ch_left, ch_right } => {
+                    debug_assert_eq!(ch_left.len(), ch_right.len());
+
+                    for (l_sample, r_sample) in ch_left.into_iter().zip_eq(ch_right) {
+                        let start_i = frame_i * channels;
+                        let end_i = start_i + channels;
+                        remix_stereo_to(l_sample, r_sample, channels, &mut buffer[start_i..end_i]);
+
+                        frame_i += 1;
+                        if frame_i >= frame_count { break; }
+                    }
+                }
+            }
+        });
+    }
+}
+
+/// `sample`のモノ音源を任意でミックスして`buffer`に入れる。
+fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32]) {
+    debug_assert!(channels > 0);
+    debug_assert!(buffer.len() >= channels);
+
+    let sample = sample.to_f64_clamped() as f32;
+    for i in 0..channels {
+        buffer[i] = sample;
+    }
+}
+
+/// `left`, `right`のステレオ音源を任意でミックスして`buffer`に入れる。
+fn remix_stereo_to(left: UniformedSample, right: UniformedSample, channels: usize, buffer: &mut [f32]) {
+    debug_assert!(channels > 0);
+    debug_assert!(buffer.len() >= channels);
+
+    // 24-12-12 ダウンミックスとそのままだけ。
+    // @todo 多重チャンネルも対応しよう。
+    match channels {
+        1 => {
+            // ダウンミックスしよう。
+            //
+            // https://www.sonible.com/blog/stereo-to-mono/
+            // でも足して割り算するだけだとフェーズ相殺によるコムフィルタになってしまうけど、
+            // しょうがないか。。。
+            let downmixed = (left.to_f64_clamped() + right.to_f64_clamped()) * 0.5;
+            buffer[0] = downmixed as f32;
+        },
+        2 => {
+            buffer[0] = left.to_f64_clamped() as f32;
+            buffer[1] = right.to_f64_clamped() as f32;
+        }
+        _ => unreachable!(),
     }
 }
 

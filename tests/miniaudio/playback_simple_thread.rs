@@ -4,9 +4,10 @@ use miniaudio::{Device, DeviceConfig, DeviceType, Format, FramesMut, Waveform, W
 use std::io::Write;
 use num_traits::real::Real;
 use soundprog::math::frequency::EA440ChromaticScale;
+use soundprog::wave::sample::UniformedSample;
 use crate::miniaudio::wait_for_enter;
 
-pub const DEVICE_FORMAT: Format = Format::F32;
+pub const DEVICE_FORMAT: Format = Format::S16;
 pub const DEVICE_CHANNELS: u32 = 2;
 pub const DEVICE_SAMPLE_RATE: u32 = miniaudio::SAMPLE_RATE_48000;
 pub const SUBBUFFER_LEN: usize = 1024;
@@ -102,29 +103,53 @@ fn test_miniaudio_playback_simple_thread() {
     device_config.playback_mut().set_channels(DEVICE_CHANNELS);
     device_config.set_sample_rate(DEVICE_SAMPLE_RATE);
 
-    let mut last_sample = 0.0f32;
-    device_config.set_data_callback(move |_device, output, _input| {
-        let samples = output.as_samples_mut::<f32>();
+    device_config.set_data_callback(move |device, output, _input| {
+        match device.playback().format() {
+            Format::S16 => {
+                let outputs = output.as_samples_mut::<i16>();
+                // f32は[-1, 1]までに。
+                let mut raw_samples = vec![];
+                raw_samples.resize(outputs.len(), 0.0f32);
 
-        // Here we try reading at most 8 subbuffers to attempt to read enough samples to
-        // fill the playback output buffer. We don't allow infinite attempts because we can't be
-        // sure how long that would take.
-        let mut read_count = 0;
-        let mut attempts = 0;
-        while read_count < samples.len() && attempts < 8 {
-            read_count += recv.read(&mut samples[read_count..]);
-            attempts += 1;
+                // できるだけ読み切る。
+                let mut read_count = 0;
+                let mut attempts = 0;
+                while read_count < outputs.len() && attempts < 8 {
+                    read_count += recv.read(&mut raw_samples[read_count..]);
+                    attempts += 1;
+                }
+
+                // raw_samplesをoutputに変換する。
+                for (i, sample) in raw_samples.iter().enumerate() {
+                    outputs[i] = UniformedSample::from_f64(*sample as f64).to_16bits();
+                }
+
+                // If we're starved, just repeat the last sample on all channels:
+                (&mut outputs[read_count..])
+                    .iter_mut()
+                    .for_each(|s| *s = 0);
+            }
+            Format::F32 => {
+                // f32 → f32なので、そのままにしてもいい。
+                let outputs = output.as_samples_mut::<f32>();
+
+                // Here we try reading at most 8 subbuffers to attempt to read enough outputs to
+                // fill the playback output buffer. We don't allow infinite attempts because we can't be
+                // sure how long that would take.
+                let mut read_count = 0;
+                let mut attempts = 0;
+                while read_count < outputs.len() && attempts < 8 {
+                    read_count += recv.read(&mut outputs[read_count..]);
+                    attempts += 1;
+                }
+
+                // If we're starved, just repeat the last sample on all channels:
+                (&mut outputs[read_count..])
+                    .iter_mut()
+                    .for_each(|s| *s = 0.0);
+            }
+            _ => unreachable!(),
         }
-
-        // If we read anything, update the last sample.
-        if read_count > 0 {
-            last_sample = samples[read_count - 1];
-        }
-
-        // If we're starved, just repeat the last sample on all channels:
-        (&mut samples[read_count..])
-            .iter_mut()
-            .for_each(|s| *s = 0.0);
     });
     device_config.set_stop_callback(|_| {
         println!("Stopped");

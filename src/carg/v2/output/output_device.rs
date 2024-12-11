@@ -111,14 +111,17 @@ impl OutputDeviceProcessData {
         let (drained_buffer, is_all_zero) = {
             let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
             let item = item.output_dynamic_mut().unwrap();
+
             match item {
                 EOutputDeviceInput::Mono(v) => {
                     let (channel, is_all_zero) = get_drained_buffer_from(&mut v.buffer, required_samples);
+
                     (EDrainedChannelBuffers::Mono { channel }, is_all_zero)
                 }
                 EOutputDeviceInput::Stereo(v) => {
                     let (ch_left, left_all_zero) = get_drained_buffer_from(&mut v.ch_left, required_samples);
                     let (ch_right, right_all_zero) = get_drained_buffer_from(&mut v.ch_right, required_samples);
+
                     (
                         EDrainedChannelBuffers::Stereo { ch_left, ch_right },
                         left_all_zero & right_all_zero,
