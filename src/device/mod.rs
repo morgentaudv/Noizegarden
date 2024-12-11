@@ -1,5 +1,6 @@
 use miniaudio::{DeviceType, FramesMut};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
+use crate::wave::sample::UniformedSample;
 
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
@@ -86,6 +87,9 @@ impl AudioDevice {
         }
     }
 
+    /// Tick関数。
+    pub fn process(_frame_time: f64) {}
+
     /// システムを解放する。
     /// すべての関連処理が終わった後に解放すべき。
     pub fn cleanup() {
@@ -117,6 +121,12 @@ impl AudioDevice {
         }
     }
 
+    /// `frame_time`から現在の設定からの推定の各チャンネルに必要な推定のサンプル数を返す。
+    fn get_required_samples(&self, _frame_time: f64) -> usize {
+        // @todo まず固定にして動いたら変動させてみる。
+        1024
+    }
+
     fn on_update_device_callback(_device: &miniaudio::RawDevice, _output: &mut FramesMut, _input: &miniaudio::Frames) {}
 
     fn on_stop_device_callback(_device: &miniaudio::RawDevice) {}
@@ -126,7 +136,7 @@ unsafe impl Sync for AudioDevice {}
 
 impl Drop for AudioDevice {
     fn drop(&mut self) {
-        todo!()
+        self.low_device.stop().expect("TODO: panic message");
     }
 }
 
@@ -142,10 +152,40 @@ impl AudioDeviceProxy {
         let instance = Self { device };
         Arc::new(Mutex::new(instance))
     }
+
+    /// `frame_time`から現在の設定からの推定の各チャンネルに必要な推定のサンプル数を返す。
+    pub fn get_required_samples(&self, frame_time: f64) -> usize {
+        debug_assert!(self.device.upgrade().is_some());
+
+        let device = self.device.upgrade().unwrap();
+        let device = device.lock().unwrap();
+        device.get_required_samples(frame_time)
+    }
+
+    /// デバイスの設定に合わせて適切にサンプルを送信する。
+    pub fn send_sample_buffer(&self, requiring_samples: usize, channel_buffers: EDrainedChannelBuffers) -> bool {
+        false
+    }
 }
 
 type AudioDeviceProxyPtr = Arc<Mutex<AudioDeviceProxy>>;
-type AudioDeviceProxyWeakPtr = Weak<Mutex<AudioDeviceProxy>>;
+pub type AudioDeviceProxyWeakPtr = Weak<Mutex<AudioDeviceProxy>>;
+
+// ----------------------------------------------------------------------------
+// EDrainedChannelBuffers
+// ----------------------------------------------------------------------------
+
+/// [`OutputDeviceProcessData`]の内部で送信用の各チャンネルのバッファをまとめたもの。
+#[derive(Debug)]
+pub enum EDrainedChannelBuffers {
+    Mono {
+        channel: Vec<UniformedSample>,
+    },
+    Stereo {
+        ch_left: Vec<UniformedSample>,
+        ch_right: Vec<UniformedSample>,
+    },
+}
 
 // ----------------------------------------------------------------------------
 // EOF

@@ -1,17 +1,26 @@
-use serde::{Deserialize, Serialize};
-use crate::carg::v2::{EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, TProcess, TProcessItem, TProcessItemPtr};
-use crate::carg::v2::meta::{input, pin_category, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
+use crate::carg::v2::meta::input::{BufferMonoDynamicItem, BufferStereoDynamicItem, EInputContainerCategoryFlag};
+use crate::carg::v2::meta::node::ENode;
+use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::{
+    EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, SItemSPtr, TProcess,
+    TProcessItem, TProcessItemPtr,
+};
+use crate::wave::sample::UniformedSample;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use crate::device::{AudioDevice, AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaOutputDeviceInfo {
-
-}
+pub struct MetaOutputDeviceInfo {}
 
 #[derive(Debug)]
 pub struct OutputDeviceProcessData {
+    /// 共通アイテム
     common: ProcessControlItem,
+    /// デバイスに接近するためのプロキシ
+    device_proxy: AudioDeviceProxyWeakPtr,
 }
 
 const INPUT_IN: &'static str = "in";
@@ -64,7 +73,79 @@ impl TProcess for OutputDeviceProcessData {
     }
 
     fn try_process(&mut self, input: &ProcessProcessorInput) {
-        todo!()
+        self.common.elapsed_time = input.common.elapsed_time;
+        self.common.process_input_pins();
+
+        match self.common.state {
+            EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
+            _ => (),
+        }
+    }
+}
+
+impl OutputDeviceProcessData {
+    fn update_state(&mut self, input: &ProcessProcessorInput) {
+        // ほかのoutputノードと違って、常に何かのバッファを流す必要がある。
+        // もし新規の音源バッファがなかったら、0にして入れる必要がある。
+        //
+        // 持っているプロキシに最終処理したバッファを送る。
+        // その前に今どのぐらいのバッファを必要とするかを返してから、その量に応じて分量をとる。
+
+        // もしデバイスが死んだら処理してはいけないし、処理中断する。
+        let mut device = self.device_proxy.upgrade();
+        if device.is_none() {
+            self.common.state = EProcessState::Finished;
+            return;
+        }
+        // デバイスから各チャンネルに必要な推定のサンプル数を取得する。
+        let required_samples = {
+            let device = device.as_ref().unwrap();
+            let proxy = device.lock().unwrap();
+            proxy.get_required_samples(input.common.frame_time)
+        };
+        if required_samples <= 0 {
+            return;
+        }
+
+        // 送信用のバッファとすべてゼロかを取得。
+        let (drained_buffer, is_all_zero) = {
+            let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
+            let item = item.output_dynamic_mut().unwrap();
+            match item {
+                EOutputDeviceInput::Mono(v) => {
+                    let (channel, is_all_zero) = get_drained_buffer_from(&mut v.buffer, required_samples);
+                    (EDrainedChannelBuffers::Mono { channel }, is_all_zero)
+                }
+                EOutputDeviceInput::Stereo(v) => {
+                    let (ch_left, left_all_zero) = get_drained_buffer_from(&mut v.ch_left, required_samples);
+                    let (ch_right, right_all_zero) = get_drained_buffer_from(&mut v.ch_right, required_samples);
+                    (
+                        EDrainedChannelBuffers::Stereo { ch_left, ch_right },
+                        left_all_zero & right_all_zero,
+                    )
+                }
+            }
+        };
+
+        // ただしサンプルフォーマットはここで変更しない。
+        // 送った先でなんとかやってくれる。
+        // いったん[`UniformedSample`]自体はf32だとみなす。
+        {
+            let device = device.as_ref().unwrap();
+            let proxy = device.lock().unwrap();
+            proxy.send_sample_buffer(required_samples, drained_buffer);
+        }
+
+        // 24-12-11
+        // もしレンダリングがすべて終わって、要求サンプルがすべて0うめなら終了する。
+        // 自分を終わるかしないかのチェック
+        if input.is_children_all_finished() && is_all_zero {
+            self.common.state = EProcessState::Finished;
+            return;
+        } else {
+            self.common.state = EProcessState::Playing;
+            return;
+        }
     }
 }
 
@@ -74,10 +155,97 @@ impl TProcessItem for OutputDeviceProcessData {
     }
 
     fn create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<TProcessItemPtr> {
-        todo!()
+        match setting.node {
+            ENode::OutputDevice(info) => {
+                let item = Self {
+                    common: ProcessControlItem::new(ENodeSpecifier::OutputDevice),
+                    device_proxy: AudioDevice::get_proxy().expect("Failed to get proxy."),
+                };
+                Ok(SItemSPtr::new(item))
+            }
+            _ => unreachable!("Unexpected branch."),
+        }
     }
 }
 
+// ----------------------------------------------------------------------------
+// Helper Functions
+// ----------------------------------------------------------------------------
+
+///
+fn get_drained_buffer_from(buffer: &mut Vec<UniformedSample>, required_samples: usize) -> (Vec<UniformedSample>, bool) {
+    let drain_length = required_samples.min(buffer.len());
+    let zero_length = if drain_length < required_samples {
+        required_samples - drain_length
+    } else {
+        0
+    };
+
+    // バッファにする。
+    let mut result_buffer = buffer.drain(..drain_length).collect_vec();
+    if zero_length > 0 {
+        result_buffer.resize(required_samples, UniformedSample::MIN);
+    }
+
+    (result_buffer, zero_length == required_samples)
+}
+
+// ----------------------------------------------------------------------------
+// EOutputDeviceInput
+// ----------------------------------------------------------------------------
+
+/// [`OutputDeviceProcessData`]の入力用コンテナの中身
+#[derive(Debug, Clone)]
+pub enum EOutputDeviceInput {
+    Mono(BufferMonoDynamicItem),
+    Stereo(BufferStereoDynamicItem),
+}
+
+impl EOutputDeviceInput {
+    /// 今のセッティングで`output`が受け取れるか？
+    pub fn can_support(&self, output: &EProcessOutputContainer) -> bool {
+        match self {
+            Self::Mono(_) => match output {
+                EProcessOutputContainer::BufferMono(_) => true,
+                _ => false,
+            },
+            Self::Stereo(_) => match output {
+                EProcessOutputContainer::BufferStereo(_) => true,
+                _ => false,
+            },
+        }
+    }
+
+    /// `output`からセッティングをリセットする。
+    pub fn reset_with(&mut self, output: &EProcessOutputContainer) {
+        if self.can_support(output) {
+            return;
+        }
+
+        match output {
+            EProcessOutputContainer::BufferMono(_) => {
+                *self = Self::Mono(BufferMonoDynamicItem::new());
+            }
+            EProcessOutputContainer::BufferStereo(_) => {
+                *self = Self::Stereo(BufferStereoDynamicItem::new());
+            }
+            _ => unreachable!("Unexpected branch"),
+        }
+    }
+
+    /// 種類をかえずに中身だけをリセットする。
+    pub fn reset(&mut self) {
+        match self {
+            Self::Mono(v) => {
+                v.buffer.clear();
+            }
+            Self::Stereo(v) => {
+                v.ch_left.clear();
+                v.ch_right.clear();
+            }
+        }
+    }
+}
 
 // ----------------------------------------------------------------------------
 // EOF

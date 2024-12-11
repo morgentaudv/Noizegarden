@@ -3,6 +3,7 @@ use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::output::output_file::EOutputFileInput;
 use crate::carg::v2::output::output_log::EOutputLogItem;
 use crate::carg::v2::{Setting};
+use crate::carg::v2::output::output_device::EOutputDeviceInput;
 use crate::wave::sample::UniformedSample;
 
 /// [`EProcessInputContainer`]の各アイテムの識別子をまとめている。
@@ -31,7 +32,7 @@ pub mod container_category {
     pub const DUMMY: u64 = 1 << 6;
 
     /// [`ENodeSpecifier::OutputFile`]専用
-    pub const OUTPUT_FILE: u64 = BUFFER_MONO_DYNAMIC | BUFFER_STEREO_DYNAMIC;
+    pub const OUTPUT_FILE: u64 = BUFFER_MONO_DYNAMIC | BUFFER_STEREO_DYNAMIC | OUTPUT_FILE_INTERNAL_TAG;
 
     /// [`ENodeSpecifier::OutputLog`]専用
     pub const OUTPUT_LOG: u64 = BUFFER_MONO_DYNAMIC | TEXT_DYNAMIC;
@@ -44,7 +45,10 @@ pub mod container_category {
     // ------------------------------------------------------------------------
 
     /// 内部識別区別タグ
-    const OUTPUT_DEVICE_INTERNAL_TAG: u64 = 1 << 48;
+    const OUTPUT_FILE_INTERNAL_TAG: u64 = 1 << 48;
+
+    /// 内部識別区別タグ
+    const OUTPUT_DEVICE_INTERNAL_TAG: u64 = 1 << 49;
 }
 
 pub type EInputContainerCategoryFlag = u64;
@@ -60,10 +64,12 @@ pub enum EProcessInputContainer {
     OutputFile(EOutputFileInput),
     TextDynamic(TextDynamicItem),
     OutputLog(EOutputLogItem),
+    OutputDevice(EOutputDeviceInput),
     FrequencyPhantom,
 }
 
 impl EProcessInputContainer {
+    /// [`container_category::BUFFER_MONO_DYNAMIC`]を指定してる時に使える。
     pub fn buffer_mono_dynamic(&self) -> Option<&BufferMonoDynamicItem> {
         if let Self::BufferMonoDynamic(item) = self {
             Some(item)
@@ -73,12 +79,29 @@ impl EProcessInputContainer {
         }
     }
 
+    /// [`container_category::BUFFER_MONO_DYNAMIC`]を指定してる時に使える。
     pub fn buffer_mono_dynamic_mut(&mut self) -> Option<&mut BufferMonoDynamicItem> {
         if let Self::BufferMonoDynamic(item) = self {
             Some(item)
         }
         else {
             None
+        }
+    }
+
+    /// [`container_category::OUTPUT_DEVICE`]を指定してる時に使える。
+    pub fn output_dynamic(&self) -> Option<&EOutputDeviceInput> {
+        match self {
+            Self::OutputDevice(item) => Some(item),
+            _ => None,
+        }
+    }
+
+    /// [`container_category::OUTPUT_DEVICE`]を指定してる時に使える。
+    pub fn output_dynamic_mut(&mut self) -> Option<&mut EOutputDeviceInput> {
+        match self {
+            Self::OutputDevice(item) => Some(item),
+            _ => None,
         }
     }
 }
@@ -170,6 +193,7 @@ impl EProcessInputContainer {
             EProcessInputContainer::OutputFile(_) => container_category::OUTPUT_FILE,
             EProcessInputContainer::OutputLog(_) => container_category::OUTPUT_LOG,
             EProcessInputContainer::FrequencyPhantom => container_category::FREQUENCY_PHANTOM,
+            EProcessInputContainer::OutputDevice(_) => container_category::OUTPUT_DEVICE,
             EProcessInputContainer::Dummy => container_category::DUMMY,
         }
     }
@@ -196,6 +220,9 @@ impl EProcessInputContainer {
             }
             container_category::OUTPUT_FILE => {
                 EProcessInputContainer::OutputFile(EOutputFileInput::Mono(BufferMonoDynamicItem::new()))
+            }
+            container_category::OUTPUT_DEVICE => {
+                EProcessInputContainer::OutputDevice(EOutputDeviceInput::Mono(BufferMonoDynamicItem::new()))
             }
             container_category::FREQUENCY_PHANTOM => EProcessInputContainer::FrequencyPhantom,
             container_category::DUMMY => EProcessInputContainer::Dummy,
@@ -287,6 +314,27 @@ impl EProcessInputContainer {
                     EOutputLogItem::TextDynamic(dst) => match output {
                         EProcessOutputContainer::Text(v) => {
                             dst.buffer.push(v.text.clone());
+                        }
+                        _ => unreachable!("Unexpected output"),
+                    },
+                }
+            }
+            EProcessInputContainer::OutputDevice(dst) => {
+                // まずタイプが違うかをチェック。違ったら作りなおし。
+                if !dst.can_support(output) {
+                    dst.reset_with(output);
+                }
+
+                // そして入れる。ここからはタイプが同じであること前提。
+                match dst {
+                    EOutputDeviceInput::Mono(dst) => {
+                        dst.update(output);
+                    }
+                    EOutputDeviceInput::Stereo(dst) => match output {
+                        EProcessOutputContainer::BufferStereo(v) => {
+                            dst.setting = Some(v.setting.clone());
+                            dst.ch_left.append(&mut v.ch_left.clone());
+                            dst.ch_right.append(&mut v.ch_right.clone());
                         }
                         _ => unreachable!("Unexpected output"),
                     },
