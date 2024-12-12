@@ -1,7 +1,7 @@
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use miniaudio::{DeviceType, FramesMut, RingBufferRecv, RingBufferSend};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{mpsc, Arc, Mutex, OnceLock, Weak};
 
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
@@ -11,6 +11,26 @@ static mut AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 /// コールバックから取得する必要があるので、[`AudioDevice`]には入れない。
 /// リングバッファのレシーバー
 static mut BUFFER_RECEIVER: OnceLock<Option<Mutex<RingBufferRecv<f32>>>> = OnceLock::new();
+
+/// 依存システム全体からの処理の結果
+#[derive(Debug)]
+pub enum ESystemProcessResult {
+    /// 何も起きていない。次フレームでも処理が続行できる。
+    Nothing,
+    /// システムが停止したので、これから処理をしてはいけない。
+    SystemStopped,
+}
+
+#[derive(Debug)]
+enum EAudioDeviceState {
+    Stopped,
+    Started,
+}
+
+///
+pub enum EAudioDeviceMessage {
+    Stop,
+}
 
 /// [`AudioDevice`]を生成するための初期設定のための構造体。
 pub struct AudioDeviceConfig {
@@ -47,6 +67,10 @@ pub struct AudioDevice {
     low_device: miniaudio::Device,
     /// プロキシの親元。ほかのところでは全部Weakタイプで共有する。
     original_proxy: Option<AudioDeviceProxyPtr>,
+    /// [`AudioDevice::process`]から取得して特定の処理を行うためのもの。
+    rx: Option<mpsc::Receiver<EAudioDeviceMessage>>,
+    /// 内部制御状態
+    state: EAudioDeviceState,
 }
 
 impl AudioDevice {
@@ -62,19 +86,20 @@ impl AudioDevice {
             let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
         }
 
+        // メッセージチャンネルの生成と登録。
+        let (tx, rx) = mpsc::channel();
+
         // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
         // こっからProxyを作って、weakを渡してから
         let original_proxy = unsafe {
             assert!(AUDIO_DEVICE.get().is_none());
 
             // デバイスの初期化
-            let device = AUDIO_DEVICE.get_or_init(move || {
-                let device = Self::new(config);
-                Arc::new(Mutex::new(device))
-            });
+            let _result = AUDIO_DEVICE.set(Arc::new(Mutex::new(Self::new(config))));
+            let device = AUDIO_DEVICE.get().unwrap();
             let weak_device = Arc::downgrade(&device);
 
-            let original_proxy = AudioDeviceProxy::new(weak_device, send);
+            let original_proxy = AudioDeviceProxy::new(weak_device, send, tx);
             original_proxy
         };
 
@@ -86,9 +111,13 @@ impl AudioDevice {
             let mut accessor = instance.lock().unwrap();
 
             accessor.original_proxy = Some(original_proxy);
+            accessor.rx = Some(rx);
         }
 
         // Proxyを返す。本体は絶対返さない。
+        unsafe {
+            assert!(AUDIO_DEVICE.get().is_some());
+        }
         weak_proxy
     }
 
@@ -104,7 +133,27 @@ impl AudioDevice {
     }
 
     /// Tick関数。
-    pub fn process(_frame_time: f64) {}
+    pub fn process(_frame_time: f64) -> ESystemProcessResult {
+        unsafe {
+            assert!(AUDIO_DEVICE.get().is_some());
+        }
+
+        unsafe {
+            let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let mut accessor = instance.lock().unwrap();
+
+            match accessor.state {
+                EAudioDeviceState::Stopped => {
+                    accessor.low_device.start().expect("Failed to start audio device");
+                    accessor.state = EAudioDeviceState::Started;
+                }
+                EAudioDeviceState::Started => {
+                }
+            }
+        }
+
+        ESystemProcessResult::Nothing
+    }
 
     /// システムを解放する。
     /// すべての関連処理が終わった後に解放すべき。
@@ -137,6 +186,8 @@ impl AudioDevice {
         Self {
             low_device,
             original_proxy: None, // これはあとで初期化する。
+            rx: None,
+            state: EAudioDeviceState::Stopped,
         }
     }
 
@@ -224,24 +275,21 @@ impl AudioDevice {
 
 unsafe impl Sync for AudioDevice {}
 
-impl Drop for AudioDevice {
-    fn drop(&mut self) {
-        self.low_device.stop().expect("TODO: panic message");
-    }
-}
-
 /// レンダリングアイテムからデバイスに接近するためのプロキシ。
 pub struct AudioDeviceProxy {
     /// デバイスに接近するためのもの。
     device: Weak<Mutex<AudioDevice>>,
     /// 最終オーディオレンダリングに使うためのリングバッファ。
     buffer_sender: RingBufferSend<f32>,
+    /// Multi-producerなので、おそらく内部でThread-safeなはず。
+    /// [`AudioDevice`]の処理までに特定の動作を送るため。
+    tx: mpsc::Sender<EAudioDeviceMessage>,
 }
 
 impl AudioDeviceProxy {
     /// 親元となるProxyのマルチスレッド版のインスタンスを生成する。
-    fn new(device: Weak<Mutex<AudioDevice>>, buffer_sender: RingBufferSend<f32>) -> AudioDeviceProxyPtr {
-        let instance = Self { device, buffer_sender };
+    fn new(device: Weak<Mutex<AudioDevice>>, buffer_sender: RingBufferSend<f32>, tx: mpsc::Sender<EAudioDeviceMessage>) -> AudioDeviceProxyPtr {
+        let instance = Self { device, buffer_sender, tx };
         Arc::new(Mutex::new(instance))
     }
 

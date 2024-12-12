@@ -2,11 +2,14 @@ use crate::carg::v2::filter::iir_compute_sample;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputText, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
+use crate::carg::v2::{
+    EProcessOutput, EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem,
+    ProcessOutputText, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
+};
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
-use crate::carg::v2::meta::system::TSystemCategory;
 
 mod hz48000 {
     /// HRTFのIIRフィルター（おおむねハイシェルブ）
@@ -131,7 +134,10 @@ impl TProcessItem for AnalyzeLUFSProcessData {
         Ok(())
     }
 
-    fn create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<TProcessItemPtr> {
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &ProcessItemCreateSettingSystem,
+    ) -> anyhow::Result<TProcessItemPtr> {
         // これで関数実行は行うようにするけど変数は受け取らないことができる。
         let _is_ok = Self::can_create_item(&setting)?;
 
@@ -192,14 +198,7 @@ impl AnalyzeLUFSProcessData {
 
             for sample_i in sample_range {
                 let output_i = sample_i - start_i;
-                iir_compute_sample(
-                    output_i,
-                    sample_i,
-                    &mut output_buffer,
-                    buffer,
-                    &iir_as,
-                    &iir_bs,
-                );
+                iir_compute_sample(output_i, sample_i, &mut output_buffer, buffer, &iir_as, &iir_bs);
             }
 
             output_buffer
@@ -210,14 +209,7 @@ impl AnalyzeLUFSProcessData {
 
             for sample_i in 0..block_sample_len {
                 let output_i = sample_i;
-                iir_compute_sample(
-                    output_i,
-                    sample_i,
-                    &mut output_buffer,
-                    &after_k_weight,
-                    &iir_cs,
-                    &iir_ds,
-                );
+                iir_compute_sample(output_i, sample_i, &mut output_buffer, &after_k_weight, &iir_cs, &iir_ds);
             }
 
             output_buffer
@@ -231,8 +223,7 @@ impl AnalyzeLUFSProcessData {
             };
             if after_rms.is_subnormal() {
                 -1280.0
-            }
-            else {
+            } else {
                 (after_rms.log10() * 10.0) - 0.691
             }
         };
@@ -244,8 +235,7 @@ impl AnalyzeLUFSProcessData {
         if self.internal.processed_time <= 0.0 {
             let sample_range_time = (block_sample_len as f64) / sample_rate;
             self.internal.processed_time += sample_range_time;
-        }
-        else {
+        } else {
             let proceed_time = (slide_sample_len as f64) / sample_rate;
             self.internal.processed_time += proceed_time;
         }
@@ -263,7 +253,6 @@ impl AnalyzeLUFSProcessData {
         // out_freq関連出力処理
         if self.common.is_output_pin_connected(OUTPUT_LUFS) {
             //dbg!(&self.internal, block_lufs);
-
         }
 
         // 自分を終わるかしないかのチェック

@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use crate::carg::v2::{EParsedOutputLogMode, EmitterRange, ProcessItemCreateSetting, Setting, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::adapter::compressor::{AdapterCompressorProcessData, MetaCompressorInfo};
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
@@ -13,23 +10,29 @@ use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
 use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo};
-use crate::carg::v2::filter::EFilterMode;
 use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
 use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
-use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
+use crate::carg::v2::filter::EFilterMode;
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag};
+use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
-use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
 use crate::carg::v2::output::output_file::OutputFileProcessData;
 use crate::carg::v2::output::output_log::OutputLogProcessData;
+use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
+use crate::carg::v2::{
+    EParsedOutputLogMode, EmitterRange, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, Setting,
+    TProcessItem, TProcessItemPtr,
+};
 use crate::math::float::EFloatCommonPin;
 use crate::math::frequency::EFrequency;
 use crate::math::window::EWindowFunction;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 // ----------------------------------------------------------------------------
 // ENode
 // ----------------------------------------------------------------------------
@@ -178,7 +181,7 @@ pub enum ENode {
 
 impl ENode {
     /// ノードから処理アイテムを生成する。
-    pub fn create_from(&self, setting: &Setting) -> TProcessItemPtr {
+    pub fn create_from(&self, setting: &Setting, system_setting: &ProcessItemCreateSettingSystem) -> TProcessItemPtr {
         match self {
             ENode::EmitterPinkNoise { .. }
             | ENode::EmitterWhiteNoise { .. }
@@ -208,18 +211,12 @@ impl ENode {
             ENode::FilterIIRBandStop(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandStop),
             ENode::FilterIRConvolution(_) => IRConvolutionProcessData::create_from(self, setting),
             ENode::AnalyzerLUFS(_) => {
-                let setting = ProcessItemCreateSetting{
-                    node: &self,
-                    setting,
-                };
-                AnalyzeLUFSProcessData::create_item(&setting).expect("Failed to create item")
+                let setting = ProcessItemCreateSetting { node: &self, setting };
+                AnalyzeLUFSProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
             ENode::OutputDevice(_) => {
-                let setting = ProcessItemCreateSetting{
-                    node: &self,
-                    setting,
-                };
-                OutputDeviceProcessData::create_item(&setting).expect("Failed to create item")
+                let setting = ProcessItemCreateSetting { node: &self, setting };
+                OutputDeviceProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
         }
     }
@@ -288,7 +285,6 @@ impl MetaNodeContainer {
 
     /// このマップで必要となるシステムのカテゴリ全体フラグを返す。
     pub fn get_dependent_system_categories(&self) -> ESystemCategoryFlag {
-
         let mut categories = system_category::NONE;
         for (_, v) in &self.map {
             categories |= ENodeSpecifier::from_node(v).get_dependent_system_cateogries();

@@ -4,13 +4,13 @@ use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, SItemSPtr, TProcess,
-    TProcessItem, TProcessItemPtr,
+    EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessProcessorInput,
+    SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
 };
+use crate::device::{AudioDevice, AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use crate::device::{AudioDevice, AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaOutputDeviceInfo {}
@@ -104,6 +104,10 @@ impl OutputDeviceProcessData {
             proxy.get_required_samples(input.common.frame_time)
         };
         if required_samples <= 0 {
+            if input.is_children_all_finished() {
+                self.common.state = EProcessState::Finished;
+            }
+
             return;
         }
 
@@ -157,12 +161,15 @@ impl TProcessItem for OutputDeviceProcessData {
         Ok(())
     }
 
-    fn create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<TProcessItemPtr> {
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &ProcessItemCreateSettingSystem,
+    ) -> anyhow::Result<TProcessItemPtr> {
         match setting.node {
             ENode::OutputDevice(info) => {
                 let item = Self {
                     common: ProcessControlItem::new(ENodeSpecifier::OutputDevice),
-                    device_proxy: AudioDevice::get_proxy().expect("Failed to get proxy."),
+                    device_proxy: system_setting.audio_device.unwrap().clone(),
                 };
                 Ok(SItemSPtr::new(item))
             }

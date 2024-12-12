@@ -2,15 +2,16 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
+use crate::carg::v2::meta::system::{system_category, TSystemCategory};
 use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag};
-use crate::carg::v2::utility::{validate_node_relations};
+use crate::carg::v2::utility::validate_node_relations;
+use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr};
 use crate::wave::analyze::sine_freq::SineFrequency;
-use crate::{
-    math::timer::Timer,
-    wave::sample::UniformedSample,
-};
+use crate::{math::timer::Timer, wave::sample::UniformedSample};
 use itertools::Itertools;
 use meta::relation::Relation;
+use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 use std::rc::Weak;
@@ -19,21 +20,19 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use num_traits::{One, Zero};
-use soundprog::device::{AudioDevice, AudioDeviceConfig};
-use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
-use crate::carg::v2::meta::system::{system_category, TSystemCategory};
+use std::thread::sleep;
+use std::time::Duration;
 
 pub mod adapter;
 pub mod analyzer;
 pub mod base;
 pub mod emitter;
+pub mod filter;
 pub mod meta;
+pub mod mix;
 pub mod output;
 mod special;
 mod utility;
-pub mod mix;
-pub mod filter;
 
 /// シングルスレッド、通常参照
 pub type ItemSPtr<T> = Rc<RefCell<T>>;
@@ -586,16 +585,21 @@ pub struct ProcessItemCreateSetting<'a> {
     pub setting: &'a Setting,
 }
 
+pub struct ProcessItemCreateSettingSystem<'a> {
+    pub audio_device: Option<&'a AudioDeviceProxyWeakPtr>,
+}
+
 /// アイテムの生成の処理をまとめるためのtrait。
 /// 処理アイテム自体はこれを持っても、もたなくてもいいができればこれも[`TProcess`]と一緒に実装した方がいい。
 pub trait TProcessItem: TProcess {
-
     /// アイテムの作成ができるかを確認するための関数。
     fn can_create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<()>;
 
-
     /// 処理アイテムを生成するための関数。
-    fn create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<TProcessItemPtr>;
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &ProcessItemCreateSettingSystem,
+    ) -> anyhow::Result<TProcessItemPtr>;
 }
 
 /// [`TProcess`]を実装しているアイテムの外部表示タイプ
@@ -608,17 +612,20 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
 
     // 依存システムの初期化
     let dependent_systems = node_container.get_dependent_system_categories();
+    let mut audio_device_weak_proxy = None;
     if dependent_systems != system_category::NONE {
         // AudioDeviceの初期化
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
             let mut config = AudioDeviceConfig::new();
-            config
-                .set_channels(1)
-                .set_sample_rate(setting.sample_rate as usize);
+            config.set_channels(1).set_sample_rate(setting.sample_rate as usize);
 
-            AudioDevice::initialize(config);
+            audio_device_weak_proxy = Some(AudioDevice::initialize(config));
         }
     }
+    let system_setting = ProcessItemCreateSettingSystem {
+        audio_device: audio_device_weak_proxy.as_ref(),
+    };
+    debug_assert!(audio_device_weak_proxy.clone().unwrap().upgrade().is_some());
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
@@ -628,7 +635,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         // 各ノードから処理に使うためのアイテムを全部生成しておく。
         // 中でinputピンとoutputピンを作る。
         for (node_name, node) in &node_container.map {
-            let processor = node.create_from(setting);
+            let processor = node.create_from(setting, &system_setting);
             let node = RelationTreeNode::new_item(&node_name, processor);
             map.insert(node_name.clone(), node);
         }
@@ -674,6 +681,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     let mut elapsed_time = 0.0;
     loop {
         let prev_to_now_time = tick_timer.tick().as_secs_f64();
+        // @todo TEMPORARY
         //elapsed_time += tick_timer.tick().as_secs_f64();
         elapsed_time += 5.0 / 1000.0;
 
@@ -712,6 +720,14 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         if end_node_processed && is_all_finished {
             break;
         }
+
+        // 24-12-12 依存システムの処理。
+        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+            AudioDevice::process(prev_to_now_time);
+        }
+
+        // @todo TEMPORARY
+        sleep(Duration::from_secs_f64(24.0 / 1000.0));
     }
 
     println!("{:?}s", elapsed_time);
@@ -722,7 +738,6 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
             AudioDevice::cleanup();
         }
-
     }
 
     Ok(())
