@@ -1,13 +1,14 @@
 use crate::carg::v2::meta::input::{BufferMonoDynamicItem, BufferStereoDynamicItem, EInputContainerCategoryFlag};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TProcessCategory};
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
     EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessProcessorInput,
     SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
 };
-use crate::device::{AudioDevice, AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
+use crate::device::{AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,12 @@ impl TPinCategory for OutputDeviceProcessData {
 impl TSystemCategory for OutputDeviceProcessData {
     fn get_dependent_system_categories() -> ESystemCategoryFlag {
         system_category::AUDIO_DEVICE
+    }
+}
+
+impl TProcessCategory for OutputDeviceProcessData {
+    fn get_process_category() -> EProcessCategoryFlag {
+        process_category::BUS_MASTER_OUTPUT
     }
 }
 

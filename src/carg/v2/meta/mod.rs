@@ -4,6 +4,7 @@ pub mod output;
 pub mod relation;
 pub mod setting;
 pub mod system;
+pub mod process;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
@@ -28,6 +29,7 @@ use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
+use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TProcessCategory};
 use crate::carg::v2::meta::system::{ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::output::output_device::OutputDeviceProcessData;
 
@@ -335,7 +337,8 @@ impl ENodeSpecifier {
         .unwrap()
     }
 
-    pub fn get_dependent_system_cateogries(&self) -> ESystemCategoryFlag {
+    /// ノードが依存するシステムを複数のフラグとして返す。
+    pub fn get_dependent_system_categories(&self) -> ESystemCategoryFlag {
         match self {
             Self::InternalStartPin => StartProcessData::get_dependent_system_categories(),
             Self::InternalDummy => DummyProcessData::get_dependent_system_categories(),
@@ -365,6 +368,14 @@ impl ENodeSpecifier {
                 IIRProcessData::get_dependent_system_categories()
             }
             Self::FilterIRConvolution => IRConvolutionProcessData::get_dependent_system_categories(),
+        }
+    }
+
+    /// ノードの処理順を取得する。
+    pub fn get_process_category(&self) -> EProcessCategoryFlag {
+        match self {
+            Self::OutputDevice => OutputDeviceProcessData::get_process_category(),
+            _ => process_category::NORMAL,
         }
     }
 }

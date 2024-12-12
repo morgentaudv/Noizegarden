@@ -287,7 +287,7 @@ impl MetaNodeContainer {
     pub fn get_dependent_system_categories(&self) -> ESystemCategoryFlag {
         let mut categories = system_category::NONE;
         for (_, v) in &self.map {
-            categories |= ENodeSpecifier::from_node(v).get_dependent_system_cateogries();
+            categories |= ENodeSpecifier::from_node(v).get_dependent_system_categories();
         }
 
         categories
