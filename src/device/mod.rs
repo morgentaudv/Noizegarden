@@ -1,12 +1,16 @@
 use crate::wave::sample::UniformedSample;
+use itertools::Itertools;
 use miniaudio::{DeviceType, FramesMut, RingBufferRecv, RingBufferSend};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
-use itertools::Itertools;
 
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
 /// 他に良い方法があればそれにしてmutをなくしたい。
 static mut AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
+
+/// コールバックから取得する必要があるので、[`AudioDevice`]には入れない。
+/// リングバッファのレシーバー
+static mut BUFFER_RECEIVER: OnceLock<Option<Mutex<RingBufferRecv<f32>>>> = OnceLock::new();
 
 /// [`AudioDevice`]を生成するための初期設定のための構造体。
 pub struct AudioDeviceConfig {
@@ -43,8 +47,6 @@ pub struct AudioDevice {
     low_device: miniaudio::Device,
     /// プロキシの親元。ほかのところでは全部Weakタイプで共有する。
     original_proxy: Option<AudioDeviceProxyPtr>,
-    /// リングバッファのレシーバー
-    buffer_receiver: Option<RingBufferRecv<f32>>,
 }
 
 impl AudioDevice {
@@ -56,6 +58,9 @@ impl AudioDevice {
         //
         // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
         let (send, recv) = miniaudio::ring_buffer::<f32>(1024, 16).expect("Failed to create audio ring buffer.");
+        unsafe {
+            let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
+        }
 
         // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
         // こっからProxyを作って、weakを渡してから
@@ -81,7 +86,6 @@ impl AudioDevice {
             let mut accessor = instance.lock().unwrap();
 
             accessor.original_proxy = Some(original_proxy);
-            accessor.buffer_receiver = Some(recv);
         }
 
         // Proxyを返す。本体は絶対返さない。
@@ -112,6 +116,9 @@ impl AudioDevice {
             if let Some(device) = AUDIO_DEVICE.take() {
                 drop(device)
             }
+
+            // Receiverも解放する。
+            BUFFER_RECEIVER.take();
         }
     }
 
@@ -130,7 +137,6 @@ impl AudioDevice {
         Self {
             low_device,
             original_proxy: None, // これはあとで初期化する。
-            buffer_receiver: None,
         }
     }
 
@@ -146,7 +152,72 @@ impl AudioDevice {
         self.low_device.playback().channels() as usize
     }
 
-    fn on_update_device_callback(_device: &miniaudio::RawDevice, _output: &mut FramesMut, _input: &miniaudio::Frames) {}
+    fn on_update_device_callback(device: &miniaudio::RawDevice, output: &mut FramesMut, _input: &miniaudio::Frames) {
+        unsafe {
+            debug_assert!(BUFFER_RECEIVER.get().is_some());
+        }
+
+        match device.playback().format() {
+            miniaudio::Format::S16 => {
+                let outputs = output.as_samples_mut::<i16>();
+                // f32は[-1, 1]までに。
+                let mut raw_samples = vec![];
+                raw_samples.resize(outputs.len(), 0.0f32);
+
+                // できるだけ読み切る。
+                let mut read_count = 0;
+                let mut attempts = 0;
+                while read_count < outputs.len() && attempts < 8 {
+                    read_count += unsafe {
+                        BUFFER_RECEIVER
+                            .get()
+                            .unwrap()
+                            .as_ref()
+                            .unwrap()
+                            .lock()
+                            .unwrap()
+                            .read(&mut raw_samples[read_count..])
+                    };
+                    attempts += 1;
+                }
+
+                // raw_samplesをoutputに変換する。
+                for (i, sample) in raw_samples.iter().enumerate() {
+                    outputs[i] = UniformedSample::from_f64(*sample as f64).to_16bits();
+                }
+
+                // If we're starved, just repeat the last sample on all channels:
+                (&mut outputs[read_count..]).iter_mut().for_each(|s| *s = 0);
+            }
+            miniaudio::Format::F32 => {
+                // f32 → f32なので、そのままにしてもいい。
+                let outputs = output.as_samples_mut::<f32>();
+
+                // Here we try reading at most 8 subbuffers to attempt to read enough outputs to
+                // fill the playback output buffer. We don't allow infinite attempts because we can't be
+                // sure how long that would take.
+                let mut read_count = 0;
+                let mut attempts = 0;
+                while read_count < outputs.len() && attempts < 8 {
+                    read_count += unsafe {
+                        BUFFER_RECEIVER
+                            .get()
+                            .unwrap()
+                            .as_ref()
+                            .unwrap()
+                            .lock()
+                            .unwrap()
+                            .read(&mut outputs[read_count..])
+                    };
+                    attempts += 1;
+                }
+
+                // If we're starved, just repeat the last sample on all channels:
+                (&mut outputs[read_count..]).iter_mut().for_each(|s| *s = 0.0);
+            }
+            _ => unreachable!(),
+        }
+    }
 
     fn on_stop_device_callback(_device: &miniaudio::RawDevice) {}
 }
@@ -222,7 +293,9 @@ impl AudioDeviceProxy {
                         remix_mono_to(sample, channels, &mut buffer[start_i..end_i]);
 
                         frame_i += 1;
-                        if frame_i >= frame_count { break; }
+                        if frame_i >= frame_count {
+                            break;
+                        }
                     }
                 }
                 EDrainedChannelBuffers::Stereo { ch_left, ch_right } => {
@@ -234,7 +307,9 @@ impl AudioDeviceProxy {
                         remix_stereo_to(l_sample, r_sample, channels, &mut buffer[start_i..end_i]);
 
                         frame_i += 1;
-                        if frame_i >= frame_count { break; }
+                        if frame_i >= frame_count {
+                            break;
+                        }
                     }
                 }
             }
@@ -269,7 +344,7 @@ fn remix_stereo_to(left: UniformedSample, right: UniformedSample, channels: usiz
             // しょうがないか。。。
             let downmixed = (left.to_f64_clamped() + right.to_f64_clamped()) * 0.5;
             buffer[0] = downmixed as f32;
-        },
+        }
         2 => {
             buffer[0] = left.to_f64_clamped() as f32;
             buffer[1] = right.to_f64_clamped() as f32;
