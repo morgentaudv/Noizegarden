@@ -14,6 +14,7 @@ use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
 use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
 use crate::carg::v2::filter::EFilterMode;
+use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
@@ -272,6 +273,17 @@ impl MetaNodeContainer {
             return false;
         }
 
+        // 24-12-13 prev/next間の処理順が逆になっていないかを確認する。
+        let prev_orders = ENodeSpecifier::from_node(self.map.get(&relation.prev.node).unwrap()).get_process_category();
+        let next_orders = ENodeSpecifier::from_node(self.map.get(&relation.next.node).unwrap()).get_process_category();
+        if next_orders < prev_orders {
+            println!(
+                "Given relation prev : ({:?}) and next : ({:?}) are not in the valid order.",
+                relation.prev, relation.next
+            );
+            return false;
+        }
+
         // お互いにチェック。
         // pinの種類を見て判定する。
         let output_pin = self
@@ -292,4 +304,18 @@ impl MetaNodeContainer {
 
         categories
     }
+
+    /// このマップで必要となる処理順カテゴリ全体を返す。
+    pub fn get_using_process_categories(&self) -> EProcessCategoryFlag {
+        let mut categories = process_category::NORMAL;
+        for (_, v) in &self.map {
+            categories |= ENodeSpecifier::from_node(v).get_process_category();
+        }
+
+        categories
+    }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

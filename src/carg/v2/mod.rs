@@ -2,10 +2,11 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
 use crate::carg::v2::meta::system::{system_category, TSystemCategory};
 use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag};
-use crate::carg::v2::utility::validate_node_relations;
+use crate::carg::v2::utility::{update_process_graph_connection, validate_node_relations};
 use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr};
 use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{math::timer::Timer, wave::sample::UniformedSample};
@@ -15,13 +16,13 @@ use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 use std::rc::Weak;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use std::thread::sleep;
-use std::time::Duration;
 
 pub mod adapter;
 pub mod analyzer;
@@ -93,6 +94,8 @@ pub struct ProcessCommonInput {
     pub elapsed_time: f64,
     /// 前のフレーム処理から何秒経ったか
     pub frame_time: f64,
+    /// 処理カテゴリ
+    pub category: EProcessCategoryFlag,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -125,6 +128,12 @@ pub type RelationTreeNodeWPtr = ItemWPtr<RelationTreeNode>;
 pub struct RelationTreeNode {
     /// ノードの名前
     pub name: String,
+    /// このノードの処理カテゴリ
+    pub category: EProcessCategoryFlag,
+    /// デバッグ用かも
+    node_specifier: ENodeSpecifier,
+    /// 処理グラフに連結されているか
+    pub is_connected: bool,
     /// 前からこのノードを依存する前ノードのマップ
     prev_nodes: HashMap<String, RelationTreeNodeWPtr>,
     /// 次に伝播するノードのマップ
@@ -136,8 +145,13 @@ pub struct RelationTreeNode {
 impl RelationTreeNode {
     /// ノードアイテムを作る。
     pub fn new_item(name: &str, processor: TProcessItemPtr) -> RelationTreeNodePtr {
+        let cached_category = processor.borrow().get_common_ref().get_process_category();
+        let node_specifier = processor.borrow().get_common_ref().specifier;
         SItemSPtr::new(RelationTreeNode {
             name: name.to_owned(),
+            category: cached_category,
+            node_specifier,
+            is_connected: false,
             prev_nodes: HashMap::new(),
             next_nodes: HashMap::new(),
             processor,
@@ -191,6 +205,11 @@ impl RelationTreeNode {
     }
 
     pub fn process(&mut self, input: &ProcessCommonInput) {
+        // もしカテゴリが違っていれば、処理しない。
+        if input.category != self.category {
+            return;
+        }
+
         let input = ProcessProcessorInput {
             common: *input,
             children_states: self
@@ -443,6 +462,11 @@ impl ProcessControlItem {
             Some(v) => v.borrow().linked_pins.is_empty() == false,
         }
     }
+
+    /// 処理順のカテゴリを返す。
+    pub fn get_process_category(&self) -> EProcessCategoryFlag {
+        self.specifier.get_process_category()
+    }
 }
 
 /// [`ProcessControlItem::get_input_internal`]関数からの構造体。
@@ -607,6 +631,7 @@ pub type TProcessItemPtr = ItemSPtr<dyn TProcess>;
 
 pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
     // 下で`_start_pin`のチェックもやってくれる。
+    // @todo 24-12-12 中で[`EProcessCategoryFlag`]による処理も
     let node_container = MetaNodeContainer { map: nodes };
     validate_node_relations(&node_container, &relations)?;
 
@@ -670,9 +695,17 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         map
     };
 
+    // 24-12-13 このグラフで使う「処理順」を一つずつ作って
+    update_process_graph_connection(&node_map);
+    let start_item_groups = StartItemGroup::initialize_groups_with(
+        node_container.get_using_process_categories(),
+        &node_map.iter().map(|(_, v)| Rc::downgrade(&v.clone())).collect_vec(),
+    );
+
     // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
     // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
-    let start_node = node_map.get("_start_pin").unwrap().clone();
+    // @todo ここ実装する
+    //let start_node = node_map.get("_start_pin").unwrap().clone();
     let tick_threshold = setting.get_default_tick_threshold();
     let mut tick_timer = Timer::from_second(tick_threshold);
 
@@ -686,39 +719,42 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         elapsed_time += 5.0 / 1000.0;
 
         // 共通で使う処理時の入力。
-        let input = ProcessCommonInput {
+        let mut input = ProcessCommonInput {
             time_tick_mode: setting.time_tick_mode,
             elapsed_time,
             frame_time: prev_to_now_time,
+            category: process_category::NORMAL,
         };
-        node_queue.push_back(start_node.clone());
 
-        //
+        //node_queue.push_back(start_node.clone());
         let mut end_node_processed = false;
         let mut is_all_finished = true;
-        while !node_queue.is_empty() {
-            // 処理する。
-            let process_node = node_queue.pop_front().unwrap();
-            process_node.borrow_mut().process(&input);
-
-            // 次ノードをQueueに入れる。
-            let next_nodes = process_node.borrow().get_next_nodes();
-            let is_node_end = next_nodes.is_empty();
-            for next_node in next_nodes.into_iter().filter(|v| v.borrow().can_process()) {
-                node_queue.push_back(next_node);
+        for items_group in &start_item_groups {
+            // 同じ処理カテゴリの始発ノードを全部入れる。
+            input.category = items_group.category;
+            for item in &items_group.start_items {
+                node_queue.push_back(item.clone().upgrade().unwrap());
             }
 
-            // もしnextがなければ、自分をfinalだとみなしてstartから自分までの処理が終わってるかを確認する。
-            if is_node_end {
-                end_node_processed = true;
-                is_all_finished &= process_node.borrow().is_finished();
+            //
+            while !node_queue.is_empty() {
+                // 処理する。
+                let node = node_queue.pop_front().unwrap();
+                node.borrow_mut().process(&input);
+
+                // 次ノードをQueueに入れる。
+                let next_nodes = node.borrow().get_next_nodes();
+                let is_node_end = next_nodes.is_empty();
+                for next_node in next_nodes.into_iter().filter(|v| v.borrow().can_process()) {
+                    node_queue.push_back(next_node);
+                }
+
+                // もしnextがなければ、自分をfinalだとみなしてstartから自分までの処理が終わってるかを確認する。
+                if is_node_end {
+                    end_node_processed = true;
+                    is_all_finished &= node.borrow().is_finished();
+                }
             }
-        }
-
-        //println!("{:?}s", prev_to_now_time);
-
-        if end_node_processed && is_all_finished {
-            break;
         }
 
         // 24-12-12 依存システムの処理。
@@ -726,11 +762,13 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
             AudioDevice::process(prev_to_now_time);
         }
 
+        if end_node_processed && is_all_finished {
+            break;
+        }
+
         // @todo TEMPORARY
         sleep(Duration::from_secs_f64(24.0 / 1000.0));
     }
-
-    println!("{:?}s", elapsed_time);
 
     // 依存システムの解放
     if dependent_systems != system_category::NONE {

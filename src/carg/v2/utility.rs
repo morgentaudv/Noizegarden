@@ -1,5 +1,5 @@
-use std::collections::{HashSet, VecDeque};
-use crate::carg::v2::MetaNodeContainer;
+use std::collections::{HashMap, HashSet, VecDeque};
+use crate::carg::v2::{MetaNodeContainer, RelationTreeNodePtr};
 use crate::carg::v2::meta::relation::Relation;
 
 /// 次のことを検査する。
@@ -101,6 +101,23 @@ pub fn validate_node_relations(nodes: &MetaNodeContainer, relations: &[Relation]
 struct GraphNodeRoute {
     from: String,
     to: String,
+}
+
+/// `_start_pin`から始める処理フラグのノードにフラグをONする。
+pub fn update_process_graph_connection(node_map: &HashMap<String, RelationTreeNodePtr>) {
+    let start_node = node_map.get("_start_pin").unwrap().clone();
+
+    let mut node_queue = VecDeque::new();
+    node_queue.push_back(start_node.clone());
+
+    while !node_queue.is_empty() {
+        let process_node = node_queue.pop_front().unwrap();
+        process_node.borrow_mut().is_connected = true;
+
+        for next_node in process_node.borrow().get_next_nodes() {
+            node_queue.push_back(next_node);
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
