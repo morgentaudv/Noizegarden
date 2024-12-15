@@ -12,6 +12,11 @@ static mut AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 /// リングバッファのレシーバー
 static mut BUFFER_RECEIVER: OnceLock<Option<Mutex<RingBufferRecv<f32>>>> = OnceLock::new();
 
+/// デバイスの処理関数でデバイスに接近するためのItem。
+/// デバイスの初期化時に登録される。
+/// WeakPtrなので解放はしなくてもいいかもしれない。
+static PROXY_ACCESSOR: OnceLock<AudioDeviceProxyWeakPtr> = OnceLock::new();
+
 /// 依存システム全体からの処理の結果
 #[derive(Debug)]
 pub enum ESystemProcessResult {
@@ -23,21 +28,31 @@ pub enum ESystemProcessResult {
 
 #[derive(Debug)]
 enum EAudioDeviceState {
-    Stopped,
+    NotStarted,
     Started,
+    Stopped,
 }
 
-///
+/// デバイスシステムの処理すべく外部から送られてくる通知やメッセージ。
 pub enum EAudioDeviceMessage {
     Stop,
+    /// オーディオのStarvationが起きている。
+    StarvationNotified,
+    /// オーディオ内部処理で音を流すためのバッファのサンプル数を含む。
+    LastProcessedLength(usize),
+    /// オーディオ処理のバッファに`usize`分のサンプルを送信した。
+    SendSamplesToBuffer(usize),
 }
 
 /// [`AudioDevice`]を生成するための初期設定のための構造体。
+#[derive(Debug, Clone)]
 pub struct AudioDeviceConfig {
     /// 初期チャンネル数
     channels: usize,
     /// 初期サンプルレート
     sample_rate: usize,
+    /// リングバッファの1フレーム処理推定時間 (ms単位)
+    frame_ideal_milliseconds: std::time::Duration,
 }
 
 impl AudioDeviceConfig {
@@ -46,6 +61,7 @@ impl AudioDeviceConfig {
         Self {
             channels: 0,
             sample_rate: 0,
+            frame_ideal_milliseconds: std::time::Duration::from_millis(8),
         }
     }
 
@@ -62,6 +78,24 @@ impl AudioDeviceConfig {
     }
 }
 
+/// [`AUdioDevice`]の内部更新情報をまとめた構造体。
+#[derive(Debug)]
+struct AudioDeviceStateInfo {
+    /// 内部制御状態
+    state: EAudioDeviceState,
+    /// 現在設定したリングバッファのサブバッファのサンプル数。
+    /// 24-12-15 後でデバイス設定の変更からリセットのロジックが組まれたらこれも更新になるかもしれない。
+    sub_buffer_len: usize,
+    /// 現在処理が残っていると思われるバッファのサンプルのカウント。
+    /// 更新タイミングは詩システムのTick時点。
+    remained_samples_count: usize,
+    /// 前フレームの処理で出力で読み込んだサンプル数。
+    /// 更新タイミングは詩システムのTick時点。
+    prev_processed_samples_count: usize,
+    /// 前フレームでStarvationが起きているか？
+    is_starvation: bool,
+}
+
 pub struct AudioDevice {
     /// ローレベルのデバイス
     low_device: miniaudio::Device,
@@ -69,11 +103,26 @@ pub struct AudioDevice {
     original_proxy: Option<AudioDeviceProxyPtr>,
     /// [`AudioDevice::process`]から取得して特定の処理を行うためのもの。
     rx: Option<mpsc::Receiver<EAudioDeviceMessage>>,
-    /// 内部制御状態
-    state: EAudioDeviceState,
+    /// 更新情報
+    info: AudioDeviceStateInfo,
+    /// 初期設定
+    initial_config: AudioDeviceConfig,
 }
 
 impl AudioDevice {
+    /// リングバッファの最低限のサンプル数。
+    /// フレーム理想処理時間からの換算のサンプル数がこれ未満でも、これを適用する。
+    const BUFFER_MINIMUM_SAMPLES: usize = 1024;
+
+    /// サブバッファのサンプル数の数を計算する。
+    fn calculate_ring_sub_buffer_length(config: &AudioDeviceConfig) -> usize {
+        let ideal_seconds = config.frame_ideal_milliseconds.as_secs_f64();
+        let raw_required_samples = (config.sample_rate as f64 * config.channels as f64 * ideal_seconds).ceil() as usize;
+
+        let required_samples = raw_required_samples.next_power_of_two() as usize;
+        required_samples.max(Self::BUFFER_MINIMUM_SAMPLES)
+    }
+
     /// システムを初期化する。
     /// すべての処理（レンダリング）が始まる前に処理すべき。
     pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
@@ -81,7 +130,8 @@ impl AudioDevice {
         // RingBufferのタイプはf32にして、あとで受け取る側でいい変換して送る。
         //
         // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
-        let (send, recv) = miniaudio::ring_buffer::<f32>(1024, 16).expect("Failed to create audio ring buffer.");
+        let (send, recv) = miniaudio::ring_buffer::<f32>(Self::calculate_ring_sub_buffer_length(&config), 16)
+            .expect("Failed to create audio ring buffer.");
         unsafe {
             let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
         }
@@ -118,6 +168,9 @@ impl AudioDevice {
         unsafe {
             assert!(AUDIO_DEVICE.get().is_some());
         }
+
+        // 24-12-15 登録。
+        let _result = PROXY_ACCESSOR.set(weak_proxy.clone());
         weak_proxy
     }
 
@@ -142,17 +195,66 @@ impl AudioDevice {
             let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
             let mut accessor = instance.lock().unwrap();
 
-            match accessor.state {
-                EAudioDeviceState::Stopped => {
+            match accessor.info.state {
+                EAudioDeviceState::NotStarted => {
                     accessor.low_device.start().expect("Failed to start audio device");
-                    accessor.state = EAudioDeviceState::Started;
+                    accessor.info.state = EAudioDeviceState::Started;
                 }
                 EAudioDeviceState::Started => {
+                    accessor.process_started();
                 }
+                EAudioDeviceState::Stopped => {}
             }
         }
 
         ESystemProcessResult::Nothing
+    }
+
+    /// デバイスの状態が[`EAudioDeviceState::Started`]な時の専用処理関数。
+    fn process_started(&mut self) {
+        // 関連変数を初期化する。
+        self.info.prev_processed_samples_count = 0;
+
+        let mut is_starvation = false;
+        let mut last_processed_samples_length = 0usize;
+        let mut last_send_buffer_length = 0usize;
+
+        // メッセージの処理を行う。
+        let rx = self.rx.as_ref().unwrap();
+        loop {
+            let message = match rx.try_recv() {
+                Ok(v) => v,
+                Err(_) => { break; }
+            };
+
+            match message {
+                EAudioDeviceMessage::Stop => {
+                    self.info.state = EAudioDeviceState::Stopped;
+                }
+                EAudioDeviceMessage::StarvationNotified => {
+                    // もしこのフレームで1回でもStarvationが起きたのであれば、
+                    // Starvation上での処理を優先する。
+                    is_starvation = true;
+                }
+                EAudioDeviceMessage::LastProcessedLength(samples_count) => {
+                    last_processed_samples_length += samples_count;
+                }
+                EAudioDeviceMessage::SendSamplesToBuffer(samples_count) => {
+                    last_send_buffer_length += samples_count;
+                }
+            }
+        }
+
+        // バッファ関連の情報更新
+        self.info.remained_samples_count += last_send_buffer_length;
+        if self.info.remained_samples_count > last_processed_samples_length {
+            self.info.remained_samples_count -= last_processed_samples_length;
+        }
+        else {
+            self.info.remained_samples_count = 0;
+        }
+        self.info.prev_processed_samples_count = last_processed_samples_length;
+        self.info.is_starvation = is_starvation;
     }
 
     /// システムを解放する。
@@ -187,12 +289,19 @@ impl AudioDevice {
             low_device,
             original_proxy: None, // これはあとで初期化する。
             rx: None,
-            state: EAudioDeviceState::Stopped,
+            info: AudioDeviceStateInfo {
+                state: EAudioDeviceState::NotStarted,
+                sub_buffer_len: Self::calculate_ring_sub_buffer_length(&config),
+                remained_samples_count: 0,
+                prev_processed_samples_count: 0,
+                is_starvation: true, // 最初はStarvationありにして最大限のサンプル数を取得させる。
+            },
+            initial_config: config.clone(),
         }
     }
 
     /// `frame_time`から現在の設定からの推定の各チャンネルに必要な推定のサンプル数を返す。
-    fn get_required_samples(&self, _frame_time: f64) -> usize {
+    fn get_required_samples(&self, frame_time: f64) -> usize {
         // @todo まず固定にして動いたら変動させてみる。
         1024
     }
@@ -204,21 +313,26 @@ impl AudioDevice {
     }
 
     fn on_update_device_callback(device: &miniaudio::RawDevice, output: &mut FramesMut, _input: &miniaudio::Frames) {
+        const ATTEMPTS_COUNT: usize = 8;
         unsafe {
             debug_assert!(BUFFER_RECEIVER.get().is_some());
         }
 
+        let mut read_count = 0;
+        let mut attempts = 0;
+        let mut required_output_length = 0usize;
+
         match device.playback().format() {
             miniaudio::Format::S16 => {
                 let outputs = output.as_samples_mut::<i16>();
+                required_output_length = outputs.len();
+
                 // f32は[-1, 1]までに。
                 let mut raw_samples = vec![];
                 raw_samples.resize(outputs.len(), 0.0f32);
 
                 // できるだけ読み切る。
-                let mut read_count = 0;
-                let mut attempts = 0;
-                while read_count < outputs.len() && attempts < 8 {
+                while read_count < required_output_length && attempts < ATTEMPTS_COUNT {
                     read_count += unsafe {
                         BUFFER_RECEIVER
                             .get()
@@ -243,13 +357,12 @@ impl AudioDevice {
             miniaudio::Format::F32 => {
                 // f32 → f32なので、そのままにしてもいい。
                 let outputs = output.as_samples_mut::<f32>();
+                required_output_length = outputs.len();
 
                 // Here we try reading at most 8 subbuffers to attempt to read enough outputs to
                 // fill the playback output buffer. We don't allow infinite attempts because we can't be
                 // sure how long that would take.
-                let mut read_count = 0;
-                let mut attempts = 0;
-                while read_count < outputs.len() && attempts < 8 {
+                while read_count < required_output_length && attempts < ATTEMPTS_COUNT {
                     read_count += unsafe {
                         BUFFER_RECEIVER
                             .get()
@@ -267,6 +380,24 @@ impl AudioDevice {
                 (&mut outputs[read_count..]).iter_mut().for_each(|s| *s = 0.0);
             }
             _ => unreachable!(),
+        }
+
+        // もしStarvationが発生したら、次のバッファ取得値は最大限にする。
+        if required_output_length > 0 {
+            let proxy = PROXY_ACCESSOR.get().unwrap().upgrade().unwrap();
+            let accessor = proxy.lock().unwrap();
+
+            if read_count < required_output_length {
+                accessor
+                    .tx
+                    .send(EAudioDeviceMessage::StarvationNotified)
+                    .expect("Message could not send.");
+            } else {
+                accessor
+                    .tx
+                    .send(EAudioDeviceMessage::LastProcessedLength(required_output_length))
+                    .expect("Message could not send.");
+            }
         }
     }
 
@@ -288,8 +419,16 @@ pub struct AudioDeviceProxy {
 
 impl AudioDeviceProxy {
     /// 親元となるProxyのマルチスレッド版のインスタンスを生成する。
-    fn new(device: Weak<Mutex<AudioDevice>>, buffer_sender: RingBufferSend<f32>, tx: mpsc::Sender<EAudioDeviceMessage>) -> AudioDeviceProxyPtr {
-        let instance = Self { device, buffer_sender, tx };
+    fn new(
+        device: Weak<Mutex<AudioDevice>>,
+        buffer_sender: RingBufferSend<f32>,
+        tx: mpsc::Sender<EAudioDeviceMessage>,
+    ) -> AudioDeviceProxyPtr {
+        let instance = Self {
+            device,
+            buffer_sender,
+            tx,
+        };
         Arc::new(Mutex::new(instance))
     }
 
@@ -323,6 +462,7 @@ impl AudioDeviceProxy {
         //
         // Channels : 5なら、
         // [0,1,2,3,4][0,1,2,3,4]...のようにバッファのサンプル構成を入れる。
+        let tx = self.tx.clone();
         self.buffer_sender.write_with(requiring_samples, move |buffer| {
             // 1. inputをforにして、frame_iを増加する。
             // 2. frame_iがframe_countより同じか大きければ、抜ける。
@@ -360,6 +500,12 @@ impl AudioDeviceProxy {
                         }
                     }
                 }
+            }
+
+            // 送る。
+            let written_samples_count = frame_count * channels;
+            if written_samples_count > 0 {
+                tx.send(EAudioDeviceMessage::SendSamplesToBuffer(written_samples_count)).unwrap();
             }
         });
     }
