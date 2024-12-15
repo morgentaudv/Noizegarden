@@ -132,7 +132,8 @@ impl AudioDevice {
         // RingBufferのタイプはf32にして、あとで受け取る側でいい変換して送る。
         //
         // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
-        let (send, recv) = miniaudio::ring_buffer::<f32>(Self::calculate_ring_sub_buffer_length(&config), 16)
+        let subbuffer_len = Self::calculate_ring_sub_buffer_length(&config);
+        let (send, recv) = miniaudio::ring_buffer::<f32>(subbuffer_len, 16)
             .expect("Failed to create audio ring buffer.");
         unsafe {
             let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));

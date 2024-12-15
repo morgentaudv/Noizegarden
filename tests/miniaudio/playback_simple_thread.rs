@@ -34,49 +34,10 @@ fn test_miniaudio_playback_simple_thread() {
         );
         let mut sine_wave = Waveform::new(&sine_wave_config);
 
-        let mut now_time = 0.0;
-        let advance_time = 1.0 / (DEVICE_SAMPLE_RATE as f64);
-
-        let left_waveform_freq = EA440ChromaticScale::A4.to_frequency();
-        let left_waveform_period = 1.0 / left_waveform_freq;
-
-        let right_waveform_freq = EA440ChromaticScale::C5.to_frequency();
-        let right_waveform_period = 1.0 / right_waveform_freq;
-
         loop {
             // 周期128サンプルの矩形波を出してみる。
             // とすれば、8周期になる。
             const MUL: f32 = 0.1f32; // -6dB想定。
-
-            // writeするだけじゃダメ。
-            // write_withにして寄せる必要があるのでは。(Frameとか)
-            //send.write_with(SUBBUFFER_LEN, |buf| {
-            //    // bufはおそらく1024 * 4Bytesかと。
-            //    // bufが理想的じゃない場合もあると思うので、いったん割ってみる。
-            //    let frame_count = buf.len() / DEVICE_CHANNELS as usize;
-
-            //    for frame_start in (0..buf.len()).step_by(2) {
-            //        let left_local_time = now_time % left_waveform_period;
-            //        let left_half_period = left_waveform_period * 0.5;
-            //        if left_local_time < left_half_period {
-            //            buf[frame_start + 0] = MUL;
-            //        }
-            //        else {
-            //            buf[frame_start + 0] = MUL * -1.0;
-            //        }
-
-            //        let right_local_time = now_time % right_waveform_period;
-            //        let right_half_period = right_waveform_period * 0.5;
-            //        if right_local_time < right_half_period {
-            //            buf[frame_start + 1] = MUL;
-            //        }
-            //        else {
-            //            buf[frame_start + 1] = MUL * -1.0;
-            //        }
-
-            //        now_time += advance_time;
-            //    }
-            //});
 
             // We always just try to fill the entire buffer with samples:
             send.write_with(SUBBUFFER_LEN, |buf| {
