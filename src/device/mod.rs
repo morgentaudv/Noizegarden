@@ -121,7 +121,7 @@ impl AudioDevice {
         let ideal_seconds = config.frame_ideal_milliseconds.as_secs_f64();
         let raw_required_samples = (config.sample_rate as f64 * config.channels as f64 * ideal_seconds).ceil() as usize;
 
-        let required_samples = raw_required_samples.next_power_of_two() as usize;
+        let required_samples = raw_required_samples.next_power_of_two();
         required_samples.max(Self::BUFFER_MINIMUM_SAMPLES)
     }
 
@@ -132,9 +132,9 @@ impl AudioDevice {
         // RingBufferのタイプはf32にして、あとで受け取る側でいい変換して送る。
         //
         // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
-        let subbuffer_len = Self::calculate_ring_sub_buffer_length(&config);
-        let (send, recv) = miniaudio::ring_buffer::<f32>(subbuffer_len, 16)
-            .expect("Failed to create audio ring buffer.");
+        let sub_buffer_len = Self::calculate_ring_sub_buffer_length(&config);
+        let (send, recv) =
+            miniaudio::ring_buffer::<f32>(sub_buffer_len, 16).expect("Failed to create audio ring buffer.");
         unsafe {
             let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
         }
@@ -193,8 +193,6 @@ impl AudioDevice {
             assert!(AUDIO_DEVICE.get().is_some());
         }
 
-        let mut after_start = false;
-        let mut proxy_item = None;
         unsafe {
             let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
             let mut accessor = instance.lock().unwrap();
@@ -203,23 +201,8 @@ impl AudioDevice {
                 EAudioDeviceState::NotStarted => {
                     accessor.low_device.start().expect("Failed to start audio device");
                     accessor.info.state = EAudioDeviceState::Started;
-
-                    after_start = true;
-                    proxy_item = Some(Arc::downgrade(accessor.original_proxy.as_ref().unwrap()));
                 }
                 _ => {}
-            }
-        }
-
-        if after_start && proxy_item.is_some() {
-            let proxy_item = proxy_item.unwrap();
-            let proxy_item = proxy_item.upgrade().unwrap();
-            let mut accessor = proxy_item.lock().unwrap();
-            let send_counts = accessor.available_send_counts();
-            if send_counts > 0 {
-                let mut initial_buffer = vec![0.0f32; send_counts];
-                initial_buffer[0] = 0.0001f32;
-                accessor.buffer_sender.write(&initial_buffer);
             }
         }
     }
@@ -260,7 +243,9 @@ impl AudioDevice {
         loop {
             let message = match rx.try_recv() {
                 Ok(v) => v,
-                Err(_) => { break; }
+                Err(_) => {
+                    break;
+                }
             };
 
             match message {
@@ -287,8 +272,7 @@ impl AudioDevice {
         self.info.remained_samples_count += last_send_buffer_length;
         if self.info.remained_samples_count >= last_processed_samples_length {
             self.info.remained_samples_count -= last_processed_samples_length;
-        }
-        else {
+        } else {
             self.info.remained_samples_count = 0;
         }
         self.info.prev_processed_samples_count = last_processed_samples_length;
@@ -298,7 +282,6 @@ impl AudioDevice {
         if self.info.is_starvation {
             println!("Starved!");
         }
-        //println!("Send: {}, {:?}", last_send_buffer_length, self.info);
     }
 
     /// システムを解放する。
@@ -309,11 +292,6 @@ impl AudioDevice {
 
             // ここでdropするので、もう1回解放してはいけない。
             if let Some(device) = AUDIO_DEVICE.take() {
-                {
-                    let lock = device.lock().unwrap();
-                    println!("{:?}", lock.info);
-                }
-
                 drop(device)
             }
 
@@ -403,7 +381,7 @@ impl AudioDevice {
                 let outputs = output.as_samples_mut::<f32>();
                 required_output_length = outputs.len();
 
-                // Here we try reading at most 8 subbuffers to attempt to read enough outputs to
+                // Here we try reading at most 8 sub buffers to attempt to read enough outputs to
                 // fill the playback output buffer. We don't allow infinite attempts because we can't be
                 // sure how long that would take.
                 while read_count < required_output_length && attempts < ATTEMPTS_COUNT {
@@ -485,37 +463,26 @@ impl AudioDeviceProxy {
         }
     }
 
-    pub fn available_send_counts(&mut self) -> usize {
-        self.buffer_sender.available()
-    }
-
     /// デバイスの設定に合わせて適切にサンプルを送信する。
-    pub fn send_sample_buffer(&self, requiring_samples: usize, channel_buffers: EDrainedChannelBuffers) {
+    pub fn send_sample_buffer_with<F>(&self, f: F) -> usize
+    where
+        F: FnOnce(/*frame_count:*/ usize) -> EDrainedChannelBuffers,
+    {
         let channels = self.get_channels();
         if channels == 0 {
-            return;
+            return 0;
         }
 
-        // 返されるbufferで設定した各チャンネルのサンプルが入るようにする。
-        // 場合によってアップ・ダウンミックスするかも。
-        //
-        // Channels : 5なら、
-        // [0,1,2,3,4][0,1,2,3,4]...のようにバッファのサンプル構成を入れる。
-        let tx = self.tx.clone();
-        self.buffer_sender.write_with(requiring_samples, move |buffer| {
-            // 1. inputをforにして、frame_iを増加する。
-            // 2. frame_iがframe_countより同じか大きければ、抜ける。
+        self.buffer_sender.write_with(1024, move |buffer| {
             let buffer_len = buffer.len();
-            if buffer_len <= 0 {
-                return;
-            }
-
             let frame_count = buffer_len / channels;
             if frame_count <= 0 {
                 return;
             }
-            let mut frame_i = 0usize;
 
+            let channel_buffers = f(frame_count);
+
+            let mut frame_i = 0usize;
             match channel_buffers {
                 EDrainedChannelBuffers::Mono { channel } => {
                     for sample in channel {
@@ -544,29 +511,12 @@ impl AudioDeviceProxy {
                     }
                 }
             }
-
-            // 送る。
-            let written_samples_count = frame_count * channels;
-            if written_samples_count > 0 {
-                tx.send(EAudioDeviceMessage::SendSamplesToBuffer(written_samples_count)).unwrap();
-            }
-        });
-    }
-
-    pub fn send_sample_buffer_with<F>(&self, f: F) -> usize
-        where F: FnOnce(&mut [f32]),
-    {
-        let channels = self.get_channels();
-        if channels == 0 {
-            return 0;
-        }
-
-        self.buffer_sender.write_with(1024, f)
+        })
     }
 }
 
 /// `sample`のモノ音源を任意でミックスして`buffer`に入れる。
-pub fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32]) {
+fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32]) {
     debug_assert!(channels > 0);
     debug_assert!(buffer.len() >= channels);
 
@@ -577,7 +527,7 @@ pub fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32
 }
 
 /// `left`, `right`のステレオ音源を任意でミックスして`buffer`に入れる。
-pub fn remix_stereo_to(left: UniformedSample, right: UniformedSample, channels: usize, buffer: &mut [f32]) {
+fn remix_stereo_to(left: UniformedSample, right: UniformedSample, channels: usize, buffer: &mut [f32]) {
     debug_assert!(channels > 0);
     debug_assert!(buffer.len() >= channels);
 

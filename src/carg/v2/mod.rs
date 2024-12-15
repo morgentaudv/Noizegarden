@@ -15,8 +15,6 @@ use meta::relation::Relation;
 use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 use std::rc::Weak;
-use std::thread::sleep;
-use std::time::Duration;
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -96,9 +94,6 @@ pub struct ProcessCommonInput {
     pub frame_time: f64,
     /// 処理カテゴリ
     pub category: EProcessCategoryFlag,
-    /// 各チャンネル別にとればよさそうなサンプルの数。
-    /// `time_tick_mode`が[`ETimeTickMode::Realtime`]な時だけ有効。
-    pub required_channel_samples: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -337,15 +332,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
             elapsed_time,
             frame_time: prev_to_now_time,
             category: process_category::NORMAL,
-            required_channel_samples: 0,
         };
-        if setting.time_tick_mode == ETimeTickMode::Realtime && audio_device_weak_proxy.is_some() {
-            input.required_channel_samples = {
-                let audio_device = audio_device_weak_proxy.as_ref().unwrap().upgrade().unwrap();
-                let mut proxy = audio_device.lock().unwrap();
-                proxy.available_send_counts()
-            } / setting.channels;
-        }
 
         let mut end_node_processed = false;
         let mut is_all_finished = true;

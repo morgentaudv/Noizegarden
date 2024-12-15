@@ -1,28 +1,25 @@
-use std::cell::UnsafeCell;
 use crate::carg::v2::meta::input::{BufferMonoDynamicItem, BufferStereoDynamicItem, EInputContainerCategoryFlag};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TProcessCategory};
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::EProcessState;
 use crate::carg::v2::{
-    ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessProcessorInput,
-    SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
+    ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessProcessorInput, SItemSPtr,
+    TProcess, TProcessItem, TProcessItemPtr,
 };
-use crate::device::{remix_mono_to, remix_stereo_to, AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
+use crate::device::{AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use crate::carg::v2::node::common::EProcessState;
+use std::cell::UnsafeCell;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaOutputDeviceInfo {}
 
 #[derive(Debug)]
-struct InternalData {
-    #[allow(dead_code)]
-    sent_samples: usize,
-}
+struct InternalData {}
 
 #[derive(Debug)]
 pub struct OutputDeviceProcessData {
@@ -122,131 +119,62 @@ impl OutputDeviceProcessData {
 
         // 各チャンネルのバッファ区間に送信するためのサンプルの数を取得する。
         // 24-12-15 この辺はminiaudioライブラリの実装にゆだねられる。
-        //let required_samples = input.common.required_channel_samples;
-        //if required_samples <= 0 {
-        //    return;
-        //}
-        //self.internal.sent_samples += required_samples;
-
-        // 送信用のバッファとすべてゼロかを取得。
-        //let (drained_buffer, is_all_zero) = {
-        //    let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
-        //    let item = item.output_dynamic_mut().unwrap();
-
-        //    match item {
-        //        EOutputDeviceInput::Mono(v) => {
-        //            let (channel, is_all_zero) = get_drained_buffer_from(&mut v.buffer, required_samples);
-
-        //            (EDrainedChannelBuffers::Mono { channel }, is_all_zero)
-        //        }
-        //        EOutputDeviceInput::Stereo(v) => {
-        //            let (ch_left, left_all_zero) = get_drained_buffer_from(&mut v.ch_left, required_samples);
-        //            let (ch_right, right_all_zero) = get_drained_buffer_from(&mut v.ch_right, required_samples);
-
-        //            (
-        //                EDrainedChannelBuffers::Stereo { ch_left, ch_right },
-        //                left_all_zero & right_all_zero,
-        //            )
-        //        }
-        //    }
-        //};
 
         // ただしサンプルフォーマットはここで変更しない。
         // 送った先でなんとかやってくれる。
         // いったん[`UniformedSample`]自体はf32だとみなす。
+        let mut is_all_zero = false;
+        let this_pointer = UnsafeCell::new(self as *mut Self);
+        let all_zero_pointer = UnsafeCell::new(&mut is_all_zero as *mut bool);
+
+        // 与えた関数は必ずこの関数の中で実行するロジックになっている。
+        // のでthis(self)も無事なはずなので、ちょっと方法がわるいけどこうして中に渡す。
+        let send_buffer_fn = move |frame_count| {
+            // 1. inputをforにして、frame_iを増加する。
+            // 2. frame_iがframe_countより同じか大きければ、抜ける。
+            let mut this = unsafe { &mut **this_pointer.get() };
+
+            // 送信用のバッファとすべてゼロかを取得。
+            let (channel_buffers, is_all_zero) = {
+                let mut item = this.common.get_input_internal_mut(INPUT_IN).unwrap();
+                let item = item.output_dynamic_mut().unwrap();
+
+                match item {
+                    EOutputDeviceInput::Mono(v) => {
+                        let (channel, is_all_zero) = get_drained_buffer_from(&mut v.buffer, frame_count);
+
+                        (EDrainedChannelBuffers::Mono { channel }, is_all_zero)
+                    }
+                    EOutputDeviceInput::Stereo(v) => {
+                        let (ch_left, left_all_zero) = get_drained_buffer_from(&mut v.ch_left, frame_count);
+                        let (ch_right, right_all_zero) = get_drained_buffer_from(&mut v.ch_right, frame_count);
+
+                        (
+                            EDrainedChannelBuffers::Stereo { ch_left, ch_right },
+                            left_all_zero & right_all_zero,
+                        )
+                    }
+                }
+            };
+
+            // 更新。
+            let mut all_zero = unsafe { &mut **all_zero_pointer.get() };
+            *all_zero = is_all_zero;
+
+            channel_buffers
+        };
+
+        // critical section
         {
             let device = device.as_ref().unwrap();
             let proxy = device.lock().unwrap();
-            let channels = proxy.get_channels();
-            //proxy.send_sample_buffer(required_samples, drained_buffer);
-
-            // 与えた関数は必ずこの関数の中で実行するロジックになっている。
-            // のでthis(self)も無事なはずなので、ちょっと方法がわるいけどこうして中に渡す。
-            let this_pointer = UnsafeCell::new(self as *mut Self);
-            proxy.send_sample_buffer_with(move |buffer| {
-                // 1. inputをforにして、frame_iを増加する。
-                // 2. frame_iがframe_countより同じか大きければ、抜ける。
-                let buffer_len = buffer.len();
-                if buffer_len <= 0 {
-                    return;
-                }
-
-                let frame_count = buffer_len / channels;
-                if frame_count <= 0 {
-                    return;
-                }
-
-                let pointer = this_pointer;
-                let mut this = unsafe { &mut **pointer.get() };
-                this.internal.sent_samples += frame_count;
-
-                // 送信用のバッファとすべてゼロかを取得。
-                let (channel_buffers, is_all_zero) = {
-                    let mut item = this.common.get_input_internal_mut(INPUT_IN).unwrap();
-                    let item = item.output_dynamic_mut().unwrap();
-
-                    match item {
-                        EOutputDeviceInput::Mono(v) => {
-                            let (channel, is_all_zero) = get_drained_buffer_from(&mut v.buffer, frame_count);
-
-                            (EDrainedChannelBuffers::Mono { channel }, is_all_zero)
-                        }
-                        EOutputDeviceInput::Stereo(v) => {
-                            let (ch_left, left_all_zero) = get_drained_buffer_from(&mut v.ch_left, frame_count);
-                            let (ch_right, right_all_zero) = get_drained_buffer_from(&mut v.ch_right, frame_count);
-
-                            (
-                                EDrainedChannelBuffers::Stereo { ch_left, ch_right },
-                                left_all_zero & right_all_zero,
-                            )
-                        }
-                    }
-                };
-
-                let mut frame_i = 0usize;
-                match channel_buffers {
-                    EDrainedChannelBuffers::Mono { channel } => {
-                        for sample in channel {
-                            let start_i = frame_i * channels;
-                            let end_i = start_i + channels;
-                            remix_mono_to(sample, channels, &mut buffer[start_i..end_i]);
-
-                            frame_i += 1;
-                            if frame_i >= frame_count {
-                                break;
-                            }
-                        }
-                    }
-                    EDrainedChannelBuffers::Stereo { ch_left, ch_right } => {
-                        debug_assert_eq!(ch_left.len(), ch_right.len());
-
-                        for (l_sample, r_sample) in ch_left.into_iter().zip_eq(ch_right) {
-                            let start_i = frame_i * channels;
-                            let end_i = start_i + channels;
-                            remix_stereo_to(l_sample, r_sample, channels, &mut buffer[start_i..end_i]);
-
-                            frame_i += 1;
-                            if frame_i >= frame_count {
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // 送る。
-                //let written_samples_count = frame_count * channels;
-                //if written_samples_count > 0 {
-                //    tx.send(EAudioDeviceMessage::SendSamplesToBuffer(written_samples_count)).unwrap();
-                //}
-            });
+            proxy.send_sample_buffer_with(send_buffer_fn);
         }
 
         // 24-12-11
         // もしレンダリングがすべて終わって、要求サンプルがすべて0うめなら終了する。
         // 自分を終わるかしないかのチェック
-        let is_all_zero = false;
         if input.is_children_all_finished() && is_all_zero {
-            println!("{:?}", self.internal);
             self.common.state = EProcessState::Finished;
             return;
         } else {
@@ -266,13 +194,11 @@ impl TProcessItem for OutputDeviceProcessData {
         system_setting: &ProcessItemCreateSettingSystem,
     ) -> anyhow::Result<TProcessItemPtr> {
         match setting.node {
-            ENode::OutputDevice(info) => {
+            ENode::OutputDevice(_info) => {
                 let item = Self {
                     common: ProcessControlItem::new(ENodeSpecifier::OutputDevice),
                     device_proxy: system_setting.audio_device.unwrap().clone(),
-                    internal: InternalData {
-                        sent_samples: 0,
-                    },
+                    internal: InternalData {},
                 };
                 Ok(SItemSPtr::new(item))
             }

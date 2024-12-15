@@ -69,8 +69,6 @@ impl FrequencyTransformer {
             raw_samples.push(raw_sample);
         }
 
-        //for raw_samples in &raw_samples { println!("{:?}", raw_samples); }
-
         raw_samples
             .into_iter()
             .map(|raw_sample| UniformedSample::from_f64(raw_sample))
