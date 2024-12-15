@@ -301,9 +301,27 @@ impl AudioDevice {
     }
 
     /// `frame_time`から現在の設定からの推定の各チャンネルに必要な推定のサンプル数を返す。
-    fn get_required_samples(&self, frame_time: f64) -> usize {
-        // @todo まず固定にして動いたら変動させてみる。
-        1024
+    fn get_required_samples(&self, _frame_time: f64) -> usize {
+        // 一番近い上または同じ2累乗の値にして返す。
+        let single_length = Self::calculate_ring_sub_buffer_length(&self.initial_config);
+        let remained = self.info.remained_samples_count;
+        if self.info.is_starvation {
+            // 通常の2個分をとるようにする。
+            return single_length * 2;
+        }
+
+        if remained >= single_length * 2 {
+            // とらない。
+            return 0;
+        }
+        else if remained >= single_length {
+            // 1個とる。
+           return single_length;
+        }
+        else {
+            // 2個とる。
+            return single_length * 2;
+        }
     }
 
     /// 今デバイスに設定しているチャンネルの数を返す。
