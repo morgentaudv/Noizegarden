@@ -1,5 +1,5 @@
-use crate::carg::v2::RelationTreeNodeWPtr;
 use itertools::Itertools;
+use crate::carg::v2::node::RelationTreeNodeWPtr;
 
 /// ノードの依存システムのカテゴリビットフラグ
 pub mod process_category {

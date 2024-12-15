@@ -4,7 +4,7 @@ use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
+    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
     TProcessItemPtr,
 };
 use crate::wave::sample::UniformedSample;
@@ -12,6 +12,7 @@ use crate::wave::PI2;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]

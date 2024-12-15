@@ -3,7 +3,7 @@ use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
+    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
     TProcessItemPtr,
 };
 use crate::wave::container::WaveContainer;
@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufReader;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaWavInfo {

@@ -3,10 +3,11 @@ use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
+    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
     SItemSPtr, Setting, TProcess, TProcessItemPtr,
 };
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 use crate::wave::analyze::method::ETransformMethod;
 use crate::wave::analyze::transformer::{EExportSampleCountMode, FrequencyTransformer};
 

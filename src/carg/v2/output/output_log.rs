@@ -1,11 +1,12 @@
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer, TextDynamicItem, BufferMonoDynamicItem};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    ENode, EParsedOutputLogMode, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
+    ENode, EParsedOutputLogMode, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Debug)]
 pub struct OutputLogProcessData {

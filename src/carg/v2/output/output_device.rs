@@ -5,13 +5,14 @@ use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TPr
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessState, ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessProcessorInput,
+    ProcessControlItem, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessProcessorInput,
     SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
 };
 use crate::device::{AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaOutputDeviceInfo {}

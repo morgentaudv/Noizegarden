@@ -4,12 +4,13 @@ use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
+    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
     TProcessItemPtr,
 };
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 use crate::wave::filter::compute_fir_filters_count;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

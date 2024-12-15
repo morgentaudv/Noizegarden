@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::carg::v2::{MetaNodeContainer, RelationTreeNodePtr};
+use crate::carg::v2::{MetaNodeContainer};
 use crate::carg::v2::meta::relation::Relation;
+use crate::carg::v2::node::RelationTreeNodePtr;
 
 /// 次のことを検査する。
 ///

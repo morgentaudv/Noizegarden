@@ -1,7 +1,8 @@
-use crate::carg::v2::{ENode, EProcessState, ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
+use crate::carg::v2::{ENode, ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
 use crate::carg::v2::meta::{pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 /// スタートノード
 #[derive(Debug)]

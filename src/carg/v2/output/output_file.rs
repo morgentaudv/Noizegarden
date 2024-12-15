@@ -13,7 +13,7 @@ use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
 
 use crate::{
     carg::{
-        v2::{EProcessState, ProcessControlItem, ProcessProcessorInput, TProcess},
+        v2::{ProcessControlItem, ProcessProcessorInput, TProcess},
     },
     wave::{
         container::WaveBuilder,
@@ -21,6 +21,7 @@ use crate::{
     },
 };
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 use crate::carg::v2::output::EOutputFileFormat;
 use crate::math::window::EWindowFunction;
 

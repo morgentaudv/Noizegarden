@@ -2,7 +2,7 @@ use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputCon
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText,
+    EProcessOutput, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText,
     ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr,
 };
 use crate::math::window::EWindowFunction;
@@ -13,6 +13,7 @@ use crate::wave::analyze::{
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Debug)]
 pub struct AnalyzerDFTProcessData {

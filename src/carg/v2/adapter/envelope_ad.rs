@@ -5,10 +5,11 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    ENode, EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
+    ENode, EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
     Setting, TProcess, TProcessItemPtr,
 };
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug, Clone)]

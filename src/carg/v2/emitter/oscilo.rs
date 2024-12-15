@@ -2,7 +2,7 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
-    EProcessOutput, EProcessState, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
+    EProcessOutput, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
     SItemSPtr, Setting, TProcess, TProcessItemPtr,
 };
 use crate::{
@@ -10,6 +10,7 @@ use crate::{
     wave::{sample::UniformedSample, sine::emitter::SineUnitSampleEmitter},
 };
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ESineWaveEmitterType {

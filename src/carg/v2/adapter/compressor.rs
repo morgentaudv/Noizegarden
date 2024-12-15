@@ -3,10 +3,11 @@ use serde::{Deserialize, Serialize};
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
-use crate::carg::v2::{EProcessOutput, EProcessState, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 use crate::wave::EBitDepth;
 use crate::wave::sample::UniformedSample;
 

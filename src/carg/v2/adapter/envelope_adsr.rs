@@ -2,7 +2,7 @@ use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFla
 use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
 use crate::{
     carg::v2::{
-        EProcessState, ProcessControlItem, ProcessOutputBuffer,
+        ProcessControlItem, ProcessOutputBuffer,
         ProcessProcessorInput, TProcess,
     },
     wave::sample::UniformedSample,
@@ -10,6 +10,7 @@ use crate::{
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Debug)]
 pub struct AdapterEnvelopeAdsrProcessData {
