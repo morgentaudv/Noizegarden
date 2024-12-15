@@ -4,7 +4,8 @@
         "time_tick_mode": "realtime",
         "set_offline_rendering_frame_time": 10,
         "sample_count_frame": 1024,
-        "sample_rate": 44100
+        "sample_rate": 44100,
+        "channels": 1
     },
     "node": {
         "_start_pin": {
