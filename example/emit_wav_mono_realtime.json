@@ -14,9 +14,21 @@
         "_dummy": {
             "type": "_dummy"
         },
-        "input": {
+        "input_1": {
             "type": "emitter-wav-mono",
             "path": "./sample01.wav"
+        },
+        "input": {
+            "type": "emitter-sine",
+            "frequency": {
+                "type": "a440",
+                "value": "A4"
+            },
+            "intensity": 0.2,
+            "range": {
+                "start": 0.0,
+                "length": 4.0
+            }
         },
         "output": {
             "type": "output-device"

@@ -18,11 +18,20 @@ use crate::carg::v2::node::common::EProcessState;
 pub struct MetaOutputDeviceInfo {}
 
 #[derive(Debug)]
+struct InternalData {
+    #[allow(dead_code)]
+    sent_samples: usize,
+}
+
+#[derive(Debug)]
 pub struct OutputDeviceProcessData {
     /// 共通アイテム
     common: ProcessControlItem,
     /// デバイスに接近するためのプロキシ
     device_proxy: AudioDeviceProxyWeakPtr,
+    /// 内部用データ
+    #[allow(dead_code)]
+    internal: InternalData,
 }
 
 const INPUT_IN: &'static str = "in";
@@ -116,6 +125,7 @@ impl OutputDeviceProcessData {
         if required_samples <= 0 {
             return;
         }
+        self.internal.sent_samples += required_samples;
 
         // 送信用のバッファとすべてゼロかを取得。
         let (drained_buffer, is_all_zero) = {
@@ -153,6 +163,7 @@ impl OutputDeviceProcessData {
         // もしレンダリングがすべて終わって、要求サンプルがすべて0うめなら終了する。
         // 自分を終わるかしないかのチェック
         if input.is_children_all_finished() && is_all_zero {
+            println!("{:?}", self.internal);
             self.common.state = EProcessState::Finished;
             return;
         } else {
@@ -176,6 +187,9 @@ impl TProcessItem for OutputDeviceProcessData {
                 let item = Self {
                     common: ProcessControlItem::new(ENodeSpecifier::OutputDevice),
                     device_proxy: system_setting.audio_device.unwrap().clone(),
+                    internal: InternalData {
+                        sent_samples: 0,
+                    },
                 };
                 Ok(SItemSPtr::new(item))
             }

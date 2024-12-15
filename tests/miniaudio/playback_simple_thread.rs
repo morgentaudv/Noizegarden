@@ -7,7 +7,7 @@ use soundprog::math::frequency::EA440ChromaticScale;
 use soundprog::wave::sample::UniformedSample;
 use crate::miniaudio::wait_for_enter;
 
-pub const DEVICE_FORMAT: Format = Format::S16;
+pub const DEVICE_FORMAT: Format = Format::F32;
 pub const DEVICE_CHANNELS: u32 = 2;
 pub const DEVICE_SAMPLE_RATE: u32 = miniaudio::SAMPLE_RATE_48000;
 pub const SUBBUFFER_LEN: usize = 1024;
@@ -29,7 +29,7 @@ fn test_miniaudio_playback_simple_thread() {
             DEVICE_CHANNELS,
             DEVICE_SAMPLE_RATE,
             WaveformType::Sine,
-            0.2,
+            0.1,
             440.0
         );
         let mut sine_wave = Waveform::new(&sine_wave_config);
@@ -50,42 +50,42 @@ fn test_miniaudio_playback_simple_thread() {
 
             // writeするだけじゃダメ。
             // write_withにして寄せる必要があるのでは。(Frameとか)
-            send.write_with(SUBBUFFER_LEN, |buf| {
-                // bufはおそらく1024 * 4Bytesかと。
-                // bufが理想的じゃない場合もあると思うので、いったん割ってみる。
-                let frame_count = buf.len() / DEVICE_CHANNELS as usize;
+            //send.write_with(SUBBUFFER_LEN, |buf| {
+            //    // bufはおそらく1024 * 4Bytesかと。
+            //    // bufが理想的じゃない場合もあると思うので、いったん割ってみる。
+            //    let frame_count = buf.len() / DEVICE_CHANNELS as usize;
 
-                for frame_start in (0..buf.len()).step_by(2) {
-                    let left_local_time = now_time % left_waveform_period;
-                    let left_half_period = left_waveform_period * 0.5;
-                    if left_local_time < left_half_period {
-                        buf[frame_start + 0] = MUL;
-                    }
-                    else {
-                        buf[frame_start + 0] = MUL * -1.0;
-                    }
+            //    for frame_start in (0..buf.len()).step_by(2) {
+            //        let left_local_time = now_time % left_waveform_period;
+            //        let left_half_period = left_waveform_period * 0.5;
+            //        if left_local_time < left_half_period {
+            //            buf[frame_start + 0] = MUL;
+            //        }
+            //        else {
+            //            buf[frame_start + 0] = MUL * -1.0;
+            //        }
 
-                    let right_local_time = now_time % right_waveform_period;
-                    let right_half_period = right_waveform_period * 0.5;
-                    if right_local_time < right_half_period {
-                        buf[frame_start + 1] = MUL;
-                    }
-                    else {
-                        buf[frame_start + 1] = MUL * -1.0;
-                    }
+            //        let right_local_time = now_time % right_waveform_period;
+            //        let right_half_period = right_waveform_period * 0.5;
+            //        if right_local_time < right_half_period {
+            //            buf[frame_start + 1] = MUL;
+            //        }
+            //        else {
+            //            buf[frame_start + 1] = MUL * -1.0;
+            //        }
 
-                    now_time += advance_time;
-                }
-            });
+            //        now_time += advance_time;
+            //    }
+            //});
 
             // We always just try to fill the entire buffer with samples:
-            //send.write_with(SUBBUFFER_LEN, |buf| {
-            //    sine_wave.read_pcm_frames(&mut FramesMut::wrap(
-            //        buf,
-            //        DEVICE_FORMAT,
-            //        DEVICE_CHANNELS,
-            //    ));
-            //});
+            send.write_with(SUBBUFFER_LEN, |buf| {
+                sine_wave.read_pcm_frames(&mut FramesMut::wrap(
+                    buf,
+                    DEVICE_FORMAT,
+                    DEVICE_CHANNELS,
+                ));
+            });
 
             if shutdown_producer_check.load(std::sync::atomic::Ordering::Acquire) {
                 break;

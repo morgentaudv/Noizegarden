@@ -37,7 +37,7 @@ enum EAudioDeviceState {
 pub enum EAudioDeviceMessage {
     Stop,
     /// オーディオのStarvationが起きている。
-    StarvationNotified,
+    StarvationNotified(usize),
     /// オーディオ内部処理で音を流すためのバッファのサンプル数を含む。
     LastProcessedLength(usize),
     /// オーディオ処理のバッファに`usize`分のサンプルを送信した。
@@ -61,7 +61,7 @@ impl AudioDeviceConfig {
         Self {
             channels: 0,
             sample_rate: 0,
-            frame_ideal_milliseconds: std::time::Duration::from_millis(8),
+            frame_ideal_milliseconds: std::time::Duration::from_millis(5),
         }
     }
 
@@ -92,6 +92,8 @@ struct AudioDeviceStateInfo {
     /// 前フレームの処理で出力で読み込んだサンプル数。
     /// 更新タイミングは詩システムのTick時点。
     prev_processed_samples_count: usize,
+    ///
+    total_required_samples: usize,
     /// 前フレームでStarvationが起きているか？
     is_starvation: bool,
 }
@@ -185,8 +187,44 @@ impl AudioDevice {
         }
     }
 
+    pub fn pre_process(_frame_time: f64) {
+        unsafe {
+            assert!(AUDIO_DEVICE.get().is_some());
+        }
+
+        let mut after_start = false;
+        let mut proxy_item = None;
+        unsafe {
+            let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let mut accessor = instance.lock().unwrap();
+
+            match accessor.info.state {
+                EAudioDeviceState::NotStarted => {
+                    accessor.low_device.start().expect("Failed to start audio device");
+                    accessor.info.state = EAudioDeviceState::Started;
+
+                    after_start = true;
+                    proxy_item = Some(Arc::downgrade(accessor.original_proxy.as_ref().unwrap()));
+                }
+                _ => {}
+            }
+        }
+
+        if after_start && proxy_item.is_some() {
+            let proxy_item = proxy_item.unwrap();
+            let proxy_item = proxy_item.upgrade().unwrap();
+            let mut accessor = proxy_item.lock().unwrap();
+            let send_counts = accessor.available_send_counts();
+            if send_counts > 0 {
+                let mut initial_buffer = vec![0.0f32; send_counts];
+                initial_buffer[0] = 0.0001f32;
+                accessor.buffer_sender.write(&initial_buffer);
+            }
+        }
+    }
+
     /// Tick関数。
-    pub fn process(_frame_time: f64) -> ESystemProcessResult {
+    pub fn post_process(_frame_time: f64) -> ESystemProcessResult {
         unsafe {
             assert!(AUDIO_DEVICE.get().is_some());
         }
@@ -196,14 +234,10 @@ impl AudioDevice {
             let mut accessor = instance.lock().unwrap();
 
             match accessor.info.state {
-                EAudioDeviceState::NotStarted => {
-                    accessor.low_device.start().expect("Failed to start audio device");
-                    accessor.info.state = EAudioDeviceState::Started;
-                }
                 EAudioDeviceState::Started => {
                     accessor.process_started();
                 }
-                EAudioDeviceState::Stopped => {}
+                _ => {}
             }
         }
 
@@ -218,6 +252,7 @@ impl AudioDevice {
         let mut is_starvation = false;
         let mut last_processed_samples_length = 0usize;
         let mut last_send_buffer_length = 0usize;
+        let mut required_length = 0usize;
 
         // メッセージの処理を行う。
         let rx = self.rx.as_ref().unwrap();
@@ -231,13 +266,15 @@ impl AudioDevice {
                 EAudioDeviceMessage::Stop => {
                     self.info.state = EAudioDeviceState::Stopped;
                 }
-                EAudioDeviceMessage::StarvationNotified => {
+                EAudioDeviceMessage::StarvationNotified(required_count) => {
                     // もしこのフレームで1回でもStarvationが起きたのであれば、
                     // Starvation上での処理を優先する。
                     is_starvation = true;
+                    required_length += required_count;
                 }
                 EAudioDeviceMessage::LastProcessedLength(samples_count) => {
                     last_processed_samples_length += samples_count;
+                    required_length += samples_count;
                 }
                 EAudioDeviceMessage::SendSamplesToBuffer(samples_count) => {
                     last_send_buffer_length += samples_count;
@@ -255,6 +292,7 @@ impl AudioDevice {
         }
         self.info.prev_processed_samples_count = last_processed_samples_length;
         self.info.is_starvation = is_starvation;
+        self.info.total_required_samples += required_length;
 
         if self.info.is_starvation {
             println!("Starved!");
@@ -270,6 +308,11 @@ impl AudioDevice {
 
             // ここでdropするので、もう1回解放してはいけない。
             if let Some(device) = AUDIO_DEVICE.take() {
+                {
+                    let lock = device.lock().unwrap();
+                    println!("{:?}", lock.info);
+                }
+
                 drop(device)
             }
 
@@ -299,6 +342,7 @@ impl AudioDevice {
                 sub_buffer_len: Self::calculate_ring_sub_buffer_length(&config),
                 remained_samples_count: 0,
                 prev_processed_samples_count: 0,
+                total_required_samples: 0,
                 is_starvation: true, // 最初はStarvationありにして最大限のサンプル数を取得させる。
             },
             initial_config: config.clone(),
@@ -328,7 +372,7 @@ impl AudioDevice {
 
                 // f32は[-1, 1]までに。
                 let mut raw_samples = vec![];
-                raw_samples.resize(outputs.len(), 0.0f32);
+                raw_samples.resize(required_output_length, 0.0f32);
 
                 // できるだけ読み切る。
                 while read_count < required_output_length && attempts < ATTEMPTS_COUNT {
@@ -389,7 +433,7 @@ impl AudioDevice {
             if read_count < required_output_length {
                 accessor
                     .tx
-                    .send(EAudioDeviceMessage::StarvationNotified)
+                    .send(EAudioDeviceMessage::StarvationNotified(required_output_length))
                     .expect("Message could not send.");
             } else {
                 accessor

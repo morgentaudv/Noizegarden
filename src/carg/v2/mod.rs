@@ -326,6 +326,11 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         let prev_to_now_time = tick_timer.tick().as_secs_f64();
         elapsed_time += tick_timer.tick().as_secs_f64();
 
+        // 24-12-12 依存システムの処理。
+        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+            AudioDevice::pre_process(prev_to_now_time);
+        }
+
         // 共通で使う処理時の入力。
         let mut input = ProcessCommonInput {
             time_tick_mode: setting.time_tick_mode,
@@ -377,7 +382,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
 
         // 24-12-12 依存システムの処理。
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
-            AudioDevice::process(prev_to_now_time);
+            AudioDevice::post_process(prev_to_now_time);
         }
 
         if end_node_processed && is_all_finished {
