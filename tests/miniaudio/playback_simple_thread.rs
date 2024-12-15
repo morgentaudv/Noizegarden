@@ -15,7 +15,7 @@ pub const SUBBUFFER_COUNT: usize = 16;
 
 #[test]
 fn test_miniaudio_playback_simple_thread() {
-    let (send, recv) =
+    let (mut send, recv) =
         miniaudio::ring_buffer::<f32>(SUBBUFFER_LEN, SUBBUFFER_COUNT).expect("Failed to create ring buffer");
 
     let shutdown_producer = Arc::new(AtomicBool::new(true));
@@ -40,6 +40,18 @@ fn test_miniaudio_playback_simple_thread() {
             const MUL: f32 = 0.1f32; // -6dB想定。
 
             // We always just try to fill the entire buffer with samples:
+            //let len = send.available();
+            //if len > 0 {
+            //    let mut buf = vec![0f32; len];
+            //    sine_wave.read_pcm_frames(&mut FramesMut::wrap(
+            //        &mut buf[..],
+            //        DEVICE_FORMAT,
+            //        DEVICE_CHANNELS,
+            //    ));
+
+            //    send.write(&buf);
+            //}
+
             send.write_with(SUBBUFFER_LEN, |buf| {
                 sine_wave.read_pcm_frames(&mut FramesMut::wrap(
                     buf,
@@ -64,6 +76,7 @@ fn test_miniaudio_playback_simple_thread() {
     device_config.playback_mut().set_channels(DEVICE_CHANNELS);
     device_config.set_sample_rate(DEVICE_SAMPLE_RATE);
 
+    let mut last_sample = 0.0f32;
     device_config.set_data_callback(move |device, output, _input| {
         match device.playback().format() {
             Format::S16 => {
@@ -104,10 +117,14 @@ fn test_miniaudio_playback_simple_thread() {
                     attempts += 1;
                 }
 
+                if read_count > 0 {
+                    last_sample = outputs[read_count - 1];
+                }
+
                 // If we're starved, just repeat the last sample on all channels:
                 (&mut outputs[read_count..])
                     .iter_mut()
-                    .for_each(|s| *s = 0.0);
+                    .for_each(|s| *s = last_sample);
             }
             _ => unreachable!(),
         }

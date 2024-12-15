@@ -14,11 +14,11 @@
         "_dummy": {
             "type": "_dummy"
         },
-        "input_1": {
+        "input": {
             "type": "emitter-wav-mono",
             "path": "./sample01.wav"
         },
-        "input": {
+        "input_not": {
             "type": "emitter-sine",
             "frequency": {
                 "type": "a440",

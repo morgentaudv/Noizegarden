@@ -552,10 +552,21 @@ impl AudioDeviceProxy {
             }
         });
     }
+
+    pub fn send_sample_buffer_with<F>(&self, f: F) -> usize
+        where F: FnOnce(&mut [f32]),
+    {
+        let channels = self.get_channels();
+        if channels == 0 {
+            return 0;
+        }
+
+        self.buffer_sender.write_with(1024, f)
+    }
 }
 
 /// `sample`のモノ音源を任意でミックスして`buffer`に入れる。
-fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32]) {
+pub fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32]) {
     debug_assert!(channels > 0);
     debug_assert!(buffer.len() >= channels);
 
@@ -566,7 +577,7 @@ fn remix_mono_to(sample: UniformedSample, channels: usize, buffer: &mut [f32]) {
 }
 
 /// `left`, `right`のステレオ音源を任意でミックスして`buffer`に入れる。
-fn remix_stereo_to(left: UniformedSample, right: UniformedSample, channels: usize, buffer: &mut [f32]) {
+pub fn remix_stereo_to(left: UniformedSample, right: UniformedSample, channels: usize, buffer: &mut [f32]) {
     debug_assert!(channels > 0);
     debug_assert!(buffer.len() >= channels);
 
