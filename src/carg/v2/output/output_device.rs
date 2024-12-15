@@ -100,22 +100,20 @@ impl OutputDeviceProcessData {
         // その前に今どのぐらいのバッファを必要とするかを返してから、その量に応じて分量をとる。
 
         // もしデバイスが死んだら処理してはいけないし、処理中断する。
+        //
+        // ただしサンプルフォーマットはここで変更しない。
+        // 送った先でなんとかやってくれる。
+        // いったん[`UniformedSample`]自体はf32だとみなす。
         let mut device = self.device_proxy.upgrade();
         if device.is_none() {
             self.common.state = EProcessState::Finished;
             return;
         }
-        // デバイスから各チャンネルに必要な推定のサンプル数を取得する。
-        let required_samples = {
-            let device = device.as_ref().unwrap();
-            let proxy = device.lock().unwrap();
-            proxy.get_required_samples(input.common.frame_time)
-        };
-        if required_samples <= 0 {
-            if input.is_children_all_finished() {
-                self.common.state = EProcessState::Finished;
-            }
 
+        // 各チャンネルのバッファ区間に送信するためのサンプルの数を取得する。
+        // 24-12-15 この辺はminiaudioライブラリの実装にゆだねられる。
+        let required_samples = input.common.required_channel_samples;
+        if required_samples <= 0 {
             return;
         }
 

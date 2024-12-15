@@ -96,6 +96,9 @@ pub struct ProcessCommonInput {
     pub frame_time: f64,
     /// 処理カテゴリ
     pub category: EProcessCategoryFlag,
+    /// 各チャンネル別にとればよさそうなサンプルの数。
+    /// `time_tick_mode`が[`ETimeTickMode::Realtime`]な時だけ有効。
+    pub required_channel_samples: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -246,8 +249,12 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     if dependent_systems != system_category::NONE {
         // AudioDeviceの初期化
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+            assert!(setting.channels > 0);
+
             let mut config = AudioDeviceConfig::new();
-            config.set_channels(1).set_sample_rate(setting.sample_rate as usize);
+            config
+                .set_channels(setting.channels)
+                .set_sample_rate(setting.sample_rate as usize);
 
             audio_device_weak_proxy = Some(AudioDevice::initialize(config));
         }
@@ -255,7 +262,6 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     let system_setting = ProcessItemCreateSettingSystem {
         audio_device: audio_device_weak_proxy.as_ref(),
     };
-    debug_assert!(audio_device_weak_proxy.clone().unwrap().upgrade().is_some());
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
@@ -313,6 +319,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     let mut tick_timer = Timer::from_second(tick_threshold);
 
     // 終了条件は、すべてのノードが終わった時。
+    // vvv オーディオレンダリングフレーム処理
     let mut node_queue = VecDeque::new();
     let mut elapsed_time = 0.0;
     loop {
@@ -325,7 +332,15 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
             elapsed_time,
             frame_time: prev_to_now_time,
             category: process_category::NORMAL,
+            required_channel_samples: 0,
         };
+        if setting.time_tick_mode == ETimeTickMode::Realtime && audio_device_weak_proxy.is_some() {
+            input.required_channel_samples = {
+                let audio_device = audio_device_weak_proxy.as_ref().unwrap().upgrade().unwrap();
+                let mut proxy = audio_device.lock().unwrap();
+                proxy.available_send_counts()
+            } / setting.channels;
+        }
 
         let mut end_node_processed = false;
         let mut is_all_finished = true;
@@ -368,9 +383,6 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         if end_node_processed && is_all_finished {
             break;
         }
-
-        // @todo TEMPORARY
-        sleep(Duration::from_secs_f64(16.0 / 1000.0));
     }
 
     // 依存システムの解放

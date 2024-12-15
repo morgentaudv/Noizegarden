@@ -247,7 +247,7 @@ impl AudioDevice {
 
         // バッファ関連の情報更新
         self.info.remained_samples_count += last_send_buffer_length;
-        if self.info.remained_samples_count > last_processed_samples_length {
+        if self.info.remained_samples_count >= last_processed_samples_length {
             self.info.remained_samples_count -= last_processed_samples_length;
         }
         else {
@@ -255,6 +255,11 @@ impl AudioDevice {
         }
         self.info.prev_processed_samples_count = last_processed_samples_length;
         self.info.is_starvation = is_starvation;
+
+        if self.info.is_starvation {
+            println!("Starved!");
+        }
+        //println!("Send: {}, {:?}", last_send_buffer_length, self.info);
     }
 
     /// システムを解放する。
@@ -297,30 +302,6 @@ impl AudioDevice {
                 is_starvation: true, // 最初はStarvationありにして最大限のサンプル数を取得させる。
             },
             initial_config: config.clone(),
-        }
-    }
-
-    /// `frame_time`から現在の設定からの推定の各チャンネルに必要な推定のサンプル数を返す。
-    fn get_required_samples(&self, _frame_time: f64) -> usize {
-        // 一番近い上または同じ2累乗の値にして返す。
-        let single_length = Self::calculate_ring_sub_buffer_length(&self.initial_config);
-        let remained = self.info.remained_samples_count;
-        if self.info.is_starvation {
-            // 通常の2個分をとるようにする。
-            return single_length * 2;
-        }
-
-        if remained >= single_length * 2 {
-            // とらない。
-            return 0;
-        }
-        else if remained >= single_length {
-            // 1個とる。
-           return single_length;
-        }
-        else {
-            // 2個とる。
-            return single_length * 2;
         }
     }
 
@@ -450,15 +431,6 @@ impl AudioDeviceProxy {
         Arc::new(Mutex::new(instance))
     }
 
-    /// `frame_time`から現在の設定からの推定の各チャンネルに必要な推定のサンプル数を返す。
-    pub fn get_required_samples(&self, frame_time: f64) -> usize {
-        debug_assert!(self.device.upgrade().is_some());
-
-        let device = self.device.upgrade().unwrap();
-        let device = device.lock().unwrap();
-        device.get_required_samples(frame_time)
-    }
-
     /// 今デバイスに設定しているチャンネルの数を返す。
     /// もしデバイスが無効になっているのであれば、`0`を返す。
     pub fn get_channels(&self) -> usize {
@@ -466,6 +438,10 @@ impl AudioDeviceProxy {
             None => 0,
             Some(v) => v.lock().unwrap().get_channels(),
         }
+    }
+
+    pub fn available_send_counts(&mut self) -> usize {
+        self.buffer_sender.available()
     }
 
     /// デバイスの設定に合わせて適切にサンプルを送信する。
@@ -485,6 +461,10 @@ impl AudioDeviceProxy {
             // 1. inputをforにして、frame_iを増加する。
             // 2. frame_iがframe_countより同じか大きければ、抜ける。
             let buffer_len = buffer.len();
+            if buffer_len <= 0 {
+                return;
+            }
+
             let frame_count = buffer_len / channels;
             if frame_count <= 0 {
                 return;

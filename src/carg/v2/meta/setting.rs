@@ -10,6 +10,8 @@ pub struct Setting {
     pub sample_count_frame: usize,
     /// 音生成のために使うサンプルレートを指す。0より上であること。
     pub sample_rate: u64,
+    /// 音出力の基本チャンネル数
+    pub channels: usize,
 }
 
 impl Setting {
