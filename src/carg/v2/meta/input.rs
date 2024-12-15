@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::output::output_file::EOutputFileInput;
 use crate::carg::v2::output::output_log::EOutputLogItem;
@@ -136,7 +135,7 @@ impl BufferMonoDynamicItem {
                 else {
                     // bufferのラストからsample_offset分を持ってくる。
                     {
-                        let mut buffer_it = self.buffer.iter_mut().rev().take(sample_offset).rev();
+                        let buffer_it = self.buffer.iter_mut().rev().take(sample_offset).rev();
                         let v_it = v.buffer.iter().take(sample_offset);
                         buffer_it.zip(v_it).for_each(|(dst, src)| *dst += *src);
                     }

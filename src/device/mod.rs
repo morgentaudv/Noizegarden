@@ -160,7 +160,7 @@ impl AudioDevice {
         let weak_proxy = Arc::downgrade(&original_proxy);
         unsafe {
             // Mutexがおそらく内部Internal Mutabilityを実装しているかと。
-            let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
             let mut accessor = instance.lock().unwrap();
 
             accessor.original_proxy = Some(original_proxy);
@@ -194,7 +194,7 @@ impl AudioDevice {
         }
 
         unsafe {
-            let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
             let mut accessor = instance.lock().unwrap();
 
             match accessor.info.state {
@@ -214,7 +214,7 @@ impl AudioDevice {
         }
 
         unsafe {
-            let mut instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
             let mut accessor = instance.lock().unwrap();
 
             match accessor.info.state {

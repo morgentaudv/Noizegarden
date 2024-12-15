@@ -2,7 +2,7 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
-use crate::carg::v2::meta::system::{system_category, TSystemCategory};
+use crate::carg::v2::meta::system::{system_category};
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
 use crate::carg::v2::node::{process_result, RelationTreeNode};
@@ -12,7 +12,7 @@ use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{math::timer::Timer, wave::sample::UniformedSample};
 use itertools::Itertools;
 use meta::relation::Relation;
-use num_traits::{One, Zero};
+use num_traits::{Zero};
 use serde::{Deserialize, Serialize};
 use std::rc::Weak;
 use std::{

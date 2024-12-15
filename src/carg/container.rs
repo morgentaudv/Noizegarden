@@ -4,7 +4,6 @@ use super::v2::{self};
 use crate::carg::v2::meta;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::wave::sample::UniformedSample;
 
 /// @brief パーシングされたノードのコンテナ。
 /// これだけで一連の処理ができる。
@@ -34,10 +33,9 @@ impl ENodeContainer {
     }
 }
 
-struct UniformedSampleBufferItem {
-    buffer: Vec<UniformedSample>,
-    start_index: usize,
-    length: usize,
-}
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------
+
 
 

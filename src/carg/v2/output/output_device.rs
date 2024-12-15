@@ -111,7 +111,7 @@ impl OutputDeviceProcessData {
         // ただしサンプルフォーマットはここで変更しない。
         // 送った先でなんとかやってくれる。
         // いったん[`UniformedSample`]自体はf32だとみなす。
-        let mut device = self.device_proxy.upgrade();
+        let device = self.device_proxy.upgrade();
         if device.is_none() {
             self.common.state = EProcessState::Finished;
             return;
@@ -132,7 +132,7 @@ impl OutputDeviceProcessData {
         let send_buffer_fn = move |frame_count| {
             // 1. inputをforにして、frame_iを増加する。
             // 2. frame_iがframe_countより同じか大きければ、抜ける。
-            let mut this = unsafe { &mut **this_pointer.get() };
+            let this = unsafe { &mut **this_pointer.get() };
 
             // 送信用のバッファとすべてゼロかを取得。
             let (channel_buffers, is_all_zero) = {
@@ -158,7 +158,7 @@ impl OutputDeviceProcessData {
             };
 
             // 更新。
-            let mut all_zero = unsafe { &mut **all_zero_pointer.get() };
+            let all_zero = unsafe { &mut **all_zero_pointer.get() };
             *all_zero = is_all_zero;
 
             channel_buffers
