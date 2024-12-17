@@ -27,7 +27,7 @@ impl Default for EWindowFunction {
 
 impl EWindowFunction {
     /// 掛け算数値を計算する。もし範囲外なら、0だけを返す。
-    pub fn get_factor(&self, length: f64, time: f64) -> f64 {
+    pub fn get_factor_time(&self, length: f64, time: f64) -> f64 {
         let t = (time / length).clamp(0.0, 1.0);
         match self {
             Self::None => 1.0,
@@ -63,6 +63,10 @@ impl EWindowFunction {
                 A0 - (A1 * c2pn_n) + (A2 * c4pn_n)
             }
         }
+    }
+
+    pub fn get_factor_samples(&self, sample_i: usize, sample_count: usize) -> f64 {
+        self.get_factor_time(sample_count as f64, sample_i as f64)
     }
 }
 

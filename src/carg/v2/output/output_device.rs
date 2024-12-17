@@ -119,6 +119,13 @@ impl OutputDeviceProcessData {
 
         // 各チャンネルのバッファ区間に送信するためのサンプルの数を取得する。
         // 24-12-15 この辺はminiaudioライブラリの実装にゆだねられる。
+        // 24-12-17
+        {
+            let item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
+            if item.output_dynamic().is_none() {
+                return;
+            }
+        }
 
         // ただしサンプルフォーマットはここで変更しない。
         // 送った先でなんとかやってくれる。

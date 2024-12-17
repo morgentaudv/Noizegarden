@@ -68,7 +68,7 @@ impl PitchShifter {
                     // ここでConvolution。
                     // s_d(m)sinc(pi(t-m))
 
-                    let hann_value = window_function.get_factor(hann_length as f64, t - (m as f64));
+                    let hann_value = window_function.get_factor_time(hann_length as f64, t - (m as f64));
                     let sinc_value = sinc((PI as f64) * (t - (m as f64)));
                     dst_buffer[n] += (hann_value * sinc_value) * src_buffer[m];
                 }

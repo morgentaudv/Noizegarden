@@ -61,7 +61,7 @@ impl FrequencyAnalyzerV2 {
 
     /// 窓関数の結果値を返す。
     pub fn get_window_fn_factor(&self, length: f64, time: f64) -> f64 {
-        self.window_function.get_factor(length, time)
+        self.window_function.get_factor_time(length, time)
     }
 
     /// [`Discreted Fourier Transform`](https://en.wikipedia.org/wiki/Discrete_Fourier_transform)（離散フーリエ変換）を行って
@@ -290,7 +290,7 @@ impl FrequencyAnalyzer {
     ///
     fn get_window_fn_factor(&self, length: f64, time: f64) -> f64 {
         if let Some(window_fn) = self.window_function {
-            window_fn.get_factor(length, time)
+            window_fn.get_factor_time(length, time)
         } else {
             1f64
         }

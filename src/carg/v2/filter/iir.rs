@@ -1,18 +1,23 @@
 use crate::carg::v2::filter::{iir_compute_sample, EFilterMode};
-use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::EProcessState;
 use crate::carg::v2::{
     EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
     TProcessItemPtr,
 };
+use crate::math::window::EWindowFunction;
 use crate::wave::sample::UniformedSample;
 use crate::wave::PI2;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
-use crate::carg::v2::meta::system::TSystemCategory;
-use crate::carg::v2::node::common::EProcessState;
+
+const SAMPLES: usize = 2048;
+const OVERLAP_RATE: f64 = 0.5;
 
 /// ノードの設定情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -30,6 +35,18 @@ struct InternalInfo {
     next_start_i: usize,
     /// モード
     mode: EFilterMode,
+    /// 変形後、送る前のバッファ
+    send_pending_buffer: Vec<UniformedSample>,
+}
+
+impl InternalInfo {
+    fn new(mode: EFilterMode) -> Self {
+        Self {
+            next_start_i: 0,
+            mode,
+            send_pending_buffer: vec![],
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -106,7 +123,7 @@ impl IIRProcessData {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::FilterIIRLPF),
                     info: v.clone(),
-                    internal: InternalInfo { next_start_i: 0, mode },
+                    internal: InternalInfo::new(mode),
                 };
 
                 SItemSPtr::new(item)
@@ -116,7 +133,7 @@ impl IIRProcessData {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::FilterIIRHPF),
                     info: v.clone(),
-                    internal: InternalInfo { next_start_i: 0, mode },
+                    internal: InternalInfo::new(mode),
                 };
 
                 SItemSPtr::new(item)
@@ -126,7 +143,7 @@ impl IIRProcessData {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::FilterIIRBandPass),
                     info: v.clone(),
-                    internal: InternalInfo { next_start_i: 0, mode },
+                    internal: InternalInfo::new(mode),
                 };
 
                 SItemSPtr::new(item)
@@ -136,7 +153,7 @@ impl IIRProcessData {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::FilterIIRBandStop),
                     info: v.clone(),
-                    internal: InternalInfo { next_start_i: 0, mode },
+                    internal: InternalInfo::new(mode),
                 };
 
                 SItemSPtr::new(item)
@@ -146,7 +163,8 @@ impl IIRProcessData {
     }
 
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
-        let can_process = self.update_input_buffer();
+        let all_finished = in_input.is_children_all_finished();
+        let (can_process, _required_samples) = self.update_input_buffer(all_finished);
         if !can_process {
             return;
         }
@@ -165,25 +183,49 @@ impl IIRProcessData {
             let item = self.common.get_input_internal(INPUT_IN).unwrap();
             let item = item.buffer_mono_dynamic().unwrap();
             let buffer = &item.buffer;
-            let sample_range = start_i..buffer.len();
+            let sample_range = start_i..(start_i + SAMPLES);
 
             let mut output_buffer = vec![];
-            output_buffer.resize(sample_range.len(), UniformedSample::default());
+            output_buffer.resize(SAMPLES, UniformedSample::default());
 
             for sample_i in sample_range {
                 let output_i = sample_i - start_i;
                 iir_compute_sample(output_i, sample_i, &mut output_buffer, buffer, &filter_as, &filter_bs);
             }
 
+            let output_buffer = output_buffer
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| EWindowFunction::Hann.get_factor_samples(i, SAMPLES) * v)
+                .collect_vec();
+
             (output_buffer, item.setting.clone().unwrap())
         };
 
         // 処理が終わったら出力する。
-        self.internal.next_start_i += buffer.len();
+        // ただしOverlapしない部分だけ出力する。
+        // Overlapされる部分は内部バッファに保持して、あとで次に処理したバッファと合わせる。
+        let overlapped_len = (SAMPLES as f64 * OVERLAP_RATE) as usize;
+        self.internal.next_start_i += overlapped_len;
+
+        // 1. まずsend_pending_bufferとかけ合わせる。
+        // pending_bufferの長さまではbufferに足して、余った分は後ろに追加する。
+        let old_len = self.internal.send_pending_buffer.len();
+        for add_i in 0..old_len {
+            // Phase相殺は大丈夫か、これ？
+            self.internal.send_pending_buffer[add_i] += buffer[add_i];
+        }
+        for push_i in old_len..buffer.len() {
+            self.internal.send_pending_buffer.push(buffer[push_i]);
+        }
+
+        // 2. これ以上オーバーラップしないバッファだけをとって、次に送る。
+        let un_overlapped_len = SAMPLES - overlapped_len;
+        let send_buffer = self.internal.send_pending_buffer.drain(..un_overlapped_len).collect_vec();
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, setting)),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(send_buffer, setting)),
             )
             .unwrap();
 
@@ -198,29 +240,40 @@ impl IIRProcessData {
     }
 
     /// Input側のバッファと内部処理の情報を更新し、またフィルタリングの処理が行えるかを判定する。
-    fn update_input_buffer(&mut self) -> bool {
+    fn update_input_buffer(&mut self, all_children_finished: bool) -> (bool, usize) {
         // 処理するためのバッファが十分じゃないと処理できない。
-        let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
-            EProcessInputContainer::BufferMonoDynamic(v) => v.buffer.len() > 0,
-            _ => false,
-        };
-        if !is_buffer_enough {
-            return false;
+        let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
+        let item = &mut item.buffer_mono_dynamic_mut().unwrap();
+
+        let required_samples = self.internal.next_start_i + SAMPLES;
+        if item.buffer.len() < required_samples {
+            return if all_children_finished {
+                // すべての上からの処理が終わったら、新規のバッファは入ってこないはずなので
+                // のこりの分を返さなきゃならない。
+                // ただしサンプル数は最大限にして返す。0埋めした方がいいので。
+                let offset = required_samples - item.buffer.len();
+                for _ in 0..offset {
+                    item.buffer.push(UniformedSample::default());
+                }
+
+                (true, SAMPLES)
+            } else {
+                (false, 0)
+            }
         }
 
         // もしバッファが十分大きくなって、またインデックスも十分進んだら
         // 前に少し余裕分を残して削除する。
-        let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
-        let item = &mut item.buffer_mono_dynamic_mut().unwrap();
-        if item.buffer.len() >= 4096 && self.internal.next_start_i >= 2048 {
+        if self.internal.next_start_i >= SAMPLES {
             // 前を削除する。
-            let drain_count = self.internal.next_start_i - 96;
+            let offset = SAMPLES.min(64);
+            let drain_count = self.internal.next_start_i - offset;
             item.buffer.drain(..drain_count);
-            self.internal.next_start_i = 96;
+            self.internal.next_start_i = offset;
         }
 
         // 処理可能。
-        return true;
+        (true, SAMPLES)
     }
 }
 
