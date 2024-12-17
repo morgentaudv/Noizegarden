@@ -9,6 +9,7 @@ use crate::carg::v2::{
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::common::EProcessState;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
@@ -112,6 +113,16 @@ impl AdapterWaveSumProcessData {
 }
 
 impl TSystemCategory for AdapterWaveSumProcessData {}
+
+impl TTimeTickCategory for AdapterWaveSumProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for AdapterWaveSumProcessData {
     fn is_finished(&self) -> bool {

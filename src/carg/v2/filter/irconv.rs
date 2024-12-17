@@ -5,7 +5,9 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::common::EProcessState;
+use crate::nz_define_time_tick_for;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaIRConvInfo {
@@ -51,6 +53,8 @@ impl TPinCategory for IRConvolutionProcessData {
 }
 
 impl TSystemCategory for IRConvolutionProcessData {}
+
+nz_define_time_tick_for!(IRConvolutionProcessData, true, true);
 
 impl TProcess for IRConvolutionProcessData {
     fn is_finished(&self) -> bool {

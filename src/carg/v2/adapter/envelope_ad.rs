@@ -9,6 +9,7 @@ use crate::carg::v2::{
     Setting, TProcess, TProcessItemPtr,
 };
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::common::EProcessState;
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
@@ -185,6 +186,16 @@ impl AdapterEnvelopeAdProcessData {
 }
 
 impl TSystemCategory for AdapterEnvelopeAdProcessData {}
+
+impl TTimeTickCategory for AdapterEnvelopeAdProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for AdapterEnvelopeAdProcessData {
     fn is_finished(&self) -> bool {

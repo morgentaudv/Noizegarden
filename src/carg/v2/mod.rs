@@ -237,7 +237,7 @@ pub type TProcessItemPtr = ItemSPtr<dyn TProcess>;
 pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
     // 下で`_start_pin`のチェックもやってくれる。
     let node_container = MetaNodeContainer { map: nodes };
-    validate_node_relations(&node_container, &relations)?;
+    validate_node_relations(&setting, &node_container, &relations)?;
 
     // 依存システムの初期化
     let dependent_systems = node_container.get_dependent_system_categories();

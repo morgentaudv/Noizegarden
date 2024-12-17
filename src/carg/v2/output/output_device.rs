@@ -14,6 +14,8 @@ use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cell::UnsafeCell;
+use crate::carg::v2::node::common::EProcessState;
+use crate::nz_define_time_tick_for;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaOutputDeviceInfo {}
@@ -63,6 +65,7 @@ impl TSystemCategory for OutputDeviceProcessData {
         system_category::AUDIO_DEVICE
     }
 }
+nz_define_time_tick_for!(OutputDeviceProcessData, false, true);
 
 impl TProcessCategory for OutputDeviceProcessData {
     fn get_process_category() -> EProcessCategoryFlag {

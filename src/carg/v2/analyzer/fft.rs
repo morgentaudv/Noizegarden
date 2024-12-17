@@ -9,6 +9,8 @@ use crate::math::window::EWindowFunction;
 use crate::wave::analyze::analyzer::{FrequencyAnalyzerV2, WaveContainerSetting};
 use crate::wave::analyze::method::EAnalyzeMethod;
 use crate::wave::sample::UniformedSample;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::nz_define_time_tick_for;
 
 #[derive(Debug)]
 pub struct AnalyzerFFTProcessData {
@@ -213,6 +215,7 @@ impl AnalyzerFFTProcessData {
 }
 
 impl TSystemCategory for AnalyzerFFTProcessData {}
+nz_define_time_tick_for!(AnalyzerFFTProcessData, true, true);
 
 impl TProcess for AnalyzerFFTProcessData {
     fn is_finished(&self) -> bool {

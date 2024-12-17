@@ -10,6 +10,7 @@ use crate::carg::v2::{
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::common::EProcessState;
 use crate::wave::filter::compute_fir_filters_count;
 
@@ -180,6 +181,16 @@ impl TPinCategory for FIRProcessData {
 }
 
 impl TSystemCategory for FIRProcessData {}
+
+impl TTimeTickCategory for FIRProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for FIRProcessData {
     fn is_finished(&self) -> bool {

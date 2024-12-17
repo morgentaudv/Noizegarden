@@ -15,6 +15,7 @@ use crate::wave::PI2;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 
 const SAMPLES: usize = 2048;
 const OVERLAP_RATE: f64 = 0.5;
@@ -86,6 +87,16 @@ impl TPinCategory for IIRProcessData {
 }
 
 impl TSystemCategory for IIRProcessData {}
+
+impl TTimeTickCategory for IIRProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for IIRProcessData {
     fn is_finished(&self) -> bool {

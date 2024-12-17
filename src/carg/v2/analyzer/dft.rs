@@ -14,6 +14,8 @@ use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::node::common::EProcessState;
+use crate::nz_define_time_tick_for;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 
 #[derive(Debug)]
 pub struct AnalyzerDFTProcessData {
@@ -223,6 +225,7 @@ impl AnalyzerDFTProcessData {
 }
 
 impl TSystemCategory for AnalyzerDFTProcessData {}
+nz_define_time_tick_for!(AnalyzerDFTProcessData, true, true);
 
 impl TProcess for AnalyzerDFTProcessData {
     fn is_finished(&self) -> bool {

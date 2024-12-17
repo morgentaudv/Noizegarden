@@ -10,6 +10,7 @@ use crate::{
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::common::EProcessState;
 
 #[derive(Debug)]
@@ -197,6 +198,16 @@ impl AdapterEnvelopeAdsrProcessData {
 }
 
 impl TSystemCategory for AdapterEnvelopeAdsrProcessData {}
+
+impl TTimeTickCategory for AdapterEnvelopeAdsrProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for AdapterEnvelopeAdsrProcessData {
     fn is_finished(&self) -> bool {

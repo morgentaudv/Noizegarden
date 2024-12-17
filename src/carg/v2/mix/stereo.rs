@@ -121,6 +121,7 @@ impl MixStereoProcessData {
 
 impl TSystemCategory for MixStereoProcessData {}
 
+
 impl TProcess for MixStereoProcessData {
     fn is_finished(&self) -> bool {
         self.common.state == EProcessState::Finished

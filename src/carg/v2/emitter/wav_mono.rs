@@ -13,6 +13,8 @@ use std::fs;
 use std::io::BufReader;
 use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::nz_define_time_tick_for;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaWavInfo {
@@ -64,6 +66,7 @@ impl TPinCategory for EmitterWavMonoProcessData {
 }
 
 impl TSystemCategory for EmitterWavMonoProcessData {}
+nz_define_time_tick_for!(EmitterWavMonoProcessData, true, true);
 
 impl TProcess for EmitterWavMonoProcessData {
     fn is_finished(&self) -> bool {

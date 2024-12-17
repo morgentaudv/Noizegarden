@@ -386,6 +386,28 @@ impl ENodeSpecifier {
         match self {
             Self::InternalStartPin => StartProcessData::can_support_offline(),
             Self::InternalDummy => DummyProcessData::can_support_offline(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::can_support_offline(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::can_support_offline(),
+            Self::AdapterWaveSum => AdapterWaveSumProcessData::can_support_offline(),
+            Self::AdapterCompressor => AdapterCompressorProcessData::can_support_offline(),
+            Self::AdapterLimiter => AdapterLimiterProcessData::can_support_offline(),
+            Self::FilterFIR => FIRProcessData::can_support_offline(),
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
+                IIRProcessData::can_support_offline()
+            },
+            Self::FilterIRConvolution => IRConvolutionProcessData::can_support_offline(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::can_support_offline(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::can_support_offline(),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::can_support_offline(),
+            Self::EmitterPinkNoise
+            | Self::EmitterSawtooth
+            | Self::EmitterSquare
+            | Self::EmitterTriangle
+            | Self::EmitterWhiteNoise
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::can_support_offline(),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::can_support_offline(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::can_support_offline(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::can_support_offline(),
             _ => false,
         }
     }
@@ -394,6 +416,28 @@ impl ENodeSpecifier {
         match self {
             Self::InternalStartPin => StartProcessData::can_support_realtime(),
             Self::InternalDummy => DummyProcessData::can_support_realtime(),
+            Self::AdapterEnvelopeAd => AdapterEnvelopeAdProcessData::can_support_realtime(),
+            Self::AdapterEnvelopeAdsr => AdapterEnvelopeAdsrProcessData::can_support_realtime(),
+            Self::AdapterWaveSum => AdapterWaveSumProcessData::can_support_realtime(),
+            Self::AdapterCompressor => AdapterCompressorProcessData::can_support_realtime(),
+            Self::AdapterLimiter => AdapterLimiterProcessData::can_support_realtime(),
+            Self::FilterFIR => FIRProcessData::can_support_realtime(),
+            Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
+                IIRProcessData::can_support_realtime()
+            },
+            Self::FilterIRConvolution => IRConvolutionProcessData::can_support_realtime(),
+            Self::AnalyzerDFT => AnalyzerDFTProcessData::can_support_realtime(),
+            Self::AnalyzerFFT => AnalyzerFFTProcessData::can_support_realtime(),
+            Self::AnalyzerLUFS => AnalyzeLUFSProcessData::can_support_realtime(),
+            Self::EmitterPinkNoise
+            | Self::EmitterSawtooth
+            | Self::EmitterSquare
+            | Self::EmitterTriangle
+            | Self::EmitterWhiteNoise
+            | Self::EmitterSineWave => SineWaveEmitterProcessData::can_support_realtime(),
+            Self::EmitterWavMono => EmitterWavMonoProcessData::can_support_realtime(),
+            Self::EmitterIDFT => IDFTEmitterProcessData::can_support_realtime(),
+            Self::EmitterIFFT => IFFTEmitterProcessData::can_support_realtime(),
             _ => false,
         }
     }

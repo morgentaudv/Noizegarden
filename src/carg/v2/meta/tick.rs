@@ -23,6 +23,23 @@ pub trait TTimeTickCategory {
     }
 }
 
+/// Implement [`TTimeTickCategory`] for given `t` type,
+/// `offline` value must be return value of `can_support_offline`, and `realtime` must be.
+#[macro_export]
+macro_rules! nz_define_time_tick_for {
+    ($t: ty, $offline: expr, $realtime: expr) => {
+        impl TTimeTickCategory for $t {
+            fn can_support_offline() -> bool {
+                $offline
+            }
+
+            fn can_support_realtime() -> bool {
+                $realtime
+            }
+        }
+    }
+}
+
 // ----------------------------------------------------------------------------
 // EOF
 // ----------------------------------------------------------------------------

@@ -11,6 +11,8 @@ use crate::carg::v2::{
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::nz_define_time_tick_for;
 
 mod hz48000 {
     /// HRTFのIIRフィルター（おおむねハイシェルブ）
@@ -101,6 +103,7 @@ impl TPinCategory for AnalyzeLUFSProcessData {
 }
 
 impl TSystemCategory for AnalyzeLUFSProcessData {}
+nz_define_time_tick_for!(AnalyzeLUFSProcessData, true, true);
 
 impl TProcess for AnalyzeLUFSProcessData {
     fn is_finished(&self) -> bool {

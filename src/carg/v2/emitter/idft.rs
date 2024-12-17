@@ -10,6 +10,8 @@ use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::node::common::EProcessState;
 use crate::wave::analyze::method::ETransformMethod;
 use crate::wave::analyze::transformer::{EExportSampleCountMode, FrequencyTransformer};
+use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::nz_define_time_tick_for;
 
 /// 周波数情報をもとに音波バッファを生成する。
 #[derive(Debug)]
@@ -125,6 +127,7 @@ impl IDFTEmitterProcessData {
 }
 
 impl TSystemCategory for IDFTEmitterProcessData {}
+nz_define_time_tick_for!(IDFTEmitterProcessData, true, true);
 
 impl TProcess for IDFTEmitterProcessData {
     fn is_finished(&self) -> bool {

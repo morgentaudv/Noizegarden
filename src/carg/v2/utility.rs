@@ -1,24 +1,26 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use crate::carg::v2::{MetaNodeContainer};
 use crate::carg::v2::meta::relation::Relation;
+use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::node::RelationTreeNodePtr;
+use crate::carg::v2::MetaNodeContainer;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// 次のことを検査する。
 ///
 /// * inputとoutputが空白なものがあるかを確認する。
 /// * それぞれのノードに対してCycleになっていないかを確認する。
-pub fn validate_node_relations(nodes: &MetaNodeContainer, relations: &[Relation]) -> anyhow::Result<()>
-{
+pub fn validate_node_relations(
+    setting: &Setting,
+    nodes: &MetaNodeContainer,
+    relations: &[Relation],
+) -> anyhow::Result<()> {
     let mut is_start_node_exist = false;
 
     for relation in relations {
         // inputとoutputが空白なものがあるかを確認する。
-        if relation.prev.is_any_empty()
-        {
+        if relation.prev.is_any_empty() {
             return Err(anyhow::anyhow!("input node is empty somewhat."));
         }
-        if relation.next.is_any_empty()
-        {
+        if relation.next.is_any_empty() {
             return Err(anyhow::anyhow!("output node is empty somewhat."));
         }
 
@@ -26,37 +28,41 @@ pub fn validate_node_relations(nodes: &MetaNodeContainer, relations: &[Relation]
         // prev/next指定のノード情報が本当に有効かを確認。
         {
             let prev_node = &relation.prev;
-            if !nodes.is_valid_prev_node_pin(prev_node)
-            {
-                return Err(anyhow::anyhow!("Given relation info ({:?}) is not exist in node map.", prev_node));
+            if !nodes.is_valid_prev_node_pin(prev_node) {
+                return Err(anyhow::anyhow!(
+                    "Given relation info ({:?}) is not exist in node map.",
+                    prev_node
+                ));
             }
             // 特殊ノードなのかも確認。
-            if relation.prev.is_special_prev_node() { is_start_node_exist = true; }
+            if relation.prev.is_special_prev_node() {
+                is_start_node_exist = true;
+            }
         }
 
         // そしてinputとoutputの互換性を確認する。
         // 具体的にはoutputに対してinputの組み方とタイプを検証する。
         {
             let next_node = &relation.next;
-            if !nodes.is_valid_next_node_pin(next_node)
-            {
-                return Err(anyhow::anyhow!("Given relation info ({:?}) is not exist in node map.", next_node));
+            if !nodes.is_valid_next_node_pin(next_node) {
+                return Err(anyhow::anyhow!(
+                    "Given relation info ({:?}) is not exist in node map.",
+                    next_node
+                ));
             }
         }
 
         // そしてprev/nextがお互いに繋げられるかを確認。
-        if !nodes.is_valid_relation(&relation)
-        {
+        if !nodes.is_valid_relation(&relation) {
             return Err(anyhow::anyhow!(
-                    "prev node ({:?}) does not support next node ({:?}).",
-                    &relation.prev,
-                    &relation.next
-                ));
+                "prev node ({:?}) does not support next node ({:?}).",
+                &relation.prev,
+                &relation.next
+            ));
         }
     }
 
-    if !is_start_node_exist
-    {
+    if !is_start_node_exist {
         return Err(anyhow::anyhow!("There is no start pin node. '_start_pin'."));
     }
 

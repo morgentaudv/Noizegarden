@@ -11,6 +11,8 @@ use crate::{
 };
 use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::nz_define_time_tick_for;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ESineWaveEmitterType {
@@ -276,6 +278,7 @@ impl SineWaveEmitterProcessData {
 }
 
 impl TSystemCategory for SineWaveEmitterProcessData {}
+nz_define_time_tick_for!(SineWaveEmitterProcessData, true, true);
 
 impl TProcess for SineWaveEmitterProcessData {
     fn is_finished(&self) -> bool {
