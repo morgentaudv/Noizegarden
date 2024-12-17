@@ -18,6 +18,11 @@
             "type": "emitter-wav-mono",
             "path": "./sample01.wav"
         },
+        "filter": {
+            "type": "filter-iir-lpf",
+            "edge_frequency": 400.0,
+            "quality_factor": 1.0
+        },
         "input_not": {
             "type": "emitter-sine",
             "frequency": {
@@ -48,6 +53,16 @@
         {
             "prev": {
                 "node": "input",
+                "pin": "out"
+            },
+            "next": {
+                "node": "filter",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "filter",
                 "pin": "out"
             },
             "next": {
