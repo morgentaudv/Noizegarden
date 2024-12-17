@@ -179,10 +179,11 @@ impl IIRProcessData {
         );
 
         let (buffer, setting) = {
-            let start_i = self.internal.next_start_i;
             let item = self.common.get_input_internal(INPUT_IN).unwrap();
             let item = item.buffer_mono_dynamic().unwrap();
             let buffer = &item.buffer;
+
+            let start_i = self.internal.next_start_i;
             let sample_range = start_i..(start_i + SAMPLES);
 
             let mut output_buffer = vec![];
