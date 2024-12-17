@@ -5,6 +5,7 @@ pub mod relation;
 pub mod setting;
 pub mod system;
 pub mod process;
+pub mod tick;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
@@ -31,6 +32,7 @@ use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TProcessCategory};
 use crate::carg::v2::meta::system::{ESystemCategoryFlag, TSystemCategory};
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::pin::{NodePinItem, NodePinItemList};
 use crate::carg::v2::output::output_device::OutputDeviceProcessData;
 
@@ -377,6 +379,22 @@ impl ENodeSpecifier {
         match self {
             Self::OutputDevice => OutputDeviceProcessData::get_process_category(),
             _ => process_category::NORMAL,
+        }
+    }
+
+    pub fn can_support_offline(&self) -> bool {
+        match self {
+            Self::InternalStartPin => StartProcessData::can_support_offline(),
+            Self::InternalDummy => DummyProcessData::can_support_offline(),
+            _ => false,
+        }
+    }
+
+    pub fn can_support_realtime(&self) -> bool {
+        match self {
+            Self::InternalStartPin => StartProcessData::can_support_realtime(),
+            Self::InternalDummy => DummyProcessData::can_support_realtime(),
+            _ => false,
         }
     }
 }

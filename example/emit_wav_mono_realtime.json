@@ -19,8 +19,8 @@
             "path": "./sample01.wav"
         },
         "filter": {
-            "type": "filter-iir-lpf",
-            "edge_frequency": 400.0,
+            "type": "filter-iir-bpf",
+            "edge_frequency": 440.0,
             "quality_factor": 1.0
         },
         "input_not": {

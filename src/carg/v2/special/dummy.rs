@@ -3,6 +3,7 @@ use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 
 /// ダミーノード
 #[derive(Debug)]
@@ -48,6 +49,16 @@ impl DummyProcessData {
 }
 
 impl TSystemCategory for DummyProcessData {}
+
+impl TTimeTickCategory for DummyProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for DummyProcessData {
     fn is_finished(&self) -> bool {

@@ -7,6 +7,7 @@ use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessOutputBuffer, P
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::node::common::EProcessState;
 use crate::wave::EBitDepth;
 use crate::wave::sample::UniformedSample;
@@ -62,6 +63,16 @@ impl TPinCategory for AdapterCompressorProcessData {
 }
 
 impl TSystemCategory for AdapterCompressorProcessData {}
+
+impl TTimeTickCategory for AdapterCompressorProcessData {
+    fn can_support_offline() -> bool {
+        true
+    }
+
+    fn can_support_realtime() -> bool {
+        true
+    }
+}
 
 impl TProcess for AdapterCompressorProcessData {
     fn is_finished(&self) -> bool {

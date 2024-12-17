@@ -1,7 +1,7 @@
 use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
-use crate::carg::v2::meta::setting::{ETimeTickMode, Setting};
+use crate::carg::v2::meta::setting::{Setting};
 use crate::carg::v2::meta::system::{system_category};
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
@@ -20,6 +20,7 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
+use crate::carg::v2::meta::tick::ETimeTickMode;
 
 pub mod adapter;
 pub mod analyzer;

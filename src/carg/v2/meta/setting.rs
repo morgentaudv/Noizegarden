@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::carg::v2::meta::tick::ETimeTickMode;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Setting {
@@ -29,15 +30,6 @@ impl Setting {
     pub fn get_default_tick_threshold(&self) -> f64 {
         (self.sample_count_frame as f64) / (self.sample_rate as f64)
     }
-}
-
-/// フレームTickのモード
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ETimeTickMode {
-    #[serde(rename = "offline")]
-    Offline,
-    #[serde(rename = "realtime")]
-    Realtime,
 }
 
 // ----------------------------------------------------------------------------
