@@ -2,6 +2,7 @@ use crate::carg::v2::adapter::compressor::{AdapterCompressorProcessData, MetaCom
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
 use crate::carg::v2::adapter::limiter::{AdapterLimiterProcessData, MetaLimiterInfo};
+use crate::carg::v2::adapter::resample::{MetaResampleInfo, ResampleProcessData};
 use crate::carg::v2::adapter::wave_sum::AdapterWaveSumProcessData;
 use crate::carg::v2::analyzer::dft::AnalyzerDFTProcessData;
 use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
@@ -26,11 +27,10 @@ use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use crate::carg::v2::{
-    EParsedOutputLogMode, EmitterRange, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, Setting,
+    EParsedOutputLogMode, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, Setting,
     TProcessItem, TProcessItemPtr,
 };
 use crate::math::float::EFloatCommonPin;
-use crate::math::frequency::EFrequency;
 use crate::math::window::EWindowFunction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -129,6 +129,8 @@ pub enum ENode {
     AdapterCompressor(MetaCompressorInfo),
     #[serde(rename = "adapter-limiter")]
     AdapterLimiter(MetaLimiterInfo),
+    #[serde(rename = "adapter-resample")]
+    AdapterResample(MetaResampleInfo),
     /// 昔に作っておいたFIRのLPFフィルター（2次FIR）
     #[serde(rename = "filter-fir")]
     FilterFIR(MetaFIRInfo),
@@ -177,6 +179,11 @@ impl ENode {
             ENode::AdapterEnvelopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
             ENode::AdapterCompressor(_) => AdapterCompressorProcessData::create_from(self, setting),
             ENode::AdapterLimiter(_) => AdapterLimiterProcessData::create_from(self, setting),
+            ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
+            ENode::AdapterResample(_) => {
+                let setting = ProcessItemCreateSetting { node: &self, setting };
+                ResampleProcessData::create_item(&setting, &system_setting).expect("Failed to create resample process")
+            }
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
             ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
@@ -186,7 +193,6 @@ impl ENode {
             ENode::EmitterIFFT { .. } => IFFTEmitterProcessData::create_from(self, setting),
             ENode::EmitterWavMono(_) => EmitterWavMonoProcessData::create_from(self, setting),
             ENode::InternalDummy => DummyProcessData::create_from(self, setting),
-            ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
             ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),
             ENode::FilterFIR(_) => FIRProcessData::create_from(self, setting),
             ENode::FilterIIRLPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::LowPass),
