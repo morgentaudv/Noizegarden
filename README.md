@@ -31,6 +31,7 @@ Node based musical analysis application written in Rustlang, also features makin
 - [x] IIRのBSF
 - [ ] Delta Timeのモードの反映
 - [ ] リアルタイムプレビューノード
+- [ ] Resamplingの作りなおし
 - [ ] eguiの導入
 
 ---
