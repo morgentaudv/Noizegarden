@@ -1,0 +1,71 @@
+{
+    "version": 2,
+    "setting": {
+        "time_tick_mode": "realtime",
+        "set_offline_rendering_frame_time": 10,
+        "sample_count_frame": 1024,
+        "sample_rate": 48000,
+        "channels": 1
+    },
+    "node": {
+        "_start_pin": {
+            "type": "_start_pin"
+        },
+        "_dummy": {
+            "type": "_dummy"
+        },
+        "resample": {
+            "type": "resample",
+            "to_sample_rate": 48000,
+            "high_quality": true
+        },
+        "input": {
+            "type": "emitter-sine",
+            "frequency": {
+                "type": "a440",
+                "value": "A4"
+            },
+            "intensity": 0.2,
+            "range": {
+                "start": 0.0,
+                "length": 4.0
+            },
+            "sample_rate": 44100
+        },
+        "output": {
+            "type": "output-device"
+        }
+    },
+    "relation": [
+        {
+            "prev": {
+                "node": "_start_pin",
+                "pin": "out"
+            },
+            "next":{
+                "node": "input",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input",
+                "pin": "out"
+            },
+            "next": {
+                "node": "resample",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "resample",
+                "pin": "out"
+            },
+            "next": {
+                "node": "output",
+                "pin": "in"
+            }
+        }
+    ]
+}

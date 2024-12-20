@@ -8,7 +8,7 @@ use crate::carg::v2::analyzer::fft::AnalyzerFFTProcessData;
 use crate::carg::v2::analyzer::lufs::{AnalyzeLUFSProcessData, MetaLufsInfo};
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
-use crate::carg::v2::emitter::oscilo::SineWaveEmitterProcessData;
+use crate::carg::v2::emitter::oscilo::{MetaSineEmitterInfo, MetaSineNoiseInfo, MetaSineSquareInfo, SineWaveEmitterProcessData};
 use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo};
 use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
 use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
@@ -49,39 +49,22 @@ pub enum ENode {
     InternalDummy,
     /// ピンクノイズを出力する。
     #[serde(rename = "emitter-pinknoise")]
-    EmitterPinkNoise { intensity: f64, range: EmitterRange },
+    EmitterPinkNoise(MetaSineNoiseInfo),
     /// ホワイトノイズを出力する。
     #[serde(rename = "emitter-whitenoise")]
-    EmitterWhiteNoise { intensity: f64, range: EmitterRange },
+    EmitterWhiteNoise(MetaSineNoiseInfo),
     /// サイン波形（正弦波）を出力する。
     #[serde(rename = "emitter-sine")]
-    EmitterSineWave {
-        frequency: EFrequency,
-        intensity: f64,
-        range: EmitterRange,
-    },
+    EmitterSineWave(MetaSineEmitterInfo),
     /// ノコギリ波を出力する。
     #[serde(rename = "emitter-saw")]
-    EmitterSawtooth {
-        frequency: EFrequency,
-        intensity: f64,
-        range: EmitterRange,
-    },
+    EmitterSawtooth(MetaSineEmitterInfo),
     /// 三角波を出力する。
     #[serde(rename = "emitter-triangle")]
-    EmitterTriangle {
-        frequency: EFrequency,
-        intensity: f64,
-        range: EmitterRange,
-    },
+    EmitterTriangle(MetaSineEmitterInfo),
     /// 矩形波を出力する。
     #[serde(rename = "emitter-square")]
-    EmitterSquare {
-        frequency: EFrequency,
-        duty_rate: f64,
-        intensity: f64,
-        range: EmitterRange,
-    },
+    EmitterSquare(MetaSineSquareInfo),
     /// 周波数情報から音波バッファを生成する。
     #[serde(rename = "emitter-idft")]
     EmitterIDFT {
