@@ -110,7 +110,7 @@ impl IDFTEmitterProcessData {
                 OUTPUT_OUT,
                 EProcessOutput::BufferMono(ProcessOutputBuffer::new_sample_offset(
                     buffer,
-                    self.setting.clone(),
+                    input.sample_rate,
                     sample_offset,
                 )),
             )

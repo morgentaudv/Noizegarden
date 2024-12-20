@@ -1,20 +1,20 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::EProcessState;
 use crate::carg::v2::{
     EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
     TProcessItemPtr,
 };
+use crate::nz_define_time_tick_for;
 use crate::wave::container::WaveContainer;
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufReader;
-use crate::carg::v2::meta::system::TSystemCategory;
-use crate::carg::v2::node::common::EProcessState;
-use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::nz_define_time_tick_for;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaWavInfo {
@@ -35,6 +35,8 @@ struct InternalInfo {
     container: Option<WaveContainer>,
     /// 次のサンプル出力でバッファのスタート地点インデックス
     next_start_i: usize,
+    /// PCMのサンプルレート
+    sample_rate: usize,
 }
 
 const INPUT_IN: &'static str = "in";
@@ -103,7 +105,7 @@ impl TProcess for EmitterWavMonoProcessData {
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.internal.sample_rate)),
             )
             .unwrap();
 
@@ -139,6 +141,7 @@ impl EmitterWavMonoProcessData {
         assert_eq!(container.bits_per_sample(), 16);
 
         // 移動して終わり。
+        self.internal.sample_rate = container.samples_per_second() as usize;
         self.internal.container = Some(container);
     }
 

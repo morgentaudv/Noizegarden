@@ -189,7 +189,7 @@ impl IIRProcessData {
             self.info.quality_factor,
         );
 
-        let (buffer, setting) = {
+        let (buffer, sample_rate) = {
             let item = self.common.get_input_internal(INPUT_IN).unwrap();
             let item = item.buffer_mono_dynamic().unwrap();
             let buffer = &item.buffer;
@@ -211,7 +211,7 @@ impl IIRProcessData {
                 .map(|(i, v)| EWindowFunction::Hann.get_factor_samples(i, SAMPLES) * v)
                 .collect_vec();
 
-            (output_buffer, item.setting.clone().unwrap())
+            (output_buffer, item.sample_rate)
         };
 
         // 処理が終わったら出力する。
@@ -237,7 +237,7 @@ impl IIRProcessData {
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(send_buffer, setting)),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(send_buffer, sample_rate)),
             )
             .unwrap();
 

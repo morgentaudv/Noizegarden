@@ -106,7 +106,7 @@ impl OutputFileProcessData {
     }
 
     fn process_mono(&mut self, v: &BufferMonoDynamicItem) {
-        let source_sample_rate = v.setting.as_ref().unwrap().sample_rate as f64;
+        let source_sample_rate = v.sample_rate as f64;
 
         let container = match self.format {
             EOutputFileFormat::WavLPCM16 { sample_rate } => {

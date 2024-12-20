@@ -164,14 +164,14 @@ impl AdapterEnvelopeAdProcessData {
         // このノードでは最初からADを行う。
         // もし尺が足りなければ、そのまま終わる。
         // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
-        let values = self.emitter.next_values(input.buffer.len(), input.setting.sample_rate as usize);
+        let values = self.emitter.next_values(input.buffer.len(), input.sample_rate);
         let buffer = input.buffer.iter().zip(values.iter()).map(|(a, b)| *b * *a).collect_vec();
 
         // outputのどこかに保持する。
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, input.setting.clone())),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, input.sample_rate)),
             )
             .unwrap();
 

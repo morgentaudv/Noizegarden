@@ -178,7 +178,7 @@ impl AdapterCompressorProcessData {
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(output_buffer, input.setting.clone())),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(output_buffer, input.sample_rate)),
             )
             .unwrap();
 

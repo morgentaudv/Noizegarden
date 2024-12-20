@@ -80,7 +80,9 @@ impl AdapterWaveSumProcessData {
             }
             inputs
         };
+        debug_assert_eq!(inputs.iter().map(|v| v.sample_rate).all_equal(), true);
 
+        let sample_rate = inputs.first().unwrap().sample_rate;
         let recep = (inputs.len() as f64).recip();
         let mut buffer = vec![];
         buffer.resize(inputs.first().unwrap().buffer.len(), UniformedSample::MIN);
@@ -98,7 +100,7 @@ impl AdapterWaveSumProcessData {
         self.common
             .insert_to_output_pin(
                 "out",
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, sample_rate)),
             )
             .unwrap();
 

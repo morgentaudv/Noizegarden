@@ -1,8 +1,9 @@
 use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
-use crate::carg::v2::meta::setting::{Setting};
-use crate::carg::v2::meta::system::{system_category};
+use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::system_category;
+use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
 use crate::carg::v2::node::{process_result, RelationTreeNode};
@@ -12,7 +13,7 @@ use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{math::timer::Timer, wave::sample::UniformedSample};
 use itertools::Itertools;
 use meta::relation::Relation;
-use num_traits::{Zero};
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::rc::Weak;
 use std::{
@@ -20,7 +21,6 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use crate::carg::v2::meta::tick::ETimeTickMode;
 
 pub mod adapter;
 pub mod analyzer;
@@ -148,26 +148,21 @@ impl EProcessOutput {
 #[derive(Debug, Clone)]
 pub struct ProcessOutputBuffer {
     buffer: Vec<UniformedSample>,
-    //range: EmitterRange,
-    setting: Setting,
+    sample_rate: usize,
     sample_offset: usize,
 }
 
 impl ProcessOutputBuffer {
-    pub fn new(buffer: Vec<UniformedSample>, setting: Setting) -> Self {
+    pub fn new(buffer: Vec<UniformedSample>, sample_rate: usize) -> Self {
         Self {
             buffer,
-            setting,
-            //range: EmitterRange {
-            //    start: 0.0,
-            //    length: 0.0,
-            //},
+            sample_rate,
             sample_offset: 0usize,
         }
     }
 
-    pub fn new_sample_offset(buffer: Vec<UniformedSample>, setting: Setting, offset: usize) -> Self {
-        let mut item = Self::new(buffer, setting);
+    pub fn new_sample_offset(buffer: Vec<UniformedSample>, sample_rate: usize, offset: usize) -> Self {
+        let mut item = Self::new(buffer, sample_rate);
         item.sample_offset = offset;
         item
     }
@@ -189,6 +184,7 @@ pub struct ProcessOutputText {
 pub struct ProcessOutputFrequency {
     frequencies: Vec<SineFrequency>,
     analyzed_sample_len: usize,
+    sample_rate: usize,
     overlap: bool,
 }
 

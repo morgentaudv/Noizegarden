@@ -138,7 +138,7 @@ impl AdapterEnvelopeAdsrProcessData {
         // このノードでは最初からADを行う。
         // もし尺が足りなければ、そのまま終わる。
         // inputのSettingのsample_rateから各バッファのサンプルの発生時間を計算する。
-        let sample_rate = input.setting.sample_rate as f64;
+        let sample_rate = input.sample_rate as f64;
 
         let decay_start_time = self.attack_time;
         let sustain_start_time = decay_start_time + self.decay_time;
@@ -184,7 +184,7 @@ impl AdapterEnvelopeAdsrProcessData {
         }
 
         // outputのどこかに保持する。
-        self.output = Some(ProcessOutputBuffer::new(applied_buffer, input.setting.clone()));
+        self.output = Some(ProcessOutputBuffer::new(applied_buffer, input.sample_rate));
 
         // 状態変更。
         if in_input.is_children_all_finished() {

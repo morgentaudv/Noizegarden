@@ -109,14 +109,14 @@ impl EProcessInputContainer {
 #[derive(Debug, Clone)]
 pub struct BufferMonoDynamicItem {
     pub buffer: Vec<UniformedSample>,
-    pub setting: Option<Setting>,
+    pub sample_rate: usize,
 }
 
 impl BufferMonoDynamicItem {
     pub fn new() -> Self {
         Self {
             buffer: vec![],
-            setting: None,
+            sample_rate: 0,
         }
     }
 
@@ -125,7 +125,7 @@ impl BufferMonoDynamicItem {
         match output {
             // 記入する。
             EProcessOutputContainer::BufferMono(v) => {
-                self.setting = Some(v.setting.clone());
+                self.sample_rate = v.sample_rate;
 
                 // 24-09-27 `sample_offset`に気をつける。
                 let sample_offset = v.sample_offset.min(self.buffer.len());
@@ -304,7 +304,7 @@ impl EProcessInputContainer {
                             // 記入する。
                             EProcessOutputContainer::BufferMono(v) => {
                                 //dst.range = Some(v.range);
-                                dst.setting = Some(v.setting.clone());
+                                dst.sample_rate = v.sample_rate;
                                 dst.buffer.append(&mut v.buffer.clone());
                             }
                             _ => unreachable!("Unexpected output"),

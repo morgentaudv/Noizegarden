@@ -337,7 +337,7 @@ impl TProcess for SineWaveEmitterProcessData {
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, self.setting.clone())),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, sample_rate)),
             )
             .unwrap();
 

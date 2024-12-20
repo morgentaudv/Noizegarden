@@ -79,7 +79,7 @@ impl AnalyzerDFTProcessData {
         }
     }
 
-    fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, u64) {
+    fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, usize) {
         // チェックしてself.levelよりバッファが多くないと処理しない。
         let mut now_buffer_len = 0usize;
         let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
@@ -92,7 +92,7 @@ impl AnalyzerDFTProcessData {
 
         let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
         let v = &mut item.buffer_mono_dynamic_mut().unwrap();
-        let sample_rate = v.setting.as_ref().unwrap().sample_rate;
+        let sample_rate = v.sample_rate;
 
         // バッファ0補充分岐
         if !is_buffer_enough && in_input.is_children_all_finished() {
@@ -196,6 +196,7 @@ impl AnalyzerDFTProcessData {
                     EProcessOutput::Frequency(ProcessOutputFrequency {
                         frequencies,
                         analyzed_sample_len,
+                        sample_rate,
                         overlap: self.overlap,
                     }),
                 )

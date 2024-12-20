@@ -86,7 +86,7 @@ impl FIRProcessData {
         // `filter_responses`を使って折り畳みを行う。
         let start_i = self.internal.next_start_i;
 
-        let (buffer, setting) = {
+        let (buffer, sample_rate) = {
             let item = self.common.get_input_internal(INPUT_IN).unwrap();
             let item = item.buffer_mono_dynamic().unwrap();
             let buffer = &item.buffer;
@@ -106,7 +106,7 @@ impl FIRProcessData {
                 }
             }
 
-            (output_buffer, item.setting.clone().unwrap())
+            (output_buffer, item.sample_rate)
         };
 
         // 処理が終わったら出力する。
@@ -114,7 +114,7 @@ impl FIRProcessData {
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, setting)),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(buffer, sample_rate)),
             )
             .unwrap();
 
