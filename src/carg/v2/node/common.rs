@@ -132,6 +132,16 @@ impl ProcessControlItem {
     pub fn get_process_category(&self) -> EProcessCategoryFlag {
         self.specifier.get_process_category()
     }
+
+    /// ステートが一体しているか
+    pub fn is_state(&self, state: EProcessState) -> bool {
+        self.state == state
+    }
+
+    /// ステートを更新する。
+    pub fn set_state(&mut self, state: EProcessState) {
+        self.state = state;
+    }
 }
 
 /// [`ProcessControlItem::get_input_internal`]関数からの構造体。
