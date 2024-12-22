@@ -16,7 +16,7 @@
         },
         "resample": {
             "type": "adapter-resample",
-            "to_sample_rate": 48000,
+            "to_sample_rate": 44100,
             "high_quality": true
         },
         "input": {
@@ -30,7 +30,7 @@
                 "start": 0.0,
                 "length": 4.0
             },
-            "sample_rate": 44100
+            "sample_rate": 48000
         },
         "output": {
             "type": "output-file",
@@ -38,7 +38,7 @@
                 "type": "wav_lpcm16",
                 "sample_rate": 48000
             },
-            "file_name": "resample_441_480.wav"
+            "file_name": "resample_480_441.wav"
         }
     },
     "relation": [
