@@ -258,13 +258,13 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    fn next_samples(&mut self, _input: &ProcessProcessorInput) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.emitter.is_some());
 
         // 設定のサンプル数ずつ吐き出す。
         // ただし今のと最終長さと比べて最終長さより長い分は0に埋める。
         let end_sample_index = {
-            let ideal_add_time = self.setting.get_default_tick_threshold();
+            let ideal_add_time = (self.setting.sample_count_frame as f64) / (self.emitter_type.sample_rate() as f64);
             let ideal_next_time = self.common.elapsed_time + ideal_add_time;
 
             let mut add_time = ideal_add_time;

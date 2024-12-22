@@ -5,12 +5,15 @@ use crate::carg::v2::meta::system::TSystemCategory;
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::node::common::{EProcessState, ProcessControlItem};
-use crate::carg::v2::{EProcessOutput, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
+use crate::carg::v2::{
+    EProcessOutput, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, ProcessOutputBuffer,
+    ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
+};
 use crate::nz_define_time_tick_for;
+use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
-use crate::wave::sample::UniformedSample;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaResampleInfo {
@@ -111,20 +114,25 @@ impl TProcess for ResampleProcessData {
         // 24-12-22 まずoverlappingなしでやってみる。
         let to_fs = self.info.to_sample_rate;
         let (input_buffer, is_last) = self.drain_buffer(&input);
-        let output_buffer = self.process_resample(&input_buffer, is_last);
+        if input_buffer.is_empty() {
+            return;
+        }
+
+        let result = self.process_resample(&input_buffer, is_last, self.internal.next_phase_time);
+        self.internal.next_phase_time = result.next_phase_time;
 
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
-                EProcessOutput::BufferMono(ProcessOutputBuffer::new(output_buffer, to_fs)),
+                EProcessOutput::BufferMono(ProcessOutputBuffer::new(result.outputs, to_fs)),
             )
             .unwrap();
 
         // 状態確認
-        if is_last {
-            self.common.state = EProcessState::Playing;
-        } else {
+        if is_last && input.is_children_all_finished() {
             self.common.state = EProcessState::Finished;
+        } else {
+            self.common.state = EProcessState::Playing;
         }
     }
 }
@@ -163,13 +171,8 @@ impl ResampleProcessData {
         // 24-12-22 まずソースのサンプルサイズ（1チャンネル）は固定にしてみる。
         const SRC_SAMPLE_LEN: usize = 4096;
 
-        let mut input_internal = self
-            .common
-            .get_input_internal_mut(INPUT_IN)
-            .unwrap();
-        let input = input_internal
-            .buffer_mono_dynamic_mut()
-            .unwrap();
+        let mut input_internal = self.common.get_input_internal_mut(INPUT_IN).unwrap();
+        let input = input_internal.buffer_mono_dynamic_mut().unwrap();
 
         // バッファ0補充分岐
         let is_buffer_enough = input.buffer.len() >= SRC_SAMPLE_LEN;
@@ -178,31 +181,38 @@ impl ResampleProcessData {
             buffer.resize(SRC_SAMPLE_LEN, UniformedSample::MIN);
             return (buffer, true);
         }
+        if !is_buffer_enough {
+            return (vec![], false);
+        }
 
         // 普通。
         (input.buffer.drain(..SRC_SAMPLE_LEN).collect_vec(), false)
     }
 
-    fn process_resample(&self, src_buffer: &[UniformedSample], is_last: bool) -> Vec<UniformedSample> {
+    fn process_resample(
+        &self,
+        src_buffer: &[UniformedSample],
+        is_last: bool,
+        start_phase_time: f64,
+    ) -> ProcessSourceResult {
         // Account for increased filter gain when using factors less than 1.
         // Decimationするなら、ゲインを減らす必要があるっぽい？
         let header = self.internal.data.as_ref().unwrap();
         let lp_scale = header.ratio().min(1.0);
 
         //loop {
-            let setting = ProcessSamplingSetting {
-                src_buffer,
-                ratio: header.ratio(),
-                wing_num: header.wing_coeffs.len(),
-                lp_scale,
-                coeffs: &header.wing_coeffs,
-                coeff_deltas: &header.wing_coeffs,
-                use_interp: false,
-                start_time: 0.0,
-            };
+        let setting = ProcessSamplingSetting {
+            src_buffer,
+            ratio: header.ratio(),
+            wing_num: header.wing_coeffs.len(),
+            lp_scale,
+            coeffs: &header.wing_coeffs,
+            coeff_deltas: &header.wing_coeffs,
+            use_interp: false,
+            start_phase_time,
+        };
 
-            let result = process_source(&setting);
-            result.outputs
+        process_source(&setting)
         //}
     }
 }
@@ -219,13 +229,16 @@ struct ProcessSamplingSetting<'a> {
     coeffs: &'a [f64],
     coeff_deltas: &'a [f64],
     use_interp: bool,
-    start_time: f64,
+    start_phase_time: f64,
 }
 
+/// [`process_source`]の処理結果
 #[derive(Debug)]
 struct ProcessSourceResult {
+    /// 処理後のサンプルリスト
     outputs: Vec<UniformedSample>,
-    next_start_time: f64,
+    /// 次のバッファを処理する時のPhaseを計算するための時間。
+    next_phase_time: f64,
 }
 
 /// 結果の
@@ -233,20 +246,32 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
     debug_assert!(setting.ratio > 0.0);
 
     // Output sampling period
-    let dt = setting.ratio.recip();
+    //
+    // 元コードでは`dt`だったが、今のinputバッファから何サンプル分たっているか？を示す。
+    // 24kHzから48kHzなら、ratio = 2でdt = 0.5だけどつまり1サンプルに2個分計算する。
+    // という意味にもなる。
+    let input_buffer_dt = setting.ratio.recip();
     let mut results = vec![];
-    let mut process_time = setting.start_time;
+    // 24-12-22 Phaseを計算するために必要。サンプルをとるための時間計算は今は別途する。
+    let mut phase_time = setting.start_phase_time;
+    let mut sample_time = 0.0_f64;
 
     if setting.ratio == 1.0 {
         // そのまま
         return ProcessSourceResult {
             outputs: setting.src_buffer.iter().map(|v| *v).collect_vec(),
-            next_start_time: setting.start_time + setting.src_buffer.len() as f64,
+            next_phase_time: setting.start_phase_time + setting.src_buffer.len() as f64,
         };
     } else if setting.ratio > 1.0 {
-        for sample_i in 0..setting.src_buffer.len() {
+        let input_buffer_len = setting.src_buffer.len();
+        loop {
+            let mut input_i = sample_time.floor() as usize;
+            if input_i >= input_buffer_len {
+                break;
+            }
+
             // Interpolation
-            let left_phase_frac = process_time.fract();
+            let left_phase_frac = phase_time.fract();
             let right_phase_frac = 1.0 - left_phase_frac;
 
             let mut proc_setting = ProcessFilterSetting {
@@ -256,7 +281,7 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
                 use_interp: setting.use_interp,
                 phase: left_phase_frac,
                 samples: &setting.src_buffer,
-                start_sample_index: sample_i,
+                start_sample_index: input_i,
                 is_increment: false,
                 dh: 0.0,
             };
@@ -268,18 +293,27 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
             proc_setting.is_increment = true;
             proc_setting.phase = right_phase_frac;
             v += process_filter_up(&proc_setting);
-            v *= setting.lp_scale;
+            v *= setting.lp_scale * 0.25;
 
             results.push(UniformedSample::from_f64(v));
-            process_time += dt;
+            phase_time += input_buffer_dt;
+            sample_time += input_buffer_dt;
         }
     } else {
+        let input_buffer_len = setting.src_buffer.len();
+
         // Decimation
         let npc_f = ProcessHeader::NPC as f64;
         let dh = npc_f.min(setting.ratio * npc_f);
-        for sample_i in 0..setting.src_buffer.len() {
+
+        loop {
+            let mut input_i = sample_time.floor() as usize;
+            if input_i >= input_buffer_len {
+                break;
+            }
+
             // Interpolation
-            let left_phase_frac = process_time.fract();
+            let left_phase_frac = phase_time.fract();
             let right_phase_frac = 1.0 - left_phase_frac;
 
             let mut proc_setting = ProcessFilterSetting {
@@ -289,7 +323,7 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
                 use_interp: setting.use_interp,
                 phase: left_phase_frac,
                 samples: &setting.src_buffer,
-                start_sample_index: sample_i,
+                start_sample_index: input_i,
                 is_increment: false,
                 dh,
             };
@@ -304,13 +338,14 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
             v *= setting.lp_scale;
 
             results.push(UniformedSample::from_f64(v));
-            process_time += dt;
+            phase_time += input_buffer_dt;
+            sample_time += input_buffer_dt;
         }
     }
 
     ProcessSourceResult {
         outputs: results,
-        next_start_time: process_time,
+        next_phase_time: phase_time,
     }
 }
 
@@ -362,6 +397,7 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
 
     let mut output = 0.0;
     let mut input_i = setting.start_sample_index;
+    let mut is_oob = false;
     let inputs = setting.samples;
     if setting.use_interp {
         // irs_iを進めて、最後まで到達するまで演算する。
@@ -371,15 +407,28 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
             }
 
             let coeff = irs[irs_i] + (irs_deltas[irs_i] * phase_frac);
-            let applied = coeff * inputs[input_i].to_f64();
+
+            let input = if is_oob { 0.0 } else { inputs[input_i].to_f64() };
+            let applied = coeff * input;
             output += applied;
 
             // sinc関数を近接しているサンプルに当てるように調整する。
             irs_i += ProcessHeader::NPC;
-            if setting.is_increment {
-                input_i += 1;
-            } else {
-                input_i -= 1;
+
+            if !is_oob {
+                if setting.is_increment {
+                    input_i += 1;
+
+                    if input_i >= inputs.len() {
+                        is_oob = true;
+                    }
+                } else {
+                    if input_i > 0 {
+                        input_i -= 1;
+                    } else {
+                        is_oob = true;
+                    }
+                }
             }
         }
     } else {
@@ -388,15 +437,27 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
                 break;
             }
 
-            let applied = irs[irs_i] * inputs[input_i].to_f64();
+            let input = if is_oob { 0.0 } else { inputs[input_i].to_f64() };
+            let applied = irs[irs_i] * input;
             output += applied;
 
             // sinc関数を近接しているサンプルに当てるように調整する。
             irs_i += ProcessHeader::NPC;
-            if setting.is_increment {
-                input_i += 1;
-            } else {
-                input_i -= 1;
+
+            if !is_oob {
+                if setting.is_increment {
+                    input_i += 1;
+
+                    if input_i >= inputs.len() {
+                        is_oob = true;
+                    }
+                } else {
+                    if input_i > 0 {
+                        input_i -= 1;
+                    } else {
+                        is_oob = true;
+                    }
+                }
             }
         }
     }
@@ -496,6 +557,7 @@ struct InternalInfo {
     /// 変動するものはサポートできない。(ADPCM?）
     from_fs: Option<usize>,
     data: Option<ProcessHeader>,
+    next_phase_time: f64,
 }
 
 impl Default for InternalInfo {
@@ -503,6 +565,7 @@ impl Default for InternalInfo {
         Self {
             from_fs: None,
             data: None,
+            next_phase_time: 0.0,
         }
     }
 }

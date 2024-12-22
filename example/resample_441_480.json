@@ -33,7 +33,12 @@
             "sample_rate": 44100
         },
         "output": {
-            "type": "output-device"
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 48000
+            },
+            "file_name": "resample_441_480.wav"
         }
     },
     "relation": [
