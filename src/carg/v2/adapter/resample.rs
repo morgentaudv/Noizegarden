@@ -293,7 +293,7 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
             proc_setting.is_increment = true;
             proc_setting.phase = right_phase_frac;
             v += process_filter_up(&proc_setting);
-            v *= setting.lp_scale * 0.25;
+            v *= setting.lp_scale;
 
             results.push(UniformedSample::from_f64(v));
             phase_time += input_buffer_dt;
@@ -398,66 +398,46 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
     let mut output = 0.0;
     let mut input_i = setting.start_sample_index;
     let mut is_oob = false;
+    let mut last_sample = 0.0;
     let inputs = setting.samples;
-    if setting.use_interp {
-        // irs_iを進めて、最後まで到達するまで演算する。
-        loop {
-            if irs_i >= irs_end_i {
-                break;
-            }
-
-            let coeff = irs[irs_i] + (irs_deltas[irs_i] * phase_frac);
-
-            let input = if is_oob { 0.0 } else { inputs[input_i].to_f64() };
-            let applied = coeff * input;
-            output += applied;
-
-            // sinc関数を近接しているサンプルに当てるように調整する。
-            irs_i += ProcessHeader::NPC;
-
-            if !is_oob {
-                if setting.is_increment {
-                    input_i += 1;
-
-                    if input_i >= inputs.len() {
-                        is_oob = true;
-                    }
-                } else {
-                    if input_i > 0 {
-                        input_i -= 1;
-                    } else {
-                        is_oob = true;
-                    }
-                }
-            }
+    // irs_iを進めて、最後まで到達するまで演算する。
+    loop {
+        // サンプルを補完するためのIRがなければ、終わる。(FIRなのでタップの限界がある)
+        if irs_i >= irs_end_i {
+            break;
         }
-    } else {
-        loop {
-            if irs_i >= irs_end_i {
-                break;
+
+        let coeff = if setting.use_interp {
+            irs[irs_i] + (irs_deltas[irs_i] * phase_frac)
+        }
+        else {
+            irs[irs_i]
+        };
+
+        let input = if is_oob { last_sample } else { inputs[input_i].to_f64() };
+        last_sample = input; // oobした時にこれを使う。
+        let applied = coeff * input;
+        output += applied;
+
+        // sinc関数を近接しているサンプルに当てるように調整する。
+        // 片側のzero-crossingの中の区間がNPC個のサンプルが入っているとしたら、
+        // 次のサンプルに当てはまるIR係数はNPC先である。
+        irs_i += ProcessHeader::NPC;
+        if is_oob {
+            continue;
+        }
+
+        if setting.is_increment {
+            input_i += 1;
+
+            if input_i >= inputs.len() {
+                is_oob = true;
             }
-
-            let input = if is_oob { 0.0 } else { inputs[input_i].to_f64() };
-            let applied = irs[irs_i] * input;
-            output += applied;
-
-            // sinc関数を近接しているサンプルに当てるように調整する。
-            irs_i += ProcessHeader::NPC;
-
-            if !is_oob {
-                if setting.is_increment {
-                    input_i += 1;
-
-                    if input_i >= inputs.len() {
-                        is_oob = true;
-                    }
-                } else {
-                    if input_i > 0 {
-                        input_i -= 1;
-                    } else {
-                        is_oob = true;
-                    }
-                }
+        } else {
+            if input_i > 0 {
+                input_i -= 1;
+            } else {
+                is_oob = true;
             }
         }
     }
@@ -491,44 +471,46 @@ fn process_filter_down(setting: &ProcessFilterSetting) -> f64 {
 
     let mut output = 0.0;
     let mut input_i = setting.start_sample_index;
+    let mut is_oob = false;
+    let mut last_sample = 0.0;
     let inputs = setting.samples;
-    if setting.use_interp {
-        // irs_iを進めて、最後まで到達するまで演算する。
-        loop {
-            if irs_i >= irs_end_i {
-                break;
-            }
-
-            let phase_frac = irs_raw_i - irs_i as f64;
-            let coeff = irs[irs_i] + (irs_deltas[irs_i] * phase_frac);
-            let applied = coeff * inputs[input_i].to_f64();
-            output += applied;
-
-            // sinc関数を近接しているサンプルに当てるように調整する。
-            irs_raw_i += setting.dh;
-            irs_i = irs_raw_i.floor() as usize;
-            if setting.is_increment {
-                input_i += 1;
-            } else {
-                input_i -= 1;
-            }
+    loop {
+        // サンプルを補完するためのIRがなければ、終わる。(FIRなのでタップの限界がある)
+        if irs_i >= irs_end_i {
+            break;
         }
-    } else {
-        loop {
-            if irs_i >= irs_end_i {
-                break;
+
+        let coeff = if setting.use_interp {
+            let phase_frac = irs_raw_i - irs_i as f64;
+            irs[irs_i] + (irs_deltas[irs_i] * phase_frac)
+        }
+        else {
+            irs[irs_i]
+        };
+
+        let input = if is_oob { last_sample } else { inputs[input_i].to_f64() };
+        last_sample = input; // oobした時にこれを使う。
+        let applied = coeff * input;
+        output += applied;
+
+        // sinc関数を近接しているサンプルに当てるように調整する。
+        irs_raw_i += setting.dh;
+        irs_i = irs_raw_i.floor() as usize;
+        if is_oob {
+            continue;
+        }
+
+        if setting.is_increment {
+            input_i += 1;
+
+            if input_i >= inputs.len() {
+                is_oob = true;
             }
-
-            let applied = irs[irs_i] * inputs[input_i].to_f64();
-            output += applied;
-
-            // sinc関数を近接しているサンプルに当てるように調整する。
-            irs_raw_i += setting.dh;
-            irs_i = irs_raw_i.floor() as usize;
-            if setting.is_increment {
-                input_i += 1;
-            } else {
+        } else {
+            if input_i > 0 {
                 input_i -= 1;
+            } else {
+                is_oob = true;
             }
         }
     }
@@ -584,6 +566,7 @@ struct ProcessHeader {
 }
 
 impl ProcessHeader {
+    /// 特性関数の理想的なsinc関数を考慮する時の、per zero-crossing間のサンプル数を示す。
     const NPC: usize = 4096;
 
     /// サンプリング周波数の変換比率を求める。
@@ -594,17 +577,24 @@ impl ProcessHeader {
     /// `from_fs`から`to_fs`までのリファクタリング処理を行うためのヘッダー情報を作る。
     /// `is_high_quality`が`true`なら、クォリティーの良いヘッダーを生成する。
     fn new(is_high_quality: bool, from_fs: usize, to_fs: usize) -> Self {
-        // とりあえずlibresampleのコードを参考にしながら作ろうか。。。
+        // とりあえずlibresampleのコードを参考にしながら作ろうか。。
+        // libresampleのヘッダーではインプットのバッファを入れるためのX系列の変数もあるけど、
+        // x_offが前の分のオフセットで、x_readから～が新しいインプットを入れるためのバッファ。
+
+        // 偶数にすること。
+        // 半分はsinc関数の各羽部分にあたる。
         let n_mult = if is_high_quality { 35 } else { 11 } as usize;
+        assert_eq!(n_mult % 2, 1);
 
         // wing_numは疑似sinc関数の片側の係数の数を示す。
+        // つまり、n_multの半分のzero-crossingが存在するともいえる。
         let wing_num = (Self::NPC * (n_mult - 1)) >> 1;
         let rolloff = 0.90;
         let beta = 6.0; // Kaiser窓関数のパラメータ
 
         // 片側の係数。
         // そしてそれぞれのcoeffから差分もリストに入れる。
-        let wing_coeffs = Self::initialize_lpf_coeffs(wing_num, rolloff * 0.5, beta);
+        let wing_coeffs = Self::initialize_lpf_coeffs(wing_num, rolloff * 0.5, beta, Self::NPC);
         let mut coeff_deltas = wing_coeffs
             .iter()
             .zip(wing_coeffs.iter().skip(1))
@@ -613,11 +603,6 @@ impl ProcessHeader {
         assert_eq!(coeff_deltas.len(), wing_num - 1);
         // 最後はcoeffsから。
         coeff_deltas.push(*wing_coeffs.last().unwrap() * -1.0);
-
-        // LPFフィルターの片側の到達範囲？を求める？
-        let ratio = (to_fs as f64) / (from_fs as f64);
-        let i_ratio = ratio.recip();
-        let x_offset = (((wing_num + 1) >> 1) as f64 * 1.0_f64.max(i_ratio)).floor() as usize + 10;
 
         Self {
             from_fs,
@@ -628,7 +613,7 @@ impl ProcessHeader {
         }
     }
 
-    fn initialize_lpf_coeffs(coeff_num: usize, freq: f64, beta: f64) -> Vec<f64> {
+    fn initialize_lpf_coeffs(coeff_num: usize, freq: f64, beta: f64, zero_crossing: usize) -> Vec<f64> {
         assert!(coeff_num > 1);
 
         // まず窓関数を考慮しなかった、理想的なLPFフィルターの係数を入れる。
@@ -636,7 +621,7 @@ impl ProcessHeader {
         coeffs[0] = 2.0 * freq;
         for coeff_i in 1..coeff_num {
             // ここは一般sinc関数を使わない。
-            let v = PI * coeff_i as f64 / (coeff_num as f64);
+            let v = PI * coeff_i as f64 / (zero_crossing as f64);
             coeffs[coeff_i] = (2.0 * v * freq).sin() / v;
         }
 
@@ -650,7 +635,9 @@ impl ProcessHeader {
             let v = v.max(0.0); // sqrtするので、マイナスは許容できない。
 
             // ここで値をベッセル関数に入れて補正する。
-            coeffs[coeff_i] *= Self::modified_bessel_1st(beta * v.sqrt()) * ibeta;
+            // mul値自体は[0, 1]を持つ。
+            let mul = Self::modified_bessel_1st(beta * v.sqrt()) * ibeta;
+            coeffs[coeff_i] *= mul;
         }
 
         coeffs
@@ -658,17 +645,18 @@ impl ProcessHeader {
 
     /// https://en.wikipedia.org/wiki/Bessel_function#Modified_Bessel_functions:_I%CE%B1,_K%CE%B1
     /// を参考すること。
+    ///
+    /// alphaは0になので、基本1.0から始まる。
     fn modified_bessel_1st(x: f64) -> f64 {
         let mut sum = 1.0;
         let half_x = x * 0.5;
-        let mut n = 1.0;
         let mut u = 1.0;
 
-        loop {
-            let mut temp = half_x / n;
-            n += 1.0;
-
+        for n in 1usize.. {
+            // pow2
+            let mut temp = half_x / (n as f64);
             temp *= temp;
+
             u *= temp;
             sum += u;
 
