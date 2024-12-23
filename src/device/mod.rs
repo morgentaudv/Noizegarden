@@ -6,6 +6,10 @@ use std::sync::{mpsc, Arc, Mutex, OnceLock, Weak};
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
 /// 他に良い方法があればそれにしてmutをなくしたい。
+///
+/// 24-12-23
+/// Takeしなくても、中にInternal変数を持たせてOptionにすることでTakeせずに解放できるようになった。
+/// なので`mut`しなくても更新できるようになった。
 static AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 
 /// コールバックから取得する必要があるので、[`AudioDevice`]には入れない。
