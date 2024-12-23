@@ -1,8 +1,8 @@
+use crate::wave::sample::UniformedSample;
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
-use itertools::Itertools;
-use crate::wave::sample::UniformedSample;
 
 /// 24-12-23
 /// リサンプリングするためのテンプレートや接近するための仕組みを用意している。
@@ -11,17 +11,159 @@ use crate::wave::sample::UniformedSample;
 /// さまざまな所で使いまわせることで色々なメリットがある。
 static RESAMPLE_SYSTEM: OnceLock<Arc<Mutex<ResampleSystem>>> = OnceLock::new();
 
+/// WeakPtrなので解放はしなくてもいいかもしれない。
+static PROXY_ACCESSOR: OnceLock<ResampleSystemProxyWeakPtr> = OnceLock::new();
+
 pub struct ResampleSystem {
-    /// リサンプリングのマップの保持情報
-    map: HashMap<ResampleHeaderSetting, ResampleProcessHeader>,
+    v: Option<ResampleSystemInternal>,
+}
+
+impl ResampleSystem {
+    pub fn initialize(config: ResampleSystemConfig) -> ResampleSystemProxyWeakPtr {
+        let original_proxy = unsafe {
+            assert!(RESAMPLE_SYSTEM.get().is_none());
+
+            let _result = RESAMPLE_SYSTEM.set(Arc::new(Mutex::new(Self::new(config))));
+            let system = RESAMPLE_SYSTEM.get().unwrap();
+            let weak = Arc::downgrade(&system);
+
+            let original_proxy = ResampleSystemProxy::new(weak);
+            original_proxy
+        };
+
+        // Proxyの登録
+        let weak_proxy = Arc::downgrade(&original_proxy);
+        {
+            // Mutexがおそらく内部Internal Mutabilityを実装しているかと。
+            let instance = RESAMPLE_SYSTEM.get().expect("ResampleSystem instance must be valid");
+            let mut accessor = instance.lock().unwrap();
+            debug_assert!(accessor.v.is_some());
+
+            let v = accessor.v.as_mut().unwrap();
+            v.original_proxy = Some(original_proxy);
+        }
+
+        // Proxyを返す。本体は絶対返さない。
+        assert!(RESAMPLE_SYSTEM.get().is_some());
+
+        let _result = PROXY_ACCESSOR.set(weak_proxy.clone());
+        weak_proxy
+    }
+
+    fn new(config: ResampleSystemConfig) -> Self {
+        Self {
+            v: Some(ResampleSystemInternal::new(config)),
+        }
+    }
+
+    /// システムを解放する。
+    /// すべての関連処理が終わった後に解放すべき。
+    pub fn cleanup() {
+        assert!(RESAMPLE_SYSTEM.get().is_some());
+
+        if let Some(system) = RESAMPLE_SYSTEM.get() {
+            let mut system = system.lock().unwrap();
+            system.v = None;
+        }
+    }
+
+    /// `setting`に合わせてリサンプリングのための新しいIRを生成する。
+    fn create_response(&mut self, setting: &ResampleHeaderSetting) {
+        let v = self.v.as_mut().unwrap();
+
+        if !v.map.contains_key(&setting) {
+            let header = setting.create_header();
+            v.map.insert(setting.clone(), header);
+        }
+    }
+
+    /// `ir_setting`から取得したリサンプリングのIRに`buffer_setting`を適用してリサンプリングする。
+    fn process_response(
+        &self,
+        ir_setting: &ResampleHeaderSetting,
+        buffer_setting: &ProcessSamplingSetting,
+    ) -> anyhow::Result<ProcessSourceResult> {
+        let v = self.v.as_ref().unwrap();
+
+        match v.map.get(&ir_setting) {
+            None => Err(anyhow::anyhow!("Given ir_setting {:?} is not created yet.", ir_setting)),
+            Some(v) => Ok(v.process(&buffer_setting))
+        }
+    }
+}
+
+/// システム立ち上げの初期設定
+#[derive(Debug, Clone)]
+pub struct ResampleSystemConfig {}
+
+impl ResampleSystemConfig {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 pub struct ResampleSystemProxy {
     device: Weak<Mutex<ResampleSystem>>,
 }
 
+impl ResampleSystemProxy {
+    fn new(device: Weak<Mutex<ResampleSystem>>) -> ResampleSystemProxyPtr {
+        let instance = Self { device };
+        Arc::new(Mutex::new(instance))
+    }
+
+    /// `setting`に合わせてリサンプリングのための新しいIRを生成する。
+    pub fn create_response(&mut self, setting: &ResampleHeaderSetting) {
+        match self.device.upgrade() {
+            None => (),
+            Some(v) => {
+                let mut v = v.lock().unwrap();
+                v.create_response(&setting);
+            }
+        }
+    }
+
+    /// `ir_setting`から取得したリサンプリングのIRに`buffer_setting`を適用してリサンプリングする。
+    pub fn process_response(
+        &self,
+        ir_setting: &ResampleHeaderSetting,
+        buffer_setting: &ProcessSamplingSetting,
+    ) -> anyhow::Result<ProcessSourceResult> {
+        match self.device.upgrade() {
+            None => Err(anyhow::anyhow!("System is not setup.")),
+            Some(v) => {
+                let mut v = v.lock().unwrap();
+                v.process_response(&ir_setting, &buffer_setting)
+            }
+        }
+    }
+}
+
 type ResampleSystemProxyPtr = Arc<Mutex<ResampleSystemProxy>>;
 pub type ResampleSystemProxyWeakPtr = Weak<Mutex<ResampleSystemProxy>>;
+
+// ----------------------------------------------------------------------------
+// 内部制御
+// ----------------------------------------------------------------------------
+
+struct ResampleSystemInternal {
+    /// リサンプリングのマップの保持情報
+    map: HashMap<ResampleHeaderSetting, ResampleProcessHeader>,
+    /// プロキシの親元。ほかのところでは全部Weakタイプで共有する。
+    original_proxy: Option<ResampleSystemProxyPtr>,
+    /// 初期設定
+    initial_config: ResampleSystemConfig,
+}
+
+impl ResampleSystemInternal {
+    fn new(config: ResampleSystemConfig) -> Self {
+        Self {
+            map: HashMap::new(),
+            original_proxy: None,
+            initial_config: config.clone(),
+        }
+    }
+}
 
 // ----------------------------------------------------------------------------
 // 関連タイプ
@@ -343,8 +485,7 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
 
         let coeff = if setting.use_interp {
             irs[irs_i] + (irs_deltas[irs_i] * phase_frac)
-        }
-        else {
+        } else {
             irs[irs_i]
         };
 
@@ -417,8 +558,7 @@ fn process_filter_down(setting: &ProcessFilterSetting) -> f64 {
         let coeff = if setting.use_interp {
             let phase_frac = irs_raw_i - irs_i as f64;
             irs[irs_i] + (irs_deltas[irs_i] * phase_frac)
-        }
-        else {
+        } else {
             irs[irs_i]
         };
 

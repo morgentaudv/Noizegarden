@@ -1,7 +1,7 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::node::common::{EProcessState, ProcessControlItem};
@@ -10,7 +10,10 @@ use crate::carg::v2::{
     ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
 };
 use crate::nz_define_time_tick_for;
-use crate::resample::{ProcessSamplingSetting, ProcessSourceResult, ResampleHeaderSetting, ResampleProcessHeader};
+use crate::resample::{
+    ProcessSamplingSetting, ProcessSourceResult, ResampleHeaderSetting, ResampleProcessHeader,
+    ResampleSystemProxyWeakPtr,
+};
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -27,7 +30,10 @@ pub struct MetaResampleInfo {
 pub struct ResampleProcessData {
     setting: Setting,
     common: ProcessControlItem,
+    resample_proxy: ResampleSystemProxyWeakPtr,
     info: MetaResampleInfo,
+    /// 内部用データ
+    #[allow(dead_code)]
     internal: InternalInfo,
 }
 
@@ -59,7 +65,11 @@ impl TPinCategory for ResampleProcessData {
     }
 }
 
-impl TSystemCategory for ResampleProcessData {}
+impl TSystemCategory for ResampleProcessData {
+    fn get_dependent_system_categories() -> ESystemCategoryFlag {
+        system_category::RESAMPLE_SYSTEM
+    }
+}
 nz_define_time_tick_for!(ResampleProcessData, true, true);
 
 impl TProcess for ResampleProcessData {
@@ -144,12 +154,13 @@ impl TProcessItem for ResampleProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        _system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &ProcessItemCreateSettingSystem,
     ) -> anyhow::Result<TProcessItemPtr> {
         if let ENode::AdapterResample(v) = setting.node {
             let item = Self {
                 setting: setting.setting.clone(),
                 common: ProcessControlItem::new(ENodeSpecifier::AdapterResample),
+                resample_proxy: system_setting.resample_system.unwrap().clone(),
                 info: v.clone(),
                 internal: Default::default(),
             };
@@ -165,12 +176,23 @@ impl ResampleProcessData {
     fn initialize(&mut self, setting: &InitializeSetting) {
         self.internal.from_fs = Some(setting.from_fs);
 
+        let system = self.resample_proxy.upgrade();
+        assert!(system.is_some());
+
+        // あとで特定のIRに接近するために保持する。
         let setting = ResampleHeaderSetting {
             from_fs: setting.from_fs,
             to_fs: setting.to_fs,
             is_high_quality: setting.is_high_quality,
         };
-        self.internal.data = Some(setting.create_header())
+        self.internal.ir_setting = Some(setting.clone());
+
+        // IRの生成。
+        {
+            let system = system.unwrap();
+            let mut system = system.lock().unwrap();
+            system.create_response(&setting);
+        }
     }
 
     fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, bool) {
@@ -201,16 +223,25 @@ impl ResampleProcessData {
         _is_last: bool,
         start_phase_time: f64,
     ) -> ProcessSourceResult {
-        // Account for increased filter gain when using factors less than 1.
-        // Decimationするなら、ゲインを減らす必要があるっぽい？
-        let header = self.internal.data.as_ref().unwrap();
-
         let setting = ProcessSamplingSetting {
             src_buffer,
             use_interp: false,
             start_phase_time,
         };
-        header.process(&setting)
+
+        {
+            let system = self.resample_proxy.upgrade();
+            assert!(system.is_some());
+
+            let system = system.unwrap();
+            let mut system = system.lock().unwrap();
+
+            // Account for increased filter gain when using factors less than 1.
+            // Decimationするなら、ゲインを減らす必要があるっぽい？
+            system
+                .process_response(self.internal.ir_setting.as_ref().unwrap(), &setting)
+                .unwrap()
+        }
     }
 }
 
@@ -234,7 +265,7 @@ struct InternalInfo {
     /// サンプリング周波数は固定にする必要ある。
     /// 変動するものはサポートできない。(ADPCM?）
     from_fs: Option<usize>,
-    data: Option<ResampleProcessHeader>,
+    ir_setting: Option<ResampleHeaderSetting>,
     next_phase_time: f64,
 }
 
@@ -242,7 +273,7 @@ impl Default for InternalInfo {
     fn default() -> Self {
         Self {
             from_fs: None,
-            data: None,
+            ir_setting: None,
             next_phase_time: 0.0,
         }
     }

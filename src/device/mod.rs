@@ -338,21 +338,19 @@ impl AudioDevice {
     /// システムを解放する。
     /// すべての関連処理が終わった後に解放すべき。
     pub fn cleanup() {
-        unsafe {
-            assert!(AUDIO_DEVICE.get().is_some());
+        assert!(AUDIO_DEVICE.get().is_some());
 
-            // 12-11-xx ここでdropするので、もう1回解放してはいけない。
-            // 12-12-23 Optionおdropすればいいだけ。
-            if let Some(device) = AUDIO_DEVICE.get() {
-                let mut device = device.lock().unwrap();
-                device.v = None;
-            }
+        // 12-11-xx ここでdropするので、もう1回解放してはいけない。
+        // 12-12-23 Optionおdropすればいいだけ。
+        if let Some(device) = AUDIO_DEVICE.get() {
+            let mut device = device.lock().unwrap();
+            device.v = None;
+        }
 
-            // Receiverも解放する。
-            if let Some(rv) = BUFFER_RECEIVER.get() {
-                let mut rv = rv.lock().unwrap();
-                *rv = None;
-            }
+        // Receiverも解放する。
+        if let Some(rv) = BUFFER_RECEIVER.get() {
+            let mut rv = rv.lock().unwrap();
+            *rv = None;
         }
     }
 

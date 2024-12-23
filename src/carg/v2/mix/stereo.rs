@@ -43,7 +43,8 @@ impl TPinCategory for MixStereoProcessData {
 impl MixStereoProcessData {
     pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
         match node {
-            ENode::MixStereo{ gain_0, gain_1 } => {
+            // @todo 対応する。
+            ENode::MixStereo{ .. } => {
                 let item = Self {
                     setting: setting.clone(),
                     common: ProcessControlItem::new(ENodeSpecifier::MixStereo),

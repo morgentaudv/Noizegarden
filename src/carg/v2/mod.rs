@@ -9,6 +9,7 @@ use crate::carg::v2::node::common::ProcessControlItem;
 use crate::carg::v2::node::{process_result, RelationTreeNode};
 use crate::carg::v2::utility::{update_process_graph_connection, validate_node_relations};
 use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr};
+use crate::resample::{ResampleSystem, ResampleSystemConfig, ResampleSystemProxyWeakPtr};
 use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{math::timer::Timer, wave::sample::UniformedSample};
 use itertools::Itertools;
@@ -21,8 +22,6 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use std::thread::sleep;
-use std::time::Duration;
 
 pub mod adapter;
 pub mod analyzer;
@@ -213,7 +212,10 @@ pub struct ProcessItemCreateSetting<'a> {
 }
 
 pub struct ProcessItemCreateSettingSystem<'a> {
+    ///
     pub audio_device: Option<&'a AudioDeviceProxyWeakPtr>,
+    /// リサンプリング処理に必要なシステムのアクセサー
+    pub resample_system: Option<&'a ResampleSystemProxyWeakPtr>,
 }
 
 /// アイテムの生成の処理をまとめるためのtrait。
@@ -240,6 +242,7 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     // 依存システムの初期化
     let dependent_systems = node_container.get_dependent_system_categories();
     let mut audio_device_weak_proxy = None;
+    let mut resample_system_weak_proxy = None;
     if dependent_systems != system_category::NONE {
         // AudioDeviceの初期化
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
@@ -252,9 +255,17 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
 
             audio_device_weak_proxy = Some(AudioDevice::initialize(config));
         }
+
+        // ResampleSystemの初期化
+        if (!dependent_systems & system_category::RESAMPLE_SYSTEM).is_zero() {
+
+            let config = ResampleSystemConfig::new();
+            resample_system_weak_proxy = Some(ResampleSystem::initialize(config));
+        }
     }
     let system_setting = ProcessItemCreateSettingSystem {
         audio_device: audio_device_weak_proxy.as_ref(),
+        resample_system: resample_system_weak_proxy.as_ref(),
     };
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
@@ -381,6 +392,11 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
         // AudioDeviceの解放
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
             AudioDevice::cleanup();
+        }
+
+        // ResampleSystemの解放
+        if (!dependent_systems & system_category::RESAMPLE_SYSTEM).is_zero() {
+            ResampleSystem::cleanup();
         }
     }
 

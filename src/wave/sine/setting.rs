@@ -51,8 +51,6 @@ pub enum EIntensityControlItem {
 }
 
 impl EIntensityControlItem {
-    const DEFAULT_FACTOR: f64 = 1.0;
-
     ///
     pub fn calculate_factor(&self, relative_time: f64) -> f64 {
         0.0
@@ -127,19 +125,6 @@ impl WaveSoundADSR {
             process_fn: self.process_fn,
         }
         .compute(sample_i)
-    }
-}
-
-///
-#[derive(Debug, Clone, Copy)]
-struct CalculatedSamplesCount {
-    begin_index: usize,
-    length: usize,
-}
-
-impl CalculatedSamplesCount {
-    pub fn end_index(&self) -> usize {
-        self.begin_index + self.length
     }
 }
 

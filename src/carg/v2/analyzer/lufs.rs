@@ -134,13 +134,13 @@ impl TProcess for AnalyzeLUFSProcessData {
 }
 
 impl TProcessItem for AnalyzeLUFSProcessData {
-    fn can_create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
         Ok(())
     }
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        system_setting: &ProcessItemCreateSettingSystem,
+        _system_setting: &ProcessItemCreateSettingSystem,
     ) -> anyhow::Result<TProcessItemPtr> {
         // これで関数実行は行うようにするけど変数は受け取らないことができる。
         let _is_ok = Self::can_create_item(&setting)?;
