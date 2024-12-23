@@ -1,4 +1,4 @@
-use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
+use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::system::TSystemCategory;
@@ -192,7 +192,7 @@ impl ResampleProcessData {
     fn process_resample(
         &self,
         src_buffer: &[UniformedSample],
-        is_last: bool,
+        _is_last: bool,
         start_phase_time: f64,
     ) -> ProcessSourceResult {
         // Account for increased filter gain when using factors less than 1.
@@ -265,7 +265,7 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
     } else if setting.ratio > 1.0 {
         let input_buffer_len = setting.src_buffer.len();
         loop {
-            let mut input_i = sample_time.floor() as usize;
+            let input_i = sample_time.floor() as usize;
             if input_i >= input_buffer_len {
                 break;
             }
@@ -307,7 +307,7 @@ fn process_source(setting: &ProcessSamplingSetting) -> ProcessSourceResult {
         let dh = npc_f.min(setting.ratio * npc_f);
 
         loop {
-            let mut input_i = sample_time.floor() as usize;
+            let input_i = sample_time.floor() as usize;
             if input_i >= input_buffer_len {
                 break;
             }
@@ -560,7 +560,6 @@ impl Default for InternalInfo {
 struct ProcessHeader {
     from_fs: usize,
     to_fs: usize,
-    is_high_quality: bool,
     wing_coeffs: Vec<f64>,
     coeff_deltas: Vec<f64>,
 }
@@ -607,7 +606,6 @@ impl ProcessHeader {
         Self {
             from_fs,
             to_fs,
-            is_high_quality,
             wing_coeffs,
             coeff_deltas,
         }

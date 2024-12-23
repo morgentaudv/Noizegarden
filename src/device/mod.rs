@@ -6,7 +6,7 @@ use std::sync::{mpsc, Arc, Mutex, OnceLock, Weak};
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
 /// 他に良い方法があればそれにしてmutをなくしたい。
-static mut AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
+static AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 
 /// コールバックから取得する必要があるので、[`AudioDevice`]には入れない。
 /// リングバッファのレシーバー
@@ -98,7 +98,7 @@ struct AudioDeviceStateInfo {
     is_starvation: bool,
 }
 
-pub struct AudioDevice {
+pub struct AudioDeviceInternal {
     /// ローレベルのデバイス
     low_device: miniaudio::Device,
     /// プロキシの親元。ほかのところでは全部Weakタイプで共有する。
@@ -111,118 +111,58 @@ pub struct AudioDevice {
     initial_config: AudioDeviceConfig,
 }
 
-impl AudioDevice {
-    /// リングバッファの最低限のサンプル数。
-    /// フレーム理想処理時間からの換算のサンプル数がこれ未満でも、これを適用する。
-    const BUFFER_MINIMUM_SAMPLES: usize = 1024;
+impl AudioDeviceInternal {
+    fn new(config: AudioDeviceConfig) -> Self {
+        assert!(config.channels > 0);
+        assert!(config.sample_rate > 0);
 
-    /// サブバッファのサンプル数の数を計算する。
-    fn calculate_ring_sub_buffer_length(config: &AudioDeviceConfig) -> usize {
-        let ideal_seconds = config.frame_ideal_milliseconds.as_secs_f64();
-        let raw_required_samples = (config.sample_rate as f64 * config.channels as f64 * ideal_seconds).ceil() as usize;
+        let mut low_device_config = miniaudio::DeviceConfig::new(DeviceType::Playback);
+        low_device_config.playback_mut().set_format(miniaudio::Format::F32);
+        low_device_config.playback_mut().set_channels(config.channels as u32);
+        low_device_config.set_sample_rate(config.sample_rate as u32);
+        low_device_config.set_data_callback(AudioDevice::on_update_device_callback);
+        low_device_config.set_stop_callback(AudioDevice::on_stop_device_callback);
 
-        let required_samples = raw_required_samples.next_power_of_two();
-        required_samples.max(Self::BUFFER_MINIMUM_SAMPLES)
+        let low_device = miniaudio::Device::new(None, &low_device_config).expect("failed to create audio device");
+        Self {
+            low_device,
+            original_proxy: None, // これはあとで初期化する。
+            rx: None,
+            info: AudioDeviceStateInfo {
+                state: EAudioDeviceState::NotStarted,
+                sub_buffer_len: AudioDevice::calculate_ring_sub_buffer_length(&config),
+                remained_samples_count: 0,
+                prev_processed_samples_count: 0,
+                total_required_samples: 0,
+                is_starvation: true, // 最初はStarvationありにして最大限のサンプル数を取得させる。
+            },
+            initial_config: config.clone(),
+        }
     }
 
-    /// システムを初期化する。
-    /// すべての処理（レンダリング）が始まる前に処理すべき。
-    pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
-        // RingBufferの登録。
-        // RingBufferのタイプはf32にして、あとで受け取る側でいい変換して送る。
-        //
-        // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
-        let sub_buffer_len = Self::calculate_ring_sub_buffer_length(&config);
-        let (send, recv) =
-            miniaudio::ring_buffer::<f32>(sub_buffer_len, 16).expect("Failed to create audio ring buffer.");
-        unsafe {
-            let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
-        }
-
-        // メッセージチャンネルの生成と登録。
-        let (tx, rx) = mpsc::channel();
-
-        // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
-        // こっからProxyを作って、weakを渡してから
-        let original_proxy = unsafe {
-            assert!(AUDIO_DEVICE.get().is_none());
-
-            // デバイスの初期化
-            let _result = AUDIO_DEVICE.set(Arc::new(Mutex::new(Self::new(config))));
-            let device = AUDIO_DEVICE.get().unwrap();
-            let weak_device = Arc::downgrade(&device);
-
-            let original_proxy = AudioDeviceProxy::new(weak_device, send, tx);
-            original_proxy
-        };
-
-        // Proxyの登録。
-        let weak_proxy = Arc::downgrade(&original_proxy);
-        unsafe {
-            // Mutexがおそらく内部Internal Mutabilityを実装しているかと。
-            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
-            let mut accessor = instance.lock().unwrap();
-
-            accessor.original_proxy = Some(original_proxy);
-            accessor.rx = Some(rx);
-        }
-
-        // Proxyを返す。本体は絶対返さない。
-        unsafe {
-            assert!(AUDIO_DEVICE.get().is_some());
-        }
-
-        // 24-12-15 登録。
-        let _result = PROXY_ACCESSOR.set(weak_proxy.clone());
-        weak_proxy
+    /// 今デバイスに設定しているチャンネルの数を返す。
+    /// もしデバイスが無効になっているのであれば、`0`を返す。
+    pub fn get_channels(&self) -> usize {
+        self.low_device.playback().channels() as usize
     }
 
-    /// システムの対応。
-    pub fn get_proxy() -> Option<AudioDeviceProxyWeakPtr> {
-        // これは大丈夫か。。。。
-        unsafe {
-            match AUDIO_DEVICE.get() {
-                None => None,
-                Some(v) => Some(Arc::downgrade(v.lock().unwrap().original_proxy.as_ref()?)),
+    pub fn pre_process(&mut self, _frame_time: f64) {
+        match self.info.state {
+            EAudioDeviceState::NotStarted => {
+                self.low_device.start().expect("Failed to start audio device");
+                self.info.state = EAudioDeviceState::Started;
             }
-        }
-    }
-
-    pub fn pre_process(_frame_time: f64) {
-        unsafe {
-            assert!(AUDIO_DEVICE.get().is_some());
-        }
-
-        unsafe {
-            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
-            let mut accessor = instance.lock().unwrap();
-
-            match accessor.info.state {
-                EAudioDeviceState::NotStarted => {
-                    accessor.low_device.start().expect("Failed to start audio device");
-                    accessor.info.state = EAudioDeviceState::Started;
-                }
-                _ => {}
-            }
+            _ => {}
         }
     }
 
     /// Tick関数。
-    pub fn post_process(_frame_time: f64) -> ESystemProcessResult {
-        unsafe {
-            assert!(AUDIO_DEVICE.get().is_some());
-        }
-
-        unsafe {
-            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
-            let mut accessor = instance.lock().unwrap();
-
-            match accessor.info.state {
-                EAudioDeviceState::Started => {
-                    accessor.process_started();
-                }
-                _ => {}
+    pub fn post_process(&mut self, _frame_time: f64) -> ESystemProcessResult {
+        match self.info.state {
+            EAudioDeviceState::Started => {
+                self.process_started();
             }
+            _ => {}
         }
 
         ESystemProcessResult::Nothing
@@ -283,6 +223,113 @@ impl AudioDevice {
             println!("Starved!");
         }
     }
+}
+
+pub struct AudioDevice {
+    v: Option<AudioDeviceInternal>,
+}
+
+impl AudioDevice {
+    /// リングバッファの最低限のサンプル数。
+    /// フレーム理想処理時間からの換算のサンプル数がこれ未満でも、これを適用する。
+    const BUFFER_MINIMUM_SAMPLES: usize = 1024;
+
+    /// サブバッファのサンプル数の数を計算する。
+    fn calculate_ring_sub_buffer_length(config: &AudioDeviceConfig) -> usize {
+        let ideal_seconds = config.frame_ideal_milliseconds.as_secs_f64();
+        let raw_required_samples = (config.sample_rate as f64 * config.channels as f64 * ideal_seconds).ceil() as usize;
+
+        let required_samples = raw_required_samples.next_power_of_two();
+        required_samples.max(Self::BUFFER_MINIMUM_SAMPLES)
+    }
+
+    /// システムを初期化する。
+    /// すべての処理（レンダリング）が始まる前に処理すべき。
+    pub fn initialize(config: AudioDeviceConfig) -> AudioDeviceProxyWeakPtr {
+        // RingBufferの登録。
+        // RingBufferのタイプはf32にして、あとで受け取る側でいい変換して送る。
+        //
+        // ただし生成したままではちゃんと扱えないので、sendだけはArc<Mutex<>>にはさむ。
+        let sub_buffer_len = Self::calculate_ring_sub_buffer_length(&config);
+        let (send, recv) =
+            miniaudio::ring_buffer::<f32>(sub_buffer_len, 16).expect("Failed to create audio ring buffer.");
+        unsafe {
+            let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
+        }
+
+        // メッセージチャンネルの生成と登録。
+        let (tx, rx) = mpsc::channel();
+
+        // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
+        // こっからProxyを作って、weakを渡してから
+        let original_proxy = unsafe {
+            assert!(AUDIO_DEVICE.get().is_none());
+
+            // デバイスの初期化
+            let _result = AUDIO_DEVICE.set(Arc::new(Mutex::new(Self::new(config))));
+            let device = AUDIO_DEVICE.get().unwrap();
+            let weak_device = Arc::downgrade(&device);
+
+            let original_proxy = AudioDeviceProxy::new(weak_device, send, tx);
+            original_proxy
+        };
+
+        // Proxyの登録。
+        let weak_proxy = Arc::downgrade(&original_proxy);
+        {
+            // Mutexがおそらく内部Internal Mutabilityを実装しているかと。
+            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let mut accessor = instance.lock().unwrap();
+            debug_assert!(accessor.v.is_some());
+
+            // 24-12-23 内部に接近する。
+            let v = accessor.v.as_mut().unwrap();
+            v.original_proxy = Some(original_proxy);
+            v.rx = Some(rx);
+        }
+
+        // Proxyを返す。本体は絶対返さない。
+        assert!(AUDIO_DEVICE.get().is_some());
+
+        // 24-12-15 登録。
+        let _result = PROXY_ACCESSOR.set(weak_proxy.clone());
+        weak_proxy
+    }
+
+    /// システムの対応。
+    pub fn get_proxy() -> Option<AudioDeviceProxyWeakPtr> {
+        // これは大丈夫か。。。。
+        match PROXY_ACCESSOR.get() {
+            None => None,
+            Some(v) => Some(v.clone())
+        }
+    }
+
+    pub fn pre_process(_frame_time: f64) {
+        assert!(AUDIO_DEVICE.get().is_some());
+
+        {
+            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let mut accessor = instance.lock().unwrap();
+            debug_assert!(accessor.v.is_some());
+            let v = accessor.v.as_mut().unwrap();
+
+            v.pre_process(_frame_time);
+        }
+    }
+
+    /// Tick関数。
+    pub fn post_process(_frame_time: f64) -> ESystemProcessResult {
+        assert!(AUDIO_DEVICE.get().is_some());
+
+        {
+            let instance = AUDIO_DEVICE.get().expect("AudioDevice instance must be valid");
+            let mut accessor = instance.lock().unwrap();
+            debug_assert!(accessor.v.is_some());
+            let v = accessor.v.as_mut().unwrap();
+            v.post_process(_frame_time)
+        }
+    }
 
     /// システムを解放する。
     /// すべての関連処理が終わった後に解放すべき。
@@ -290,9 +337,11 @@ impl AudioDevice {
         unsafe {
             assert!(AUDIO_DEVICE.get().is_some());
 
-            // ここでdropするので、もう1回解放してはいけない。
-            if let Some(device) = AUDIO_DEVICE.take() {
-                drop(device)
+            // 12-11-xx ここでdropするので、もう1回解放してはいけない。
+            // 12-12-23 Optionおdropすればいいだけ。
+            if let Some(device) = AUDIO_DEVICE.get() {
+                let mut device = device.lock().unwrap();
+                device.v = None;
             }
 
             // Receiverも解放する。
@@ -304,34 +353,15 @@ impl AudioDevice {
         assert!(config.channels > 0);
         assert!(config.sample_rate > 0);
 
-        let mut low_device_config = miniaudio::DeviceConfig::new(DeviceType::Playback);
-        low_device_config.playback_mut().set_format(miniaudio::Format::F32);
-        low_device_config.playback_mut().set_channels(config.channels as u32);
-        low_device_config.set_sample_rate(config.sample_rate as u32);
-        low_device_config.set_data_callback(Self::on_update_device_callback);
-        low_device_config.set_stop_callback(Self::on_stop_device_callback);
-
-        let low_device = miniaudio::Device::new(None, &low_device_config).expect("failed to create audio device");
         Self {
-            low_device,
-            original_proxy: None, // これはあとで初期化する。
-            rx: None,
-            info: AudioDeviceStateInfo {
-                state: EAudioDeviceState::NotStarted,
-                sub_buffer_len: Self::calculate_ring_sub_buffer_length(&config),
-                remained_samples_count: 0,
-                prev_processed_samples_count: 0,
-                total_required_samples: 0,
-                is_starvation: true, // 最初はStarvationありにして最大限のサンプル数を取得させる。
-            },
-            initial_config: config.clone(),
+            v: Some(AudioDeviceInternal::new(config))
         }
     }
 
     /// 今デバイスに設定しているチャンネルの数を返す。
     /// もしデバイスが無効になっているのであれば、`0`を返す。
     pub fn get_channels(&self) -> usize {
-        self.low_device.playback().channels() as usize
+        self.v.as_ref().unwrap().get_channels()
     }
 
     fn on_update_device_callback(device: &miniaudio::RawDevice, output: &mut FramesMut, _input: &miniaudio::Frames) {
