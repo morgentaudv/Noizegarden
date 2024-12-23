@@ -11,7 +11,7 @@ use crate::carg::v2::{
 };
 use crate::nz_define_time_tick_for;
 use crate::resample::{
-    ProcessSamplingSetting, ProcessSourceResult, ResampleHeaderSetting, ResampleProcessHeader,
+    ProcessSamplingSetting, ProcessSourceResult, ResampleHeaderSetting,
     ResampleSystemProxyWeakPtr,
 };
 use crate::wave::sample::UniformedSample;
@@ -234,7 +234,7 @@ impl ResampleProcessData {
             assert!(system.is_some());
 
             let system = system.unwrap();
-            let mut system = system.lock().unwrap();
+            let system = system.lock().unwrap();
 
             // Account for increased filter gain when using factors less than 1.
             // Decimationするなら、ゲインを減らす必要があるっぽい？

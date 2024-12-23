@@ -257,16 +257,14 @@ impl AudioDevice {
         let sub_buffer_len = Self::calculate_ring_sub_buffer_length(&config);
         let (send, recv) =
             miniaudio::ring_buffer::<f32>(sub_buffer_len, 16).expect("Failed to create audio ring buffer.");
-        unsafe {
-            let _result = BUFFER_RECEIVER.set(Mutex::new(Some(recv)));
-        }
+        let _result = BUFFER_RECEIVER.set(Mutex::new(Some(recv)));
 
         // メッセージチャンネルの生成と登録。
         let (tx, rx) = mpsc::channel();
 
         // @todo 24-12-10 ここら辺のコード、結構危なっかしいのであとでちゃんとしたものに書き換えしたい。
         // こっからProxyを作って、weakを渡してから
-        let original_proxy = unsafe {
+        let original_proxy = {
             assert!(AUDIO_DEVICE.get().is_none());
 
             // デバイスの初期化
@@ -305,7 +303,7 @@ impl AudioDevice {
         // これは大丈夫か。。。。
         match PROXY_ACCESSOR.get() {
             None => None,
-            Some(v) => Some(v.clone())
+            Some(v) => Some(v.clone()),
         }
     }
 
@@ -359,7 +357,7 @@ impl AudioDevice {
         assert!(config.sample_rate > 0);
 
         Self {
-            v: Some(AudioDeviceInternal::new(config))
+            v: Some(AudioDeviceInternal::new(config)),
         }
     }
 
@@ -371,9 +369,7 @@ impl AudioDevice {
 
     fn on_update_device_callback(device: &miniaudio::RawDevice, output: &mut FramesMut, _input: &miniaudio::Frames) {
         const ATTEMPTS_COUNT: usize = 8;
-        unsafe {
-            debug_assert!(BUFFER_RECEIVER.get().is_some());
-        }
+        debug_assert!(BUFFER_RECEIVER.get().is_some());
 
         let mut read_count = 0;
         let mut attempts = 0;
@@ -390,16 +386,14 @@ impl AudioDevice {
 
                 // できるだけ読み切る。
                 while read_count < required_output_length && attempts < ATTEMPTS_COUNT {
-                    read_count += unsafe {
-                        BUFFER_RECEIVER
-                            .get()
-                            .unwrap()
-                            .lock()
-                            .unwrap()
-                            .as_ref()
-                            .unwrap()
-                            .read(&mut raw_samples[read_count..])
-                    };
+                    read_count += BUFFER_RECEIVER
+                        .get()
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .read(&mut raw_samples[read_count..]);
                     attempts += 1;
                 }
 
@@ -420,16 +414,14 @@ impl AudioDevice {
                 // fill the playback output buffer. We don't allow infinite attempts because we can't be
                 // sure how long that would take.
                 while read_count < required_output_length && attempts < ATTEMPTS_COUNT {
-                    read_count += unsafe {
-                        BUFFER_RECEIVER
-                            .get()
-                            .unwrap()
-                            .lock()
-                            .unwrap()
-                            .as_ref()
-                            .unwrap()
-                            .read(&mut outputs[read_count..])
-                    };
+                    read_count += BUFFER_RECEIVER
+                        .get()
+                        .unwrap()
+                        .lock()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .read(&mut outputs[read_count..]);
                     attempts += 1;
                 }
 

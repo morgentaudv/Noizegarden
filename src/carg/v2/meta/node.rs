@@ -34,6 +34,7 @@ use crate::math::float::EFloatCommonPin;
 use crate::math::window::EWindowFunction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::carg::v2::emitter::sine_sweep::{MetaSineSweepInfo, SineSweepEmitterProcessData};
 // ----------------------------------------------------------------------------
 // ENode
 // ----------------------------------------------------------------------------
@@ -82,6 +83,8 @@ pub enum ENode {
     /// パスからサポートできるWavを読み込み、サンプルをバッファで出力する。
     #[serde(rename = "emitter-wav-mono")]
     EmitterWavMono(MetaWavInfo),
+    #[serde(rename = "emitter-sinesweep")]
+    EmitterSineSweep(MetaSineSweepInfo),
     /// DFTで音波を分析する。
     #[serde(rename = "analyze-dft")]
     AnalyzerDFT {
@@ -207,6 +210,10 @@ impl ENode {
             ENode::OutputDevice(_) => {
                 let setting = ProcessItemCreateSetting { node: &self, setting };
                 OutputDeviceProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::EmitterSineSweep(_) => {
+                let setting = ProcessItemCreateSetting { node: &self, setting };
+                SineSweepEmitterProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
         }
     }

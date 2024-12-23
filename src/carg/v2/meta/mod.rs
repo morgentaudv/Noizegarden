@@ -28,6 +28,7 @@ use crate::carg::v2::adapter::compressor::AdapterCompressorProcessData;
 use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::adapter::resample::ResampleProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
+use crate::carg::v2::emitter::sine_sweep::SineSweepEmitterProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
 use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
 use crate::carg::v2::meta::node::ENode;
@@ -98,6 +99,7 @@ pub enum ENodeSpecifier {
     EmitterSquare,
     EmitterIDFT,
     EmitterIFFT,
+    EmitterSineSweep,
     EmitterWavMono,
     AnalyzerDFT,
     AnalyzerFFT,
@@ -134,6 +136,7 @@ impl ENodeSpecifier {
             ENode::EmitterSquare { .. } => Self::EmitterSquare,
             ENode::EmitterIDFT { .. } => Self::EmitterIDFT,
             ENode::EmitterIFFT { .. } => Self::EmitterIFFT,
+            ENode::EmitterSineSweep { .. } => Self::EmitterSineSweep,
             ENode::EmitterWavMono(_) => Self::EmitterWavMono,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
             ENode::AnalyzerFFT { .. } => Self::AnalyzerFFT,
@@ -189,6 +192,7 @@ impl ENodeSpecifier {
             }
             Self::FilterIRConvolution => IRConvolutionProcessData::get_input_pin_names(),
             Self::AdapterResample => ResampleProcessData::get_input_pin_names(),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::get_input_pin_names(),
         }
     }
 
@@ -224,6 +228,7 @@ impl ENodeSpecifier {
             }
             Self::FilterIRConvolution => IRConvolutionProcessData::get_output_pin_names(),
             Self::AdapterResample => ResampleProcessData::get_output_pin_names(),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::get_output_pin_names(),
         }
     }
 
@@ -308,6 +313,7 @@ impl ENodeSpecifier {
             },
             Self::FilterIRConvolution => IRConvolutionProcessData::get_pin_categories(pin_name),
             Self::AdapterResample => ResampleProcessData::get_pin_categories(pin_name),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -343,6 +349,7 @@ impl ENodeSpecifier {
             },
             Self::FilterIRConvolution => IRConvolutionProcessData::get_input_container_flag(pin_name),
             Self::AdapterResample => ResampleProcessData::get_input_container_flag(pin_name),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
     }
@@ -379,6 +386,7 @@ impl ENodeSpecifier {
             }
             Self::FilterIRConvolution => IRConvolutionProcessData::get_dependent_system_categories(),
             Self::AdapterResample => ResampleProcessData::get_dependent_system_categories(),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::get_dependent_system_categories(),
         }
     }
 
@@ -417,6 +425,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::can_support_offline(),
             Self::EmitterIFFT => IFFTEmitterProcessData::can_support_offline(),
             Self::AdapterResample => ResampleProcessData::can_support_offline(),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::can_support_offline(),
             _ => false,
         }
     }
@@ -448,6 +457,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::can_support_realtime(),
             Self::EmitterIFFT => IFFTEmitterProcessData::can_support_realtime(),
             Self::AdapterResample => ResampleProcessData::can_support_realtime(),
+            Self::EmitterSineSweep => SineSweepEmitterProcessData::can_support_realtime(),
             _ => false,
         }
     }

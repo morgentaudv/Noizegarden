@@ -20,7 +20,7 @@ pub struct ResampleSystem {
 
 impl ResampleSystem {
     pub fn initialize(config: ResampleSystemConfig) -> ResampleSystemProxyWeakPtr {
-        let original_proxy = unsafe {
+        let original_proxy = {
             assert!(RESAMPLE_SYSTEM.get().is_none());
 
             let _result = RESAMPLE_SYSTEM.set(Arc::new(Mutex::new(Self::new(config))));
@@ -132,7 +132,7 @@ impl ResampleSystemProxy {
         match self.device.upgrade() {
             None => Err(anyhow::anyhow!("System is not setup.")),
             Some(v) => {
-                let mut v = v.lock().unwrap();
+                let v = v.lock().unwrap();
                 v.process_response(&ir_setting, &buffer_setting)
             }
         }
@@ -152,6 +152,7 @@ struct ResampleSystemInternal {
     /// プロキシの親元。ほかのところでは全部Weakタイプで共有する。
     original_proxy: Option<ResampleSystemProxyPtr>,
     /// 初期設定
+    #[allow(dead_code)]
     initial_config: ResampleSystemConfig,
 }
 

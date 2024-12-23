@@ -8,6 +8,10 @@ pub mod system_category {
 
     /// リサンプリング処理に必要なシステム
     pub const RESAMPLE_SYSTEM: u32 = 1 << 1;
+
+    /// @todo Emitter系ターゲットにして実装。
+    #[allow(dead_code)]
+    pub const REALTIME_TRIGGER_SYSTEM: u32 = 1 << 2;
 }
 
 /// [`system_category`]のフラグ制御の補助タイプ
