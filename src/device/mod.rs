@@ -10,7 +10,7 @@ static AUDIO_DEVICE: OnceLock<Arc<Mutex<AudioDevice>>> = OnceLock::new();
 
 /// コールバックから取得する必要があるので、[`AudioDevice`]には入れない。
 /// リングバッファのレシーバー
-static mut BUFFER_RECEIVER: OnceLock<Option<Mutex<RingBufferRecv<f32>>>> = OnceLock::new();
+static BUFFER_RECEIVER: OnceLock<Mutex<Option<RingBufferRecv<f32>>>> = OnceLock::new();
 
 /// デバイスの処理関数でデバイスに接近するためのItem。
 /// デバイスの初期化時に登録される。
@@ -254,7 +254,7 @@ impl AudioDevice {
         let (send, recv) =
             miniaudio::ring_buffer::<f32>(sub_buffer_len, 16).expect("Failed to create audio ring buffer.");
         unsafe {
-            let _result = BUFFER_RECEIVER.set(Some(Mutex::new(recv)));
+            let _result = BUFFER_RECEIVER.set(Mutex::new(Some(recv)));
         }
 
         // メッセージチャンネルの生成と登録。
@@ -345,7 +345,10 @@ impl AudioDevice {
             }
 
             // Receiverも解放する。
-            BUFFER_RECEIVER.take();
+            if let Some(rv) = BUFFER_RECEIVER.get() {
+                let mut rv = rv.lock().unwrap();
+                *rv = None;
+            }
         }
     }
 
@@ -389,9 +392,9 @@ impl AudioDevice {
                         BUFFER_RECEIVER
                             .get()
                             .unwrap()
-                            .as_ref()
-                            .unwrap()
                             .lock()
+                            .unwrap()
+                            .as_ref()
                             .unwrap()
                             .read(&mut raw_samples[read_count..])
                     };
@@ -419,9 +422,9 @@ impl AudioDevice {
                         BUFFER_RECEIVER
                             .get()
                             .unwrap()
-                            .as_ref()
-                            .unwrap()
                             .lock()
+                            .unwrap()
+                            .as_ref()
                             .unwrap()
                             .read(&mut outputs[read_count..])
                     };
