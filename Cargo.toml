@@ -18,6 +18,7 @@ anyhow = "1.0.86"
 om-fork-miniaudio = "0.12.1" # https://miniaud.io/
 # https://zenn.dev/woden/articles/9a6c3b26b89e0a
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
+chrono = "0.4.0"
 
 [profile.dev]
 opt-level = 0

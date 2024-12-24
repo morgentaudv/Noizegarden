@@ -1,54 +1,75 @@
+use crate::carg::v2::meta::input::{
+    BufferMonoDynamicItem, BufferStereoDynamicItem, EInputContainerCategoryFlag, EProcessInputContainer,
+};
+use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::{
+    ENode, ProcessItemCreateSetting, ProcessItemCreateSettingSystem, SItemSPtr, TProcessItem, TProcessItemPtr,
+};
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     io::{self, Write},
 };
-
-use crate::carg::v2::meta::input::{
-    BufferMonoDynamicItem, BufferStereoDynamicItem, EInputContainerCategoryFlag, EProcessInputContainer
-    ,
-};
-use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
-
+use chrono::{Local};
+use itertools::Itertools;
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, TSystemCategory};
+use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::output::EOutputFileFormat;
+use crate::math::window::EWindowFunction;
 use crate::{
-    carg::{
-        v2::{ProcessControlItem, ProcessProcessorInput, TProcess},
-    },
+    carg::v2::{ProcessControlItem, ProcessProcessorInput, TProcess},
     wave::{
         container::WaveBuilder,
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
-use crate::carg::v2::meta::system::TSystemCategory;
-use crate::carg::v2::node::common::EProcessState;
-use crate::carg::v2::output::EOutputFileFormat;
-use crate::math::window::EWindowFunction;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaOutputFileInfo {
+    /// 音源ファイルの出力タイプ
+    format: EOutputFileFormat,
+    /// 音源ファイル名
+    /// もし`.wav`が最後についていなければ、自動で`.wav`をファイル名につけて適用する。
+    file_name: String,
+    /// `true`ならファイル名の`.wav`の前にファイル出力の時間を`%Y-%m-%d_%H%m%s`形式で追加する。
+    add_date_time: bool,
+}
 
 #[derive(Debug)]
 pub struct OutputFileProcessData {
     common: ProcessControlItem,
-    format: EOutputFileFormat,
-    file_name: String,
+    info: MetaOutputFileInfo,
 }
 
-impl OutputFileProcessData {
-    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
-        match node {
-            ENode::OutputFile { format, file_name } => {
-                let item = Self::new(format.clone(), file_name.clone());
-                SItemSPtr::new(item)
-            }
-            _ => unreachable!("Unexpected branch."),
-        }
+impl TSystemCategory for OutputFileProcessData {
+    fn get_dependent_system_categories() -> ESystemCategoryFlag {
+        system_category::NONE
+    }
+}
+
+impl TProcessItem for OutputFileProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn new(format: EOutputFileFormat, file_name: String) -> Self {
-        Self {
-            common: ProcessControlItem::new(ENodeSpecifier::OutputFile),
-            format: format.clone(),
-            file_name: file_name.clone(),
-        }
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        _system_setting: &ProcessItemCreateSettingSystem,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        // これで関数実行は行うようにするけど変数は受け取らないことができる。
+        let _is_ok = Self::can_create_item(&setting)?;
+
+        if let ENode::OutputFile(v) = setting.node {
+            let item = Self {
+                common: ProcessControlItem::new(ENodeSpecifier::OutputFile),
+                info: v.clone(),
+            };
+
+            return Ok(SItemSPtr::new(item));
+        };
+
+        unreachable!("Unexpected branch");
     }
 }
 
@@ -108,7 +129,7 @@ impl OutputFileProcessData {
     fn process_mono(&mut self, v: &BufferMonoDynamicItem) {
         let source_sample_rate = v.sample_rate as f64;
 
-        let container = match self.format {
+        let container = match self.info.format {
             EOutputFileFormat::WavLPCM16 { sample_rate } => {
                 // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、リサンプリングをしなきゃならない。
                 let dest_sample_rate = sample_rate as f64;
@@ -138,8 +159,9 @@ impl OutputFileProcessData {
         };
 
         // 書き込み。
+
         {
-            let dest_file = fs::File::create(&self.file_name).expect("Could not create 500hz.wav.");
+            let dest_file = fs::File::create(&self.get_applied_file_name()).expect("Could not create 500hz.wav.");
             let mut writer = io::BufWriter::new(dest_file);
             container.write(&mut writer);
             writer.flush().expect("Failed to flush writer.")
@@ -149,7 +171,7 @@ impl OutputFileProcessData {
     fn process_stereo(&mut self, v: &BufferStereoDynamicItem) {
         let source_sample_rate = v.setting.as_ref().unwrap().sample_rate as f64;
 
-        let container = match self.format {
+        let container = match self.info.format {
             EOutputFileFormat::WavLPCM16 { sample_rate } => {
                 // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、リサンプリングをしなきゃならない。
                 let dest_sample_rate = sample_rate as f64;
@@ -191,15 +213,29 @@ impl OutputFileProcessData {
 
         // 書き込み。
         {
-            let dest_file = fs::File::create(&self.file_name).expect("Could not create 500hz.wav.");
+            let dest_file = fs::File::create(&self.get_applied_file_name()).expect("Could not create 500hz.wav.");
             let mut writer = io::BufWriter::new(dest_file);
             container.write(&mut writer);
             writer.flush().expect("Failed to flush writer.")
         }
     }
-}
 
-impl TSystemCategory for OutputFileProcessData {}
+    fn get_applied_file_name(&self) -> String {
+        // 最後の`.wav`を切り取る
+        let mut file_name = match self.info.file_name.rfind(".wav") {
+            None => self.info.file_name.clone(),
+            Some(i) => self.info.file_name.split_at(i).0.to_string(),
+        };
+
+        // オプション
+        if self.info.add_date_time {
+            file_name.push_str(&Local::now().format(" %Y-%m-%d %H%M%S").to_string());
+        }
+
+        file_name.push_str(".wav");
+        file_name
+    }
+}
 
 impl TProcess for OutputFileProcessData {
     /// データアイテムの処理が終わったか？

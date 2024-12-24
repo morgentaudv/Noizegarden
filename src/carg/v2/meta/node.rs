@@ -21,7 +21,7 @@ use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
-use crate::carg::v2::output::output_file::OutputFileProcessData;
+use crate::carg::v2::output::output_file::{MetaOutputFileInfo, OutputFileProcessData};
 use crate::carg::v2::output::output_log::OutputLogProcessData;
 use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::special::dummy::DummyProcessData;
@@ -158,10 +158,7 @@ pub enum ENode {
     },
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
-    OutputFile {
-        format: EOutputFileFormat,
-        file_name: String,
-    },
+    OutputFile(MetaOutputFileInfo),
     #[serde(rename = "output-log")]
     OutputLog { mode: EParsedOutputLogMode },
     #[serde(rename = "output-device")]
@@ -188,7 +185,6 @@ impl ENode {
                 ResampleProcessData::create_item(&setting, &system_setting).expect("Failed to create resample process")
             }
             ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
-            ENode::OutputFile { .. } => OutputFileProcessData::create_from(self, setting),
             ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
             ENode::AnalyzerFFT { .. } => AnalyzerFFTProcessData::create_from(self, setting),
             ENode::InternalStartPin => StartProcessData::create_from(self, setting),
@@ -203,6 +199,10 @@ impl ENode {
             ENode::FilterIIRBandPass(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandPass),
             ENode::FilterIIRBandStop(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandStop),
             ENode::FilterIRConvolution(_) => IRConvolutionProcessData::create_from(self, setting),
+            ENode::OutputFile(_) => {
+                let setting = ProcessItemCreateSetting { node: &self, setting };
+                OutputFileProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
             ENode::AnalyzerLUFS(_) => {
                 let setting = ProcessItemCreateSetting { node: &self, setting };
                 AnalyzeLUFSProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
