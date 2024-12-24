@@ -10,6 +10,7 @@ use crate::wave::sine::emitter::SineUnitSampleEmitter;
 use serde::{Deserialize, Serialize};
 use soundprog::math::frequency::EFrequency;
 use crate::carg::v2::meta::node::ENode;
+use crate::wave::sample::UniformedSample;
 
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +18,7 @@ pub struct MetaSineSweepInfo {
     from_frequency: EFrequency,
     to_frequency: EFrequency,
     range: EmitterRange,
+    intensity: f64,
     sample_rate: usize,
 }
 
@@ -151,8 +153,50 @@ impl TProcess for SineSweepEmitterProcessData {
 }
 
 impl SineSweepEmitterProcessData {
+    /// 初期化する
     fn initialize(&mut self) {
-        todo!()
+        let emitter = SineUnitSampleEmitter::new_sinesweep(
+            self.info.from_frequency.to_frequency(),
+            self.info.to_frequency.to_frequency(),
+            self.info.range.length,
+            self.info.intensity,
+            self.info.sample_rate
+        );
+        self.emitter = Some(emitter);
+    }
+
+    /// 初期化した情報から設定分のOutputを更新する。
+    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
+        assert!(self.emitter.is_some());
+
+        // 設定のサンプル数ずつ吐き出す。
+        // ただし今のと最終長さと比べて最終長さより長い分は0に埋める。
+        let end_sample_index = {
+            let sample_rate = self.info.sample_rate;
+            let ideal_add_time = (self.setting.sample_count_frame as f64) / (sample_rate as f64);
+            let ideal_next_time = self.common.elapsed_time + ideal_add_time;
+
+            let mut add_time = ideal_add_time;
+            let range_length = self.info.range.length;
+            if ideal_next_time > range_length {
+                add_time = range_length - self.common.elapsed_time;
+            }
+
+            let samples = (add_time * sample_rate as f64).ceil() as usize;
+
+            assert!(samples <= self.setting.sample_count_frame);
+            samples
+        };
+
+        let mut samples = self.emitter.as_mut().unwrap().next_samples(self.setting.sample_count_frame);
+        if end_sample_index < samples.len() {
+            // [end_sample_index, len())までに0に埋める。
+            samples
+                .iter_mut()
+                .skip(end_sample_index)
+                .for_each(|v| *v = UniformedSample::MIN);
+        }
+        samples
     }
 }
 

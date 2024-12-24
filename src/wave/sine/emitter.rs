@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use num_traits::float::FloatCore;
 use rand::{rngs, Rng};
 
 use crate::wave::{sample::UniformedSample, PI2};
@@ -24,6 +25,14 @@ pub enum ESineEmitterType {
         pink_i: i32,
         /// 内部処理専用
         running_sum: f64,
+    },
+    SineSweep {
+        /// 開始周波数
+        from_frequency: f64,
+        /// 終了周波数
+        to_frequency: f64,
+        /// 開始から終了までの長さ（秒）
+        length: f64,
     },
 }
 
@@ -114,6 +123,27 @@ impl SineUnitSampleEmitter {
             rng: rand::thread_rng(),
         }
     }
+
+    pub fn new_sinesweep(
+        from_frequency: f64,
+        to_frequency: f64,
+        length: f64,
+        intensity: f64,
+        sample_rate: usize,
+    ) -> Self {
+        Self {
+            emitter_type: ESineEmitterType::SineSweep {
+                from_frequency,
+                to_frequency,
+                length,
+            },
+            phase: 0.0,
+            intensity,
+            next_sample_index: 0,
+            sample_rate,
+            rng: Default::default(),
+        }
+    }
 }
 
 impl SineUnitSampleEmitter {
@@ -123,14 +153,13 @@ impl SineUnitSampleEmitter {
         // そしてu32に変換する。最大値は`[2^32 - 1]`である。
         let sample_rate = self.sample_rate as f64;
         let coefficient = PI2 / sample_rate;
-
-        let unittime = self.next_sample_index as f64;
+        let unit_time = self.next_sample_index as f64;
         self.next_sample_index += 1;
 
         match &mut self.emitter_type {
             ESineEmitterType::Sine { frequency } => {
                 // 振幅と周波数のエンベロープのため相対時間を計算
-                let sin_input = (coefficient * *frequency * unittime) + self.phase;
+                let sin_input = (coefficient * *frequency * unit_time) + self.phase;
                 let sample = self.intensity * sin_input.sin();
                 assert!(sample >= -1.0 && sample <= 1.0);
 
@@ -138,7 +167,7 @@ impl SineUnitSampleEmitter {
             }
             ESineEmitterType::Sawtooth { frequency } => {
                 // 振幅と周波数のエンベロープのため相対時間を計算
-                let rel_time = unittime / sample_rate;
+                let rel_time = unit_time / sample_rate;
                 let orig_intensity = 1.0 - (2.0 * (rel_time * *frequency).fract());
 
                 let sample = self.intensity * orig_intensity;
@@ -162,7 +191,7 @@ impl SineUnitSampleEmitter {
                     }
                 };
 
-                let (orig_intensity, _) = compute_intensity(unittime, sample_rate, *frequency);
+                let (orig_intensity, _) = compute_intensity(unit_time, sample_rate, *frequency);
                 let sample = self.intensity * orig_intensity;
                 assert!(sample >= -1.0 && sample <= 1.0);
 
@@ -175,7 +204,7 @@ impl SineUnitSampleEmitter {
                 // 振幅と周波数のエンベロープのため相対時間を計算
                 // 正弦波形の周期を計算する。そこでduty_rateを反映する。
                 // phaseは後に入れてSignを計算する。
-                let unittime = unittime as f64;
+                let unittime = unit_time as f64;
                 let input = (herz * unittime) + self.phase;
                 let sample = self.intensity * {
                     if (input % PI2) < duty_threshold {
@@ -249,6 +278,24 @@ impl SineUnitSampleEmitter {
                 let sample_value = pink_scalar * sum;
 
                 UniformedSample::from_f64((sample_value * self.intensity).clamp(-1.0, 1.0))
+            }
+            ESineEmitterType::SineSweep {
+                from_frequency,
+                to_frequency,
+                length,
+            } => {
+                // https://www.recordingblogs.com/wiki/sine-sweep
+                // から t = unit_time / Fsにして数式通りに計算してみる。
+                let time_sec = (unit_time / sample_rate).min(*length);
+
+                let length_recip = (*length).recip();
+                let freq_range = *to_frequency - *from_frequency;
+                let sin_input =
+                    PI2 * ((*from_frequency * time_sec) + (freq_range * 0.5 * length_recip * (time_sec * time_sec))) + self.phase;
+                let sample = self.intensity * sin_input.sin();
+                assert!(sample >= -1.0 && sample <= 1.0);
+
+                UniformedSample::from_f64(sample)
             }
         }
     }
