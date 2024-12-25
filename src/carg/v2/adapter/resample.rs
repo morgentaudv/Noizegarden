@@ -11,15 +11,14 @@ use crate::carg::v2::{
 };
 use crate::nz_define_time_tick_for;
 use crate::resample::{
-    ProcessSamplingSetting, ProcessSourceResult, ResampleHeaderSetting,
+    ProcessSamplingSetting, ResampleHeaderSetting,
     ResampleSystemProxyWeakPtr,
 };
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
-use rand::distributions::Uniform;
 use serde::{Deserialize, Serialize};
 
-const OFFSET: usize = 256;
+const OFFSET: usize = 512;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaResampleInfo {
@@ -129,11 +128,43 @@ impl TProcess for ResampleProcessData {
         if now_buffer.is_empty() {
             return;
         }
-        let mut input_buffer = self.internal.offset_samples.clone();
+        let mut input_buffer = self.internal.prev_offset_samples.clone();
+        if !self.internal.next_offset_samples.is_empty() {
+            input_buffer.append(&mut self.internal.next_offset_samples);
+        }
         input_buffer.append(&mut now_buffer);
 
-        let result = self.process_resample(&input_buffer, is_last, self.internal.next_phase_time);
-        self.internal.next_phase_time = result.next_phase_time.recip();
+        // リサンプリングを行う。
+        let result = {
+            let setting = ProcessSamplingSetting {
+                src_buffer: &input_buffer,
+                use_interp: false,
+                start_phase_time: self.internal.next_phase_time,
+                start_sample_i: OFFSET, // 前オフセットが128なので。
+                process_length: input_buffer.len() - OFFSET - OFFSET /* Prev + Next */,
+            };
+
+            // CRITICAL SECTION
+            {
+                let system = self.resample_proxy.upgrade();
+                assert!(system.is_some());
+
+                let system = system.unwrap();
+                let system = system.lock().unwrap();
+
+                // Account for increased filter gain when using factors less than 1.
+                // Decimationするなら、ゲインを減らす必要があるっぽい？
+                system
+                    .process_response(self.internal.ir_setting.as_ref().unwrap(), &setting)
+                    .unwrap()
+            }
+        };
+        // 内部からrecipして返してくれるのでそのままでいい。
+        self.internal.next_phase_time = result.next_phase_time;
+        self.internal.next_offset_samples = {
+            let start = input_buffer.len() - OFFSET;
+            input_buffer.drain(start..).collect_vec()
+        };
 
         self.common
             .insert_to_output_pin(
@@ -145,13 +176,13 @@ impl TProcess for ResampleProcessData {
         // offsetサンプルバッファの更新
         if input_buffer.len() >= OFFSET {
             let start = input_buffer.len() - OFFSET;
-            self.internal.offset_samples = input_buffer.drain(start..).collect_vec();
+            self.internal.prev_offset_samples = input_buffer.drain(start..).collect_vec();
         }
         else {
             let offset = OFFSET - input_buffer.len();
             let mut new_offset_samples = vec![UniformedSample::MIN; offset];
             new_offset_samples.append(&mut input_buffer.drain(..).collect_vec());
-            self.internal.offset_samples = new_offset_samples;
+            self.internal.prev_offset_samples = new_offset_samples;
         }
 
         // 状態確認
@@ -211,18 +242,25 @@ impl ResampleProcessData {
         }
     }
 
+    /// 最初のNextを含むバッファまたは最後につくサンプルバッファ（LEN - 2OFFSET)分をとる。
     fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, bool) {
         // 24-12-22 まずソースのサンプルサイズ（1チャンネル）は固定にしてみる。
-        const SRC_SAMPLE_LEN: usize = 4096;
+        const SRC_SAMPLE_LEN: usize = 4096 << 4;
+        let required_samples = if self.internal.next_offset_samples.is_empty() {
+            SRC_SAMPLE_LEN
+        }
+        else {
+            SRC_SAMPLE_LEN - OFFSET
+        };
 
         let mut input_internal = self.common.get_input_internal_mut(INPUT_IN).unwrap();
         let input = input_internal.buffer_mono_dynamic_mut().unwrap();
+        let is_buffer_enough = input.buffer.len() >= required_samples;
 
         // バッファ0補充分岐
-        let is_buffer_enough = input.buffer.len() >= SRC_SAMPLE_LEN;
         if !is_buffer_enough && in_input.is_children_all_finished() {
             let mut buffer = input.buffer.drain(..).collect_vec();
-            buffer.resize(SRC_SAMPLE_LEN, UniformedSample::MIN);
+            buffer.resize(required_samples, UniformedSample::MIN);
             return (buffer, true);
         }
         if !is_buffer_enough {
@@ -230,35 +268,7 @@ impl ResampleProcessData {
         }
 
         // 普通。
-        (input.buffer.drain(..SRC_SAMPLE_LEN).collect_vec(), false)
-    }
-
-    fn process_resample(
-        &self,
-        src_buffer: &[UniformedSample],
-        _is_last: bool,
-        start_phase_time: f64,
-    ) -> ProcessSourceResult {
-        let setting = ProcessSamplingSetting {
-            src_buffer,
-            use_interp: false,
-            start_phase_time,
-            start_sample_i: OFFSET, // 前オフセットが128なので。
-        };
-
-        {
-            let system = self.resample_proxy.upgrade();
-            assert!(system.is_some());
-
-            let system = system.unwrap();
-            let system = system.lock().unwrap();
-
-            // Account for increased filter gain when using factors less than 1.
-            // Decimationするなら、ゲインを減らす必要があるっぽい？
-            system
-                .process_response(self.internal.ir_setting.as_ref().unwrap(), &setting)
-                .unwrap()
-        }
+        (input.buffer.drain(..required_samples).collect_vec(), false)
     }
 }
 
@@ -285,7 +295,9 @@ struct InternalInfo {
     ir_setting: Option<ResampleHeaderSetting>,
     next_phase_time: f64,
     /// 前の余裕分
-    offset_samples: Vec<UniformedSample>,
+    prev_offset_samples: Vec<UniformedSample>,
+    /// 後の余裕分
+    next_offset_samples: Vec<UniformedSample>,
 }
 
 impl Default for InternalInfo {
@@ -294,7 +306,8 @@ impl Default for InternalInfo {
             from_fs: None,
             ir_setting: None,
             next_phase_time: 0.0,
-            offset_samples: vec![UniformedSample::MIN; OFFSET],
+            prev_offset_samples: vec![UniformedSample::MIN; OFFSET],
+            next_offset_samples: vec![],
         }
     }
 }

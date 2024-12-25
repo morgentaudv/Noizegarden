@@ -245,6 +245,8 @@ impl ResampleProcessHeader {
 
     pub fn process(&self, input: &ProcessSamplingSetting) -> ProcessSourceResult {
         debug_assert!(input.start_phase_time >= 0.0 && input.start_phase_time < 1.0);
+        debug_assert!(input.process_length > 0);
+        debug_assert!(input.start_sample_i + input.process_length <= input.src_buffer.len());
 
         // Output sampling period
         //
@@ -252,24 +254,24 @@ impl ResampleProcessHeader {
         // 24kHzから48kHzなら、ratio = 2でdt = 0.5だけどつまり1サンプルに2個分計算する。
         // という意味にもなる。
         let ratio = self.info.ratio();
-        let lp_scale = ratio.min(1.0);
-        let input_buffer_dt = ratio.recip();
+        let amplitude_scale = ratio.min(1.0);
+        let buffer_proceed_delta = ratio.recip();
+
         let mut results = vec![];
         // 24-12-22 Phaseを計算するために必要。サンプルをとるための時間計算は今は別途する。
-        // 24-12-25 おそらくこれで？
         let mut sample_time: f64 = input.start_phase_time;
+        let input_buffer_end_i = input.process_length + input.start_sample_i;
 
         if ratio == 1.0 {
             // そのまま
             return ProcessSourceResult {
                 outputs: input.src_buffer.iter().map(|v| *v).collect_vec(),
-                next_phase_time: input.start_phase_time + input.src_buffer.len() as f64,
+                next_phase_time: (input.start_phase_time + input.src_buffer.len() as f64).recip(),
             };
         } else if ratio > 1.0 {
-            let input_buffer_len = input.src_buffer.len();
             loop {
                 let input_i: usize = (sample_time.floor() as usize) + input.start_sample_i;
-                if input_i >= input_buffer_len {
+                if input_i >= input_buffer_end_i {
                     break;
                 }
 
@@ -300,10 +302,10 @@ impl ResampleProcessHeader {
                 proc_setting.is_increment = true;
                 proc_setting.phase = right_phase_frac;
                 v += process_filter_up(&proc_setting);
-                v *= lp_scale;
+                v *= amplitude_scale;
 
                 results.push(UniformedSample::from_f64(v));
-                sample_time += input_buffer_dt;
+                sample_time += buffer_proceed_delta;
             }
         } else {
             let input_buffer_len = input.src_buffer.len();
@@ -341,16 +343,16 @@ impl ResampleProcessHeader {
                 proc_setting.is_increment = true;
                 proc_setting.phase = right_phase_frac;
                 v += process_filter_down(&proc_setting);
-                v *= lp_scale;
+                v *= amplitude_scale;
 
                 results.push(UniformedSample::from_f64(v));
-                sample_time += input_buffer_dt;
+                sample_time += buffer_proceed_delta;
             }
         }
 
         ProcessSourceResult {
             outputs: results,
-            next_phase_time: sample_time,
+            next_phase_time: sample_time.recip(),
         }
     }
 }
@@ -361,6 +363,7 @@ pub struct ProcessSamplingSetting<'a> {
     pub use_interp: bool,
     pub start_phase_time: f64,
     pub start_sample_i: usize,
+    pub process_length: usize,
 }
 
 /// [`process_source`]の処理結果
