@@ -9,9 +9,13 @@ pub mod system_category {
     /// リサンプリング処理に必要なシステム
     pub const RESAMPLE_SYSTEM: u32 = 1 << 1;
 
+    /// ファイル読み込み、書き込み、ストリーミング制御システム
+    /// @todo 実装すること。
+    pub const FILE_IO_SYSTEM: u32 = 1 << 2;
+
     /// @todo Emitter系ターゲットにして実装。
     #[allow(dead_code)]
-    pub const REALTIME_TRIGGER_SYSTEM: u32 = 1 << 2;
+    pub const REALTIME_TRIGGER_SYSTEM: u32 = 1 << 3;
 }
 
 /// [`system_category`]のフラグ制御の補助タイプ

@@ -16,13 +16,16 @@ use crate::resample::{
 };
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
+use rand::distributions::Uniform;
 use serde::{Deserialize, Serialize};
+
+const OFFSET: usize = 256;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaResampleInfo {
     /// サンプルレートに変換
     pub to_sample_rate: usize,
-    ///
+    /// ハイクオリティでリサンプリングするか
     pub high_quality: bool,
 }
 
@@ -100,7 +103,6 @@ impl TProcess for ResampleProcessData {
 
         if self.common.is_state(EProcessState::Stopped) {
             // inputが入っているときだけ初期化できる。
-            // @todo ピンからインプットに接近して、インプットが出すFsを取得する。
             let setting = {
                 let input_internal = self.common.get_input_internal(INPUT_IN).unwrap();
                 let input = input_internal.buffer_mono_dynamic().unwrap();
@@ -123,13 +125,15 @@ impl TProcess for ResampleProcessData {
 
         // 24-12-22 まずoverlappingなしでやってみる。
         let to_fs = self.info.to_sample_rate;
-        let (input_buffer, is_last) = self.drain_buffer(&input);
-        if input_buffer.is_empty() {
+        let (mut now_buffer, is_last) = self.drain_buffer(&input);
+        if now_buffer.is_empty() {
             return;
         }
+        let mut input_buffer = self.internal.offset_samples.clone();
+        input_buffer.append(&mut now_buffer);
 
         let result = self.process_resample(&input_buffer, is_last, self.internal.next_phase_time);
-        self.internal.next_phase_time = result.next_phase_time;
+        self.internal.next_phase_time = result.next_phase_time.recip();
 
         self.common
             .insert_to_output_pin(
@@ -137,6 +141,18 @@ impl TProcess for ResampleProcessData {
                 EProcessOutput::BufferMono(ProcessOutputBuffer::new(result.outputs, to_fs)),
             )
             .unwrap();
+
+        // offsetサンプルバッファの更新
+        if input_buffer.len() >= OFFSET {
+            let start = input_buffer.len() - OFFSET;
+            self.internal.offset_samples = input_buffer.drain(start..).collect_vec();
+        }
+        else {
+            let offset = OFFSET - input_buffer.len();
+            let mut new_offset_samples = vec![UniformedSample::MIN; offset];
+            new_offset_samples.append(&mut input_buffer.drain(..).collect_vec());
+            self.internal.offset_samples = new_offset_samples;
+        }
 
         // 状態確認
         if is_last && input.is_children_all_finished() {
@@ -227,6 +243,7 @@ impl ResampleProcessData {
             src_buffer,
             use_interp: false,
             start_phase_time,
+            start_sample_i: OFFSET, // 前オフセットが128なので。
         };
 
         {
@@ -267,6 +284,8 @@ struct InternalInfo {
     from_fs: Option<usize>,
     ir_setting: Option<ResampleHeaderSetting>,
     next_phase_time: f64,
+    /// 前の余裕分
+    offset_samples: Vec<UniformedSample>,
 }
 
 impl Default for InternalInfo {
@@ -275,6 +294,7 @@ impl Default for InternalInfo {
             from_fs: None,
             ir_setting: None,
             next_phase_time: 0.0,
+            offset_samples: vec![UniformedSample::MIN; OFFSET],
         }
     }
 }

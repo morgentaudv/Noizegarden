@@ -4,7 +4,7 @@
         "time_tick_mode": "realtime",
         "set_offline_rendering_frame_time": 10,
         "sample_count_frame": 1024,
-        "sample_rate": 48000,
+        "sample_rate": 44100,
         "channels": 1
     },
     "node": {
@@ -16,7 +16,7 @@
         },
         "resample": {
             "type": "adapter-resample",
-            "to_sample_rate": 44100,
+            "to_sample_rate": 48000,
             "high_quality": true
         },
         "input": {
@@ -25,12 +25,12 @@
                 "type": "a440",
                 "value": "A4"
             },
-            "intensity": 0.2,
+            "intensity": 0.5,
             "range": {
                 "start": 0.0,
-                "length": 4.0
+                "length": 1.0
             },
-            "sample_rate": 48000
+            "sample_rate": 44100
         },
         "output": {
             "type": "output-file",
@@ -38,7 +38,7 @@
                 "type": "wav_lpcm16",
                 "sample_rate": 48000
             },
-            "file_name": "resample_480_441.wav"
+            "file_name": "resample_441_480.wav"
         }
     },
     "relation": [

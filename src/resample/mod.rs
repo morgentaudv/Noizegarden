@@ -220,12 +220,12 @@ impl ResampleProcessHeader {
         // wing_numは疑似sinc関数の片側の係数の数を示す。
         // つまり、n_multの半分のzero-crossingが存在するともいえる。
         let wing_num = (NPC * (n_mult - 1)) >> 1;
-        let rolloff = 0.90;
-        let beta = 6.0; // Kaiser窓関数のパラメータ
+        let rolloff = 0.5;
+        let beta = PI * 2.0; // Kaiser窓関数のパラメータ beta = pi*alpha.
 
         // 片側の係数。
         // そしてそれぞれのcoeffから差分もリストに入れる。
-        let wing_coeffs = initialize_lpf_coeffs(wing_num, rolloff * 0.5, beta, NPC);
+        let wing_coeffs = initialize_lpf_coeffs(wing_num, rolloff, beta, NPC);
         let mut coeff_deltas = wing_coeffs
             .iter()
             .zip(wing_coeffs.iter().skip(1))
@@ -244,6 +244,8 @@ impl ResampleProcessHeader {
     }
 
     pub fn process(&self, input: &ProcessSamplingSetting) -> ProcessSourceResult {
+        debug_assert!(input.start_phase_time >= 0.0 && input.start_phase_time < 1.0);
+
         // Output sampling period
         //
         // 元コードでは`dt`だったが、今のinputバッファから何サンプル分たっているか？を示す。
@@ -251,11 +253,11 @@ impl ResampleProcessHeader {
         // という意味にもなる。
         let ratio = self.info.ratio();
         let lp_scale = ratio.min(1.0);
-        let input_buffer_dt = self.info.ratio().recip();
+        let input_buffer_dt = ratio.recip();
         let mut results = vec![];
         // 24-12-22 Phaseを計算するために必要。サンプルをとるための時間計算は今は別途する。
-        let mut phase_time = input.start_phase_time;
-        let mut sample_time = 0.0_f64;
+        // 24-12-25 おそらくこれで？
+        let mut sample_time: f64 = input.start_phase_time;
 
         if ratio == 1.0 {
             // そのまま
@@ -266,13 +268,17 @@ impl ResampleProcessHeader {
         } else if ratio > 1.0 {
             let input_buffer_len = input.src_buffer.len();
             loop {
-                let input_i = sample_time.floor() as usize;
+                let input_i: usize = (sample_time.floor() as usize) + input.start_sample_i;
                 if input_i >= input_buffer_len {
                     break;
                 }
 
                 // Interpolation
-                let left_phase_frac = phase_time.fract();
+                // これがずれてしまうと、Aliasingが起きてしまう。
+                // phase_fracは生成するサンプルが前のサンプルと後のサンプルの間の位置で
+                // leftに移動するときにはそのまま。（sincの同じ側）
+                // rightに移動するときには逆。（sincの反対側にそう）
+                let left_phase_frac = sample_time.fract();
                 let right_phase_frac = 1.0 - left_phase_frac;
 
                 let mut proc_setting = ProcessFilterSetting {
@@ -297,7 +303,6 @@ impl ResampleProcessHeader {
                 v *= lp_scale;
 
                 results.push(UniformedSample::from_f64(v));
-                phase_time += input_buffer_dt;
                 sample_time += input_buffer_dt;
             }
         } else {
@@ -308,13 +313,13 @@ impl ResampleProcessHeader {
             let dh = npc_f.min(ratio * npc_f);
 
             loop {
-                let input_i = sample_time.floor() as usize;
+                let input_i: usize = (sample_time.floor() as usize) + input.start_sample_i;
                 if input_i >= input_buffer_len {
                     break;
                 }
 
                 // Interpolation
-                let left_phase_frac = phase_time.fract();
+                let left_phase_frac = sample_time.fract();
                 let right_phase_frac = 1.0 - left_phase_frac;
 
                 let mut proc_setting = ProcessFilterSetting {
@@ -339,14 +344,13 @@ impl ResampleProcessHeader {
                 v *= lp_scale;
 
                 results.push(UniformedSample::from_f64(v));
-                phase_time += input_buffer_dt;
                 sample_time += input_buffer_dt;
             }
         }
 
         ProcessSourceResult {
             outputs: results,
-            next_phase_time: phase_time,
+            next_phase_time: sample_time,
         }
     }
 }
@@ -356,6 +360,7 @@ pub struct ProcessSamplingSetting<'a> {
     pub src_buffer: &'a [UniformedSample],
     pub use_interp: bool,
     pub start_phase_time: f64,
+    pub start_sample_i: usize,
 }
 
 /// [`process_source`]の処理結果
@@ -371,30 +376,34 @@ pub struct ProcessSourceResult {
 // 補助関数
 // ----------------------------------------------------------------------------
 
-pub fn initialize_lpf_coeffs(coeff_num: usize, freq: f64, beta: f64, zero_crossing: usize) -> Vec<f64> {
+pub fn initialize_lpf_coeffs(coeff_num: usize, _rolloff: f64, beta: f64, zero_crossing: usize) -> Vec<f64> {
     assert!(coeff_num > 1);
 
     // まず窓関数を考慮しなかった、理想的なLPFフィルターの係数を入れる。
+    // ただこれだけじゃAliasingがおきるので、次にカイザー窓で抑えさえる。
     let mut coeffs = vec![0.0; coeff_num];
-    coeffs[0] = 2.0 * freq;
+    let local_num = (zero_crossing as f64).recip();
+    coeffs[0] = 1.0;
     for coeff_i in 1..coeff_num {
         // ここは一般sinc関数を使わない。
-        let v = PI * coeff_i as f64 / (zero_crossing as f64);
-        coeffs[coeff_i] = (2.0 * v * freq).sin() / v;
+        let v = PI * coeff_i as f64 * local_num;
+        let v_recip = v.recip();
+        coeffs[coeff_i] = v.sin() * v_recip;
     }
 
     // カイザー窓を適用する。
     // https://en.wikipedia.org/wiki/Kaiser_window
-    let ibeta = modified_bessel_1st(beta).recip();
-    let inm1 = ((coeff_num - 1) as f64).recip();
+    let beta_recip = modified_bessel_1st(beta).recip();
+    let inm1 = (coeff_num as f64).recip();
     for coeff_i in 1..coeff_num {
-        let v = (coeff_i as f64) * inm1; // [0, 1]。(2x/L)の部分
+        let v = (2.0 * coeff_i as f64) * inm1; // [0, 1]。(2x/L)の部分
         let v = 1.0 - (v * v); // 1 - (2x/L)^2の部分
         let v = v.max(0.0); // sqrtするので、マイナスは許容できない。
 
         // ここで値をベッセル関数に入れて補正する。
         // mul値自体は[0, 1]を持つ。
-        let mul = modified_bessel_1st(beta * v.sqrt()) * ibeta;
+        let mul = modified_bessel_1st(beta * v.sqrt()) * beta_recip;
+        debug_assert!(mul >= 0.0);
         coeffs[coeff_i] *= mul;
     }
 
@@ -448,35 +457,43 @@ struct ProcessFilterSetting<'a> {
 fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
     debug_assert!(setting.irs.len() > 0);
     debug_assert!(setting.wing_num > 0);
+    debug_assert!(setting.phase >= 0.0 && setting.phase <= 1.0);
 
     // [0, NPC)までの範囲を持つ。
-    let phase_raw_i = setting.phase * NPC as f64;
-    let phase_i = phase_raw_i.floor() as usize;
-
+    // 生成されるサンプルの位置を決めて、それにあわせてsincのIRから特定の位置（NPCの間）の値を反映する。
+    //
     // `setting::irs`、`setting:irs_delta`はNPC分を何個も持っているので、
     // 元コードではポインターを操作したけど、ここではirsとdeltaに接近するためのインデックスを操作する。
+    let phase_raw_i = setting.phase * NPC as f64;
+    let mut phase_i = phase_raw_i.floor() as usize;
+    if phase_i == NPC {
+        return 0.0;
+    }
+
     let mut irs_i = phase_i;
-    let mut irs_end_i = setting.wing_num;
+    let irs_end_i = setting.wing_num;
     let mut phase_frac = 0.0;
     // 補完するとときだけ使う。
     if setting.use_interp {
         phase_frac = phase_raw_i - phase_i as f64;
+        debug_assert!(phase_frac >= 0.0);
     }
 
     let irs = setting.irs;
     let irs_deltas = setting.ir_deltas;
-    if setting.is_increment {
-        irs_end_i -= 1;
-        if phase_raw_i == 0.0 {
-            irs_i += NPC;
-        }
-    }
+    //if setting.is_increment {
+    //    irs_end_i -= 1;
+    //    if phase_raw_i == 0.0 {
+    //        phase_i += NPC;
+    //    }
+    //}
 
     let mut output = 0.0;
     let mut input_i = setting.start_sample_index;
     let mut is_oob = false;
     let mut last_sample = 0.0;
     let inputs = setting.samples;
+
     // irs_iを進めて、最後まで到達するまで演算する。
     loop {
         // サンプルを補完するためのIRがなければ、終わる。(FIRなのでタップの限界がある)
@@ -492,8 +509,7 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
 
         let input = if is_oob { last_sample } else { inputs[input_i].to_f64() };
         last_sample = input; // oobした時にこれを使う。
-        let applied = coeff * input;
-        output += applied;
+        output += (coeff * input);
 
         // sinc関数を近接しているサンプルに当てるように調整する。
         // 片側のzero-crossingの中の区間がNPC個のサンプルが入っているとしたら、

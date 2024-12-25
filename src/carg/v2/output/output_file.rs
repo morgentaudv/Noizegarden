@@ -44,7 +44,7 @@ pub struct OutputFileProcessData {
 
 impl TSystemCategory for OutputFileProcessData {
     fn get_dependent_system_categories() -> ESystemCategoryFlag {
-        system_category::NONE
+        system_category::FILE_IO_SYSTEM
     }
 }
 
