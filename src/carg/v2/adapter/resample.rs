@@ -245,7 +245,7 @@ impl ResampleProcessData {
     /// 最初のNextを含むバッファまたは最後につくサンプルバッファ（LEN - 2OFFSET)分をとる。
     fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, bool) {
         // 24-12-22 まずソースのサンプルサイズ（1チャンネル）は固定にしてみる。
-        const SRC_SAMPLE_LEN: usize = 4096 << 4;
+        const SRC_SAMPLE_LEN: usize = 4096;
         let required_samples = if self.internal.next_offset_samples.is_empty() {
             SRC_SAMPLE_LEN
         }

@@ -244,7 +244,7 @@ impl ResampleProcessHeader {
     }
 
     pub fn process(&self, input: &ProcessSamplingSetting) -> ProcessSourceResult {
-        debug_assert!(input.start_phase_time >= 0.0 && input.start_phase_time < 1.0);
+        debug_assert!(input.start_phase_time >= 0.0 && input.start_phase_time <= 1.0);
         debug_assert!(input.process_length > 0);
         debug_assert!(input.start_sample_i + input.process_length <= input.src_buffer.len());
 
@@ -254,13 +254,12 @@ impl ResampleProcessHeader {
         // 24kHzから48kHzなら、ratio = 2でdt = 0.5だけどつまり1サンプルに2個分計算する。
         // という意味にもなる。
         let ratio = self.info.ratio();
-        let amplitude_scale = ratio.min(1.0);
         let buffer_proceed_delta = ratio.recip();
-
-        let mut results = vec![];
-        // 24-12-22 Phaseを計算するために必要。サンプルをとるための時間計算は今は別途する。
-        let mut sample_time: f64 = input.start_phase_time;
         let input_buffer_end_i = input.process_length + input.start_sample_i;
+
+        // 24-12-22 Phaseを計算するために必要。サンプルをとるための時間計算は今は別途する。
+        let mut results = vec![];
+        let mut phase_time: f64 = input.start_phase_time;
 
         if ratio == 1.0 {
             // そのまま
@@ -269,59 +268,62 @@ impl ResampleProcessHeader {
                 next_phase_time: (input.start_phase_time + input.src_buffer.len() as f64).recip(),
             };
         } else if ratio > 1.0 {
+            let mut proc_setting = ProcessFilterSetting {
+                irs: &self.wing_coeffs,
+                ir_deltas: &self.coeff_deltas,
+                wing_num: self.wing_num,
+                use_interp: input.use_interp,
+                phase: 0.0,
+                samples: &input.src_buffer,
+                start_sample_index: 0,
+                is_increment: false,
+                dh: 0.0,
+            };
+
+            // Interpolation
             loop {
-                let input_i: usize = (sample_time.floor() as usize) + input.start_sample_i;
+                let input_i: usize = (phase_time.floor() as usize) + input.start_sample_i;
                 if input_i >= input_buffer_end_i {
                     break;
                 }
+                proc_setting.start_sample_index = input_i;
 
-                // Interpolation
                 // これがずれてしまうと、Aliasingが起きてしまう。
                 // phase_fracは生成するサンプルが前のサンプルと後のサンプルの間の位置で
                 // leftに移動するときにはそのまま。（sincの同じ側）
                 // rightに移動するときには逆。（sincの反対側にそう）
-                let left_phase_frac = sample_time.fract();
+                let left_phase_frac = phase_time.fract();
                 let right_phase_frac = 1.0 - left_phase_frac;
 
-                let mut proc_setting = ProcessFilterSetting {
-                    irs: &self.wing_coeffs,
-                    ir_deltas: &self.coeff_deltas,
-                    wing_num: self.wing_num,
-                    use_interp: input.use_interp,
-                    phase: left_phase_frac,
-                    samples: &input.src_buffer,
-                    start_sample_index: input_i,
-                    is_increment: false,
-                    dh: 0.0,
-                };
                 // 今ターゲットになっているサンプルから左、そして右の隣接したサンプルを使って
                 // 補完したサンプルを入れる。
                 let mut v = 0.0;
+
+                proc_setting.is_increment = false;
+                proc_setting.phase = left_phase_frac;
                 v += process_filter_up(&proc_setting);
 
                 proc_setting.is_increment = true;
                 proc_setting.phase = right_phase_frac;
                 v += process_filter_up(&proc_setting);
-                v *= amplitude_scale;
 
                 results.push(UniformedSample::from_f64(v));
-                sample_time += buffer_proceed_delta;
+                phase_time += buffer_proceed_delta;
             }
         } else {
-            let input_buffer_len = input.src_buffer.len();
-
             // Decimation
             let npc_f = NPC as f64;
             let dh = npc_f.min(ratio * npc_f);
+            let amplitude_scale = ratio.min(1.0);
 
             loop {
-                let input_i: usize = (sample_time.floor() as usize) + input.start_sample_i;
-                if input_i >= input_buffer_len {
+                let input_i: usize = (phase_time.floor() as usize) + input.start_sample_i;
+                if input_i >= input_buffer_end_i {
                     break;
                 }
 
                 // Interpolation
-                let left_phase_frac = sample_time.fract();
+                let left_phase_frac = phase_time.fract();
                 let right_phase_frac = 1.0 - left_phase_frac;
 
                 let mut proc_setting = ProcessFilterSetting {
@@ -346,13 +348,13 @@ impl ResampleProcessHeader {
                 v *= amplitude_scale;
 
                 results.push(UniformedSample::from_f64(v));
-                sample_time += buffer_proceed_delta;
+                phase_time += buffer_proceed_delta;
             }
         }
 
         ProcessSourceResult {
             outputs: results,
-            next_phase_time: sample_time.recip(),
+            next_phase_time: phase_time.fract(),
         }
     }
 }
@@ -469,9 +471,6 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
     // 元コードではポインターを操作したけど、ここではirsとdeltaに接近するためのインデックスを操作する。
     let phase_raw_i = setting.phase * NPC as f64;
     let mut phase_i = phase_raw_i.floor() as usize;
-    if phase_i == NPC {
-        return 0.0;
-    }
 
     let mut irs_i = phase_i;
     let irs_end_i = setting.wing_num;
@@ -484,22 +483,15 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
 
     let irs = setting.irs;
     let irs_deltas = setting.ir_deltas;
-    //if setting.is_increment {
-    //    irs_end_i -= 1;
-    //    if phase_raw_i == 0.0 {
-    //        phase_i += NPC;
-    //    }
-    //}
 
     let mut output = 0.0;
     let mut input_i = setting.start_sample_index;
-    let mut is_oob = false;
-    let mut last_sample = 0.0;
     let inputs = setting.samples;
 
     // irs_iを進めて、最後まで到達するまで演算する。
     loop {
         // サンプルを補完するためのIRがなければ、終わる。(FIRなのでタップの限界がある)
+        // 35個か、11個か。
         if irs_i >= irs_end_i {
             break;
         }
@@ -510,30 +502,17 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
             irs[irs_i]
         };
 
-        let input = if is_oob { last_sample } else { inputs[input_i].to_f64() };
-        last_sample = input; // oobした時にこれを使う。
-        output += (coeff * input);
+        output += coeff * inputs[input_i].to_f64();
 
         // sinc関数を近接しているサンプルに当てるように調整する。
         // 片側のzero-crossingの中の区間がNPC個のサンプルが入っているとしたら、
         // 次のサンプルに当てはまるIR係数はNPC先である。
         irs_i += NPC;
-        if is_oob {
-            continue;
-        }
 
         if setting.is_increment {
             input_i += 1;
-
-            if input_i >= inputs.len() {
-                is_oob = true;
-            }
         } else {
-            if input_i > 0 {
-                input_i -= 1;
-            } else {
-                is_oob = true;
-            }
+            input_i -= 1;
         }
     }
 
