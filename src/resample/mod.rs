@@ -220,7 +220,7 @@ impl ResampleProcessHeader {
         // wing_numは疑似sinc関数の片側の係数の数を示す。
         // つまり、n_multの半分のzero-crossingが存在するともいえる。
         let wing_num = (NPC * (n_mult - 1)) >> 1;
-        let rolloff = 0.5;
+        let rolloff = 0.05;
         let beta = PI * 2.0; // Kaiser窓関数のパラメータ beta = pi*alpha.
 
         // 片側の係数。
@@ -384,27 +384,27 @@ pub struct ProcessSourceResult {
 // 補助関数
 // ----------------------------------------------------------------------------
 
-pub fn initialize_lpf_coeffs(coeff_num: usize, _rolloff: f64, beta: f64, zero_crossing: usize) -> Vec<f64> {
+pub fn initialize_lpf_coeffs(coeff_num: usize, rolloff: f64, beta: f64, zero_crossing: usize) -> Vec<f64> {
     assert!(coeff_num > 1);
 
     // まず窓関数を考慮しなかった、理想的なLPFフィルターの係数を入れる。
     // ただこれだけじゃAliasingがおきるので、次にカイザー窓で抑えさえる。
     let mut coeffs = vec![0.0; coeff_num];
     let local_num = (zero_crossing as f64).recip();
-    coeffs[0] = 1.0;
+    coeffs[0] = 2.0 * rolloff;
     for coeff_i in 1..coeff_num {
         // ここは一般sinc関数を使わない。
         let v = PI * coeff_i as f64 * local_num;
         let v_recip = v.recip();
-        coeffs[coeff_i] = v.sin() * v_recip;
+        coeffs[coeff_i] = (2.0 * v * rolloff).sin() * v_recip;
     }
 
     // カイザー窓を適用する。
     // https://en.wikipedia.org/wiki/Kaiser_window
     let beta_recip = modified_bessel_1st(beta).recip();
-    let inm1 = (coeff_num as f64).recip();
+    let inm1 = ((coeff_num - 1) as f64).recip();
     for coeff_i in 1..coeff_num {
-        let v = (2.0 * coeff_i as f64) * inm1; // [0, 1]。(2x/L)の部分
+        let v = (coeff_i as f64) * inm1; // [0, 1]。(2x/L)の部分
         let v = 1.0 - (v * v); // 1 - (2x/L)^2の部分
         let v = v.max(0.0); // sqrtするので、マイナスは許容できない。
 
