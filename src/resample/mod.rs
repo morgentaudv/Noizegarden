@@ -268,6 +268,7 @@ impl ResampleProcessHeader {
                 next_phase_time: (input.start_phase_time + input.src_buffer.len() as f64).recip(),
             };
         } else if ratio > 1.0 {
+            // Interpolation
             let mut proc_setting = ProcessFilterSetting {
                 irs: &self.wing_coeffs,
                 ir_deltas: &self.coeff_deltas,
@@ -280,7 +281,6 @@ impl ResampleProcessHeader {
                 dh: 0.0,
             };
 
-            // Interpolation
             loop {
                 let input_i: usize = (phase_time.floor() as usize) + input.start_sample_i;
                 if input_i >= input_buffer_end_i {
@@ -316,30 +316,33 @@ impl ResampleProcessHeader {
             let dh = npc_f.min(ratio * npc_f);
             let amplitude_scale = ratio.min(1.0);
 
+            let mut proc_setting = ProcessFilterSetting {
+                irs: &self.wing_coeffs,
+                ir_deltas: &self.coeff_deltas,
+                wing_num: self.wing_num,
+                use_interp: input.use_interp,
+                phase: 0.0,
+                samples: &input.src_buffer,
+                start_sample_index: 0,
+                is_increment: false,
+                dh,
+            };
+
             loop {
                 let input_i: usize = (phase_time.floor() as usize) + input.start_sample_i;
                 if input_i >= input_buffer_end_i {
                     break;
                 }
 
-                // Interpolation
                 let left_phase_frac = phase_time.fract();
                 let right_phase_frac = 1.0 - left_phase_frac;
 
-                let mut proc_setting = ProcessFilterSetting {
-                    irs: &self.wing_coeffs,
-                    ir_deltas: &self.coeff_deltas,
-                    wing_num: self.wing_num,
-                    use_interp: input.use_interp,
-                    phase: left_phase_frac,
-                    samples: &input.src_buffer,
-                    start_sample_index: input_i,
-                    is_increment: false,
-                    dh,
-                };
                 // 今ターゲットになっているサンプルから左、そして右の隣接したサンプルを使って
                 // 補完したサンプルを入れる。
                 let mut v = 0.0;
+
+                proc_setting.is_increment = false;
+                proc_setting.phase = left_phase_frac;
                 v += process_filter_down(&proc_setting);
 
                 proc_setting.is_increment = true;
