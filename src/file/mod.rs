@@ -32,6 +32,7 @@ impl FileIOInternal {
     }
 }
 
+/// ファイルIOの処理構造体
 pub struct FileIO {
     v: Option<FileIOInternal>,
 }

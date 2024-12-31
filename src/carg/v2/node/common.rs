@@ -3,6 +3,7 @@ use crate::carg::v2::EProcessOutput;
 use crate::carg::v2::meta::ENodeSpecifier;
 use crate::carg::v2::meta::input::EProcessInputContainer;
 use crate::carg::v2::meta::process::EProcessCategoryFlag;
+use crate::carg::v2::meta::system::InitializeSystemAccessor;
 use crate::carg::v2::node::pin::{NodePinItem, NodePinItemList, NodePinItemWPtr};
 
 #[derive(Debug, Clone)]
@@ -19,10 +20,12 @@ pub struct ProcessControlItem {
     pub input_pins: NodePinItemList,
     /// Output用ピンのリスト（ノード側出る側）
     pub output_pins: NodePinItemList,
+    /// あらゆるシステムに接近できるためのアクセサー
+    pub systems: InitializeSystemAccessor,
 }
 
 impl ProcessControlItem {
-    pub fn new(specifier: ENodeSpecifier) -> Self {
+    pub fn new(specifier: ENodeSpecifier, systems: &InitializeSystemAccessor) -> Self {
         Self {
             state: EProcessState::Stopped,
             state_rtn: [0; 4],
@@ -30,6 +33,7 @@ impl ProcessControlItem {
             elapsed_time: 0.0,
             input_pins: specifier.create_input_pins(),
             output_pins: specifier.create_output_pins(),
+            systems: systems.clone(),
         }
     }
 

@@ -42,6 +42,8 @@ pub struct OutputFileProcessData {
     info: MetaOutputFileInfo,
 }
 
+const INPUT_IN: &'static str = "in";
+
 impl TSystemCategory for OutputFileProcessData {
     fn get_dependent_system_categories() -> ESystemCategoryFlag {
         system_category::FILE_IO_SYSTEM
@@ -55,10 +57,15 @@ impl TProcessItem for OutputFileProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        _system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &ProcessItemCreateSettingSystem,
     ) -> anyhow::Result<TProcessItemPtr> {
         // これで関数実行は行うようにするけど変数は受け取らないことができる。
         let _is_ok = Self::can_create_item(&setting)?;
+
+        if system_setting.file_io.is_none() {
+            return Err(anyhow::anyhow!("File IO system is needed."));
+        }
+        let file_io = system_setting.file_io.unwrap().clone();
 
         if let ENode::OutputFile(v) = setting.node {
             let item = Self {
@@ -76,7 +83,7 @@ impl TProcessItem for OutputFileProcessData {
 impl TPinCategory for OutputFileProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
     fn get_input_pin_names() -> Vec<&'static str> {
-        vec!["in"]
+        vec![INPUT_IN]
     }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
@@ -87,7 +94,7 @@ impl TPinCategory for OutputFileProcessData {
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in" => Some(pin_category::BUFFER_MONO | pin_category::BUFFER_STEREO),
+            INPUT_IN => Some(pin_category::BUFFER_MONO | pin_category::BUFFER_STEREO),
             _ => None,
         }
     }
@@ -95,7 +102,7 @@ impl TPinCategory for OutputFileProcessData {
     /// Inputピンのコンテナフラグ
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in" => Some(input::container_category::OUTPUT_FILE),
+            INPUT_IN => Some(input::container_category::OUTPUT_FILE),
             _ => None,
         }
     }
@@ -109,7 +116,7 @@ impl OutputFileProcessData {
             return;
         }
 
-        let input = self.common.input_pins.get("in").unwrap().borrow().input.clone();
+        let input = self.common.input_pins.get(INPUT_IN).unwrap().borrow().input.clone();
         match input {
             EProcessInputContainer::OutputFile(internal) => match internal {
                 EOutputFileInput::Mono(v) => {
@@ -169,7 +176,7 @@ impl OutputFileProcessData {
     }
 
     fn process_stereo(&mut self, v: &BufferStereoDynamicItem) {
-        let sample_rate = self.common.try_get_input_sample_rate("in");
+        let sample_rate = self.common.try_get_input_sample_rate(INPUT_IN);
         if sample_rate.is_none() {
             return;
         }

@@ -55,8 +55,8 @@ impl SystemSetting {
 
 /// [`initialize_systems`]関数の結果。
 /// 初期化したシステムのアクセスアイテムなどが入っている。
-#[derive(Debug, Default)]
-pub struct InitializeSystemsResult {
+#[derive(Debug, Default, Clone)]
+pub struct InitializeSystemAccessor {
     /// [`AudioDevice`]システムに接近できるアクセサー
     pub audio_device: Option<AudioDeviceProxyWeakPtr>,
     /// [`ResampleSystem`]システムに接近できるアクセサー
@@ -65,7 +65,7 @@ pub struct InitializeSystemsResult {
     pub file_io: Option<FileIOProxyWeakPtr>,
 }
 
-impl InitializeSystemsResult {
+impl InitializeSystemAccessor {
     pub fn as_process_item_create_setting(&self) -> ProcessItemCreateSettingSystem<'_> {
         ProcessItemCreateSettingSystem {
             audio_device: self.audio_device.as_ref(),
@@ -76,7 +76,7 @@ impl InitializeSystemsResult {
 }
 
 /// オーディオ処理ノードにシステムを渡すための構造体。
-/// [`InitializeSystemsResult::as_process_item_create_setting`]から生成するのが普通。
+/// [`InitializeSystemAccessor::as_process_item_create_setting`]から生成するのが普通。
 pub struct ProcessItemCreateSettingSystem<'a> {
     /// [`AudioDevice`]システムに接近するためのアクセサー
     pub audio_device: Option<&'a AudioDeviceProxyWeakPtr>,
@@ -88,8 +88,8 @@ pub struct ProcessItemCreateSettingSystem<'a> {
 
 /// `flags`から関連システムを初期化する。
 /// 一回きりで実行すべき。
-pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSetting) -> InitializeSystemsResult {
-    let mut result = InitializeSystemsResult::default();
+pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSetting) -> InitializeSystemAccessor {
+    let mut result = InitializeSystemAccessor::default();
 
     if flags != system_category::NONE {
         // FileIOSystemの初期化
