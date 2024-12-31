@@ -1,5 +1,5 @@
 use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr, AudioDeviceSetting};
-use crate::file::{FileIOProxyWeakPtr, FileIOSetting};
+use crate::file::{FileIO, FileIOProxyWeakPtr, FileIOSetting};
 use crate::resample::{ResampleSystem, ResampleSystemConfig, ResampleSystemProxyWeakPtr};
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
@@ -65,7 +65,29 @@ pub struct InitializeSystemsResult {
     pub file_io: Option<FileIOProxyWeakPtr>,
 }
 
-///
+impl InitializeSystemsResult {
+    pub fn as_process_item_create_setting(&self) -> ProcessItemCreateSettingSystem<'_> {
+        ProcessItemCreateSettingSystem {
+            audio_device: self.audio_device.as_ref(),
+            resample_system: self.resample_system.as_ref(),
+            file_io: self.file_io.as_ref(),
+        }
+    }
+}
+
+/// オーディオ処理ノードにシステムを渡すための構造体。
+/// [`InitializeSystemsResult::as_process_item_create_setting`]から生成するのが普通。
+pub struct ProcessItemCreateSettingSystem<'a> {
+    /// [`AudioDevice`]システムに接近するためのアクセサー
+    pub audio_device: Option<&'a AudioDeviceProxyWeakPtr>,
+    /// リサンプリング処理に必要なシステムのアクセサー
+    pub resample_system: Option<&'a ResampleSystemProxyWeakPtr>,
+    /// [`FileIO`]システムに接近できるアクセサー
+    pub file_io: Option<&'a FileIOProxyWeakPtr>,
+}
+
+/// `flags`から関連システムを初期化する。
+/// 一回きりで実行すべき。
 pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSetting) -> InitializeSystemsResult {
     let mut result = InitializeSystemsResult::default();
 
@@ -73,6 +95,7 @@ pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSet
         // FileIOSystemの初期化
         if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
             let setting = system_setting.file_io.as_ref().expect("FileIOSetting not set.");
+            result.file_io = Some(FileIO::initialize(setting.clone()));
         }
 
         // AudioDeviceの初期化
@@ -93,6 +116,26 @@ pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSet
     }
 
     result
+}
+
+/// 依存システムの解放
+pub fn cleanup_systems(flags: ESystemCategoryFlag) {
+    if flags != system_category::NONE {
+        // AudioDeviceの解放
+        if !(flags & system_category::AUDIO_DEVICE).is_zero() {
+            AudioDevice::cleanup();
+        }
+
+        // ResampleSystemの解放
+        if (!flags & system_category::RESAMPLE_SYSTEM).is_zero() {
+            ResampleSystem::cleanup();
+        }
+
+        // FileIOSystemの解放
+        if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
+            FileIO::cleanup();
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------

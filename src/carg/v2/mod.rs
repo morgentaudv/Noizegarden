@@ -2,14 +2,14 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{initialize_systems, system_category, SystemSetting};
+use crate::carg::v2::meta::system::{cleanup_systems, initialize_systems, system_category, SystemSetting};
 use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
 use crate::carg::v2::node::{process_result, RelationTreeNode};
 use crate::carg::v2::utility::{update_process_graph_connection, validate_node_relations};
-use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr};
-use crate::resample::{ResampleSystem, ResampleSystemConfig, ResampleSystemProxyWeakPtr};
+use crate::device::AudioDevice;
+use crate::resample::ResampleSystem;
 use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{math::timer::Timer, wave::sample::UniformedSample};
 use itertools::Itertools;
@@ -22,6 +22,7 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
+use meta::system::ProcessItemCreateSettingSystem;
 
 pub mod adapter;
 pub mod analyzer;
@@ -213,13 +214,6 @@ pub struct ProcessItemCreateSetting<'a> {
     pub setting: &'a Setting,
 }
 
-pub struct ProcessItemCreateSettingSystem<'a> {
-    ///
-    pub audio_device: Option<&'a AudioDeviceProxyWeakPtr>,
-    /// リサンプリング処理に必要なシステムのアクセサー
-    pub resample_system: Option<&'a ResampleSystemProxyWeakPtr>,
-}
-
 /// アイテムの生成の処理をまとめるためのtrait。
 /// 処理アイテム自体はこれを持っても、もたなくてもいいができればこれも[`TProcess`]と一緒に実装した方がいい。
 pub trait TProcessItem: TProcess {
@@ -249,10 +243,7 @@ pub fn process_v2(
     // 依存システムの初期化
     let dependent_systems = node_container.get_dependent_system_categories();
     let init_system_result = initialize_systems(dependent_systems, &system_setting);
-    let system_setting = ProcessItemCreateSettingSystem {
-        audio_device: init_system_result.audio_device.as_ref(),
-        resample_system: init_system_result.resample_system.as_ref(),
-    };
+    let system_setting = init_system_result.as_process_item_create_setting();
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
@@ -374,17 +365,7 @@ pub fn process_v2(
     }
 
     // 依存システムの解放
-    if dependent_systems != system_category::NONE {
-        // AudioDeviceの解放
-        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
-            AudioDevice::cleanup();
-        }
-
-        // ResampleSystemの解放
-        if (!dependent_systems & system_category::RESAMPLE_SYSTEM).is_zero() {
-            ResampleSystem::cleanup();
-        }
-    }
+    cleanup_systems(dependent_systems);
 
     Ok(())
 }

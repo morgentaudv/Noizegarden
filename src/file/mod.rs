@@ -82,6 +82,17 @@ impl FileIO {
             Some(v) => Some(v.clone()),
         }
     }
+
+    /// システムを解放する。
+    /// すべての関連処理が終わった後に解放すべき。
+    pub fn cleanup() {
+        assert!(SYSTEM.get().is_some());
+
+        if let Some(system) = SYSTEM.get() {
+            let mut system = system.lock().unwrap();
+            system.v = None;
+        }
+    }
 }
 
 pub struct FileIOProxy {
