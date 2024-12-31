@@ -9,8 +9,6 @@ pub struct Setting {
     /// たとえば48kHzだと約21ms弱ぐらいになる。
     /// この値は必ず2のべき乗数でなければならない。
     pub sample_count_frame: usize,
-    /// 音出力の基本チャンネル数
-    pub channels: usize,
 }
 
 impl Setting {

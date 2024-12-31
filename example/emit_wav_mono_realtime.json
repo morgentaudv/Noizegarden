@@ -2,9 +2,7 @@
     "version": 2,
     "setting": {
         "time_tick_mode": "realtime",
-        "set_offline_rendering_frame_time": 10,
-        "sample_count_frame": 1024,
-        "channels": 1
+        "sample_count_frame": 1024
     },
     "system_setting": {
         "audio_device": {
