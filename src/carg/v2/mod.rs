@@ -2,7 +2,7 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::system_category;
+use crate::carg::v2::meta::system::{system_category, SystemSetting};
 use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
@@ -74,12 +74,14 @@ pub struct EmitterRange {
 pub fn parse_v2(info: &serde_json::Value) -> anyhow::Result<ENodeContainer> {
     // Input, Setting, Outputがちゃんとあるとみなして吐き出す。
     let setting = Setting::from_serde_value(info["setting"].clone())?;
+    let system_setting = SystemSetting::from_serde_value(info["system_setting"].clone())?;
     let nodes: HashMap<String, ENode> = serde_json::from_value(info["node"].clone())?;
     let relations: Vec<Relation> = serde_json::from_value(info["relation"].clone())?;
 
     // まとめて出力。
     let container = ENodeContainer::V2 {
         setting,
+        system_setting,
         nodes,
         relations,
     };
@@ -234,7 +236,12 @@ pub trait TProcessItem: TProcess {
 /// [`TProcess`]を実装しているアイテムの外部表示タイプ
 pub type TProcessItemPtr = ItemSPtr<dyn TProcess>;
 
-pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &[Relation]) -> anyhow::Result<()> {
+pub fn process_v2(
+    setting: &Setting,
+    system_setting: &SystemSetting,
+    nodes: HashMap<String, ENode>,
+    relations: &[Relation],
+) -> anyhow::Result<()> {
     // 下で`_start_pin`のチェックもやってくれる。
     let node_container = MetaNodeContainer { map: nodes };
     validate_node_relations(&setting, &node_container, &relations)?;
@@ -246,19 +253,17 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
     if dependent_systems != system_category::NONE {
         // AudioDeviceの初期化
         if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+            let setting = system_setting.audio_device.as_ref().expect("AudioDeviceSetting not set");
             assert!(setting.channels > 0);
 
             let mut config = AudioDeviceConfig::new();
-            config
-                .set_channels(setting.channels)
-                .set_sample_rate(setting.sample_rate as usize);
+            config.set_channels(setting.channels).set_sample_rate(setting.sample_rate);
 
             audio_device_weak_proxy = Some(AudioDevice::initialize(config));
         }
 
         // ResampleSystemの初期化
         if (!dependent_systems & system_category::RESAMPLE_SYSTEM).is_zero() {
-
             let config = ResampleSystemConfig::new();
             resample_system_weak_proxy = Some(ResampleSystem::initialize(config));
         }
@@ -320,8 +325,8 @@ pub fn process_v2(setting: &Setting, nodes: HashMap<String, ENode>, relations: &
 
     // そしてcontrol_itemsとnodes、output_treeを使って処理をする。+ setting.
     // VecDequeをStackのように扱って、DFSをコールスタックを使わずに実装することができそう。
-    let tick_threshold = setting.get_default_tick_threshold();
-    let mut tick_timer = Timer::from_second(tick_threshold);
+    // let tick_threshold = setting.get_default_tick_threshold();
+    let mut tick_timer = Timer::from_second(0.005);
 
     // 終了条件は、すべてのノードが終わった時。
     // vvv オーディオレンダリングフレーム処理

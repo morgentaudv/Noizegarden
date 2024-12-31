@@ -4,6 +4,7 @@ use super::v2::{self};
 use crate::carg::v2::meta;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::SystemSetting;
 
 /// @brief パーシングされたノードのコンテナ。
 /// これだけで一連の処理ができる。
@@ -12,6 +13,7 @@ pub enum ENodeContainer {
     None,
     V2 {
         setting: Setting,
+        system_setting: SystemSetting,
         nodes: HashMap<String, ENode>,
         relations: Vec<meta::relation::Relation>,
     },
@@ -26,9 +28,10 @@ impl ENodeContainer {
             ENodeContainer::None => Ok(()),
             ENodeContainer::V2 {
                 setting,
+                system_setting,
                 nodes,
                 relations,
-            } => v2::process_v2(setting, nodes.clone(), relations),
+            } => v2::process_v2(setting, system_setting, nodes.clone(), relations),
         }
     }
 }

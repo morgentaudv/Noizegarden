@@ -1,3 +1,8 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use crate::carg::v2::meta::setting::Setting;
+use crate::device::AudioDeviceSetting;
+
 /// ノードの依存システムのカテゴリのビットフラグ
 pub mod system_category {
     /// 何も依存しない。
@@ -26,6 +31,20 @@ pub trait TSystemCategory {
     /// 音処理ノードの依存システムを複数のフラグにして返す。
     fn get_dependent_system_categories() -> ESystemCategoryFlag {
         system_category::NONE
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SystemSetting {
+    /// [`AudioDevice`]の設定
+    pub audio_device: Option<AudioDeviceSetting>,
+}
+
+impl SystemSetting {
+    /// シリアライズされた情報から読み込む。
+    pub fn from_serde_value(value: Value) -> anyhow::Result<Self> {
+        let setting: Self = serde_json::from_value(value)?;
+        Ok(setting)
     }
 }
 

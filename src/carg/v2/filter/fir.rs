@@ -60,7 +60,12 @@ impl FIRProcessData {
 
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // まずFIRでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
-        let sample_rate = self.setting.sample_rate as f64;
+        let sample_rate = self.common.try_get_input_sample_rate(INPUT_IN);
+        if sample_rate.is_none() {
+            return;
+        }
+
+        let sample_rate = sample_rate.unwrap() as f64;
         let edge = self.info.edge_frequency / sample_rate;
         let width = self.info.frequency_width / sample_rate;
         let delta = self.info.delta_frequency / sample_rate;

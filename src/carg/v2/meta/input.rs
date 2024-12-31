@@ -120,6 +120,11 @@ impl BufferMonoDynamicItem {
         }
     }
 
+    /// 処理可能か？
+    pub fn can_process(&self) -> bool {
+        self.sample_rate != 0
+    }
+
     pub fn update(&mut self, output: &EProcessOutputContainer) {
         // WaveBufferであるかをチェック。
         match output {

@@ -120,6 +120,23 @@ impl ProcessControlItem {
         Some(InputInternalMut { borrowed })
     }
 
+    /// 入力バッファのサンプルレートがとれる状態であれば取得する。
+    pub fn try_get_input_sample_rate(&self, pin_name: &str) -> Option<usize> {
+        let input = self.get_input_internal(pin_name)?;
+        match input.deref() {
+            EProcessInputContainer::BufferMonoDynamic(v) => {
+                if !v.can_process() {
+                    return None;
+                }
+                Some(v.sample_rate)
+            }
+            EProcessInputContainer::BufferStereoDynamic(v) => {
+                todo!("Not yet implemented.");
+            }
+            _ => None,
+        }
+    }
+
     /// `pin_name`のOutputピンが他のノードのピンに繋がっているかを確認。
     pub fn is_output_pin_connected(&self, pin_name: &str) -> bool {
         match self.output_pins.get(pin_name) {

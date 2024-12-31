@@ -181,7 +181,11 @@ impl IIRProcessData {
         }
 
         // IIRの演算のための係数を計算する。
-        let sample_rate = self.setting.sample_rate as f64;
+        let sample_rate = self.common.try_get_input_sample_rate(INPUT_IN);
+        if sample_rate.is_none() {
+            return;
+        }
+        let sample_rate = sample_rate.unwrap() as f64;
         let (filter_as, filter_bs) = compute_filter_asbs(
             self.internal.mode,
             self.info.edge_frequency,

@@ -36,8 +36,6 @@ mod hz44100 {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaLufsInfo {
-    /// インプットとして入力されるサンプルバッファのサンプルレートを代わりに使うか否か
-    pub use_input: bool,
     /// LUの測定で一ブロックを動かす周期秒。
     pub slide_length: f64,
     /// LUの想定の基本単位。
@@ -172,10 +170,14 @@ impl AnalyzeLUFSProcessData {
             return;
         }
 
-        let sample_rate = if self.info.use_input {
-            self.setting.sample_rate as f64
-        } else {
-            self.setting.sample_rate as f64
+        let sample_rate = {
+            let item = self.common.get_input_internal(INPUT_IN).unwrap();
+            let item = item.buffer_mono_dynamic().unwrap();
+            if !item.can_process() {
+                return;
+            }
+
+            item.sample_rate as f64
         };
         let (iir_as, iir_bs, iir_cs, iir_ds) = {
             match sample_rate {
@@ -273,16 +275,17 @@ impl AnalyzeLUFSProcessData {
     fn update_input_buffer(&mut self) -> bool {
         // `block_length`から処理ができるかを確認する。
         // もしインプットが終わったなら、尺が足りなくてもそのまま処理する。
-        let sample_rate = if self.info.use_input {
-            self.setting.sample_rate as f64
-        } else {
-            self.setting.sample_rate as f64
-        };
-        let block_sample_len = (self.info.block_length as f64 * sample_rate).ceil() as usize;
 
         // 処理するためのバッファが十分じゃないと処理できない。
         let is_buffer_enough = match &*self.common.get_input_internal(INPUT_IN).unwrap() {
             EProcessInputContainer::BufferMonoDynamic(v) => {
+                if !v.can_process() {
+                    return false;
+                }
+
+                let sample_rate = v.sample_rate as f64;
+                let block_sample_len = (self.info.block_length * sample_rate).ceil() as usize;
+
                 v.buffer.len() > (block_sample_len + self.internal.next_start_i)
             }
             _ => false,

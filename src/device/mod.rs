@@ -2,6 +2,7 @@ use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
 use miniaudio::{DeviceType, FramesMut, RingBufferRecv, RingBufferSend};
 use std::sync::{mpsc, Arc, Mutex, OnceLock, Weak};
+use serde::{Deserialize, Serialize};
 
 /// 24-12-10
 /// mutにしているのは、[`AudioDevice::cleanup()`]で値をTakeするため。
@@ -46,6 +47,14 @@ pub enum EAudioDeviceMessage {
     LastProcessedLength(usize),
     /// オーディオ処理のバッファに`usize`分のサンプルを送信した。
     SendSamplesToBuffer(usize),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AudioDeviceSetting {
+    /// 初期チャンネル数
+    pub channels: usize,
+    /// 初期サンプルレート
+    pub sample_rate: usize,
 }
 
 /// [`AudioDevice`]を生成するための初期設定のための構造体。

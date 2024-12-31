@@ -169,7 +169,11 @@ impl OutputFileProcessData {
     }
 
     fn process_stereo(&mut self, v: &BufferStereoDynamicItem) {
-        let source_sample_rate = v.setting.as_ref().unwrap().sample_rate as f64;
+        let sample_rate = self.common.try_get_input_sample_rate("in");
+        if sample_rate.is_none() {
+            return;
+        }
+        let source_sample_rate = sample_rate.unwrap() as f64;
 
         let container = match self.info.format {
             EOutputFileFormat::WavLPCM16 { sample_rate } => {
