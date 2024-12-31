@@ -1,7 +1,6 @@
+use crate::device::AudioDeviceSetting;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::carg::v2::meta::setting::Setting;
-use crate::device::AudioDeviceSetting;
 
 /// ノードの依存システムのカテゴリのビットフラグ
 pub mod system_category {
