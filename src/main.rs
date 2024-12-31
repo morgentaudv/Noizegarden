@@ -10,10 +10,9 @@ extern crate static_assertions;
 pub mod carg;
 pub mod math;
 pub mod wave;
-
 pub mod device;
-
 pub mod resample;
+pub mod file;
 
 fn main() -> anyhow::Result<()> {
     // @todo 24-12-05 後でParseを非同期で行うなど。

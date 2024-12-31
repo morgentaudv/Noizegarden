@@ -33,7 +33,7 @@ Node based musical analysis application written in Rustlang, also features makin
 - [ ] リアルタイムプレビューノード
 - [x] Resamplingの作りなおし
 - [ ] Resamplingのバグ対応
-- [ ] sine-sweepのEmitterノード
+- [x] sine-sweepのEmitterノード
 - [ ] Emitter音源発生系ノードのトリガー統合？
 - [ ] eguiの導入
 
