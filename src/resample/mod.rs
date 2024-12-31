@@ -171,7 +171,7 @@ impl ResampleSystemInternal {
 // ----------------------------------------------------------------------------
 
 /// 特性関数の理想的なsinc関数を考慮する時の、per zero-crossing間のサンプル数を示す。
-const NPC: usize = 4096;
+const NPC: usize = 2048;
 
 /// リサンプリングのヘッダーのアイテム
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -214,18 +214,18 @@ impl ResampleProcessHeader {
 
         // 偶数にすること。
         // 半分はsinc関数の各羽部分にあたる。
-        let n_mult = if is_high_quality { 35 } else { 11 } as usize;
-        assert_eq!(n_mult % 2, 1);
+        let n_mul_t = if is_high_quality { 35 } else { 11 } as usize;
+        assert_eq!(n_mul_t % 2, 1);
 
         // wing_numは疑似sinc関数の片側の係数の数を示す。
-        // つまり、n_multの半分のzero-crossingが存在するともいえる。
-        let wing_num = (NPC * (n_mult - 1)) >> 1;
-        let rolloff = 0.05;
+        // つまり, n_mul_tの半分のzero-crossingが存在するともいえる。
+        let wing_num = (NPC * (n_mul_t - 1)) >> 1;
+        let rolloff = 0.45;
         let beta = PI * 2.0; // Kaiser窓関数のパラメータ beta = pi*alpha.
 
         // 片側の係数。
         // そしてそれぞれのcoeffから差分もリストに入れる。
-        let wing_coeffs = initialize_lpf_coeffs(wing_num, rolloff, beta, NPC);
+        let wing_coeffs = initialize_lpf_coeffs(wing_num, rolloff * 0.5, beta, NPC);
         let mut coeff_deltas = wing_coeffs
             .iter()
             .zip(wing_coeffs.iter().skip(1))
@@ -244,7 +244,6 @@ impl ResampleProcessHeader {
     }
 
     pub fn process(&self, input: &ProcessSamplingSetting) -> ProcessSourceResult {
-        debug_assert!(input.start_phase_time >= 0.0 && input.start_phase_time <= 1.0);
         debug_assert!(input.process_length > 0);
         debug_assert!(input.start_sample_i + input.process_length <= input.src_buffer.len());
 
@@ -313,7 +312,8 @@ impl ResampleProcessHeader {
         } else {
             // Decimation
             let npc_f = NPC as f64;
-            let dh = npc_f.min(ratio * npc_f);
+            //let dh = npc_f.min(ratio * npc_f);
+            let dh = npc_f;
             let amplitude_scale = ratio.min(1.0);
 
             let mut proc_setting = ProcessFilterSetting {
@@ -333,6 +333,7 @@ impl ResampleProcessHeader {
                 if input_i >= input_buffer_end_i {
                     break;
                 }
+                proc_setting.start_sample_index = input_i;
 
                 let left_phase_frac = phase_time.fract();
                 let right_phase_frac = 1.0 - left_phase_frac;
@@ -357,7 +358,8 @@ impl ResampleProcessHeader {
 
         ProcessSourceResult {
             outputs: results,
-            next_phase_time: phase_time.fract(),
+            // Decimationの場合にはphase_timeに次のIndex情報も含まれるので、うまく計算する。
+            next_phase_time: phase_time - input.process_length as f64,
         }
     }
 }
@@ -365,10 +367,10 @@ impl ResampleProcessHeader {
 #[derive(Debug)]
 pub struct ProcessSamplingSetting<'a> {
     pub src_buffer: &'a [UniformedSample],
-    pub use_interp: bool,
     pub start_phase_time: f64,
     pub start_sample_i: usize,
     pub process_length: usize,
+    pub use_interp: bool,
 }
 
 /// [`process_source`]の処理結果
@@ -395,13 +397,12 @@ pub fn initialize_lpf_coeffs(coeff_num: usize, rolloff: f64, beta: f64, zero_cro
     for coeff_i in 1..coeff_num {
         // ここは一般sinc関数を使わない。
         let v = PI * coeff_i as f64 * local_num;
-        let v_recip = v.recip();
-        coeffs[coeff_i] = (2.0 * v * rolloff).sin() * v_recip;
+        coeffs[coeff_i] = (2.0 * v * rolloff).sin() * v.recip();
     }
 
     // カイザー窓を適用する。
     // https://en.wikipedia.org/wiki/Kaiser_window
-    let beta_recip = modified_bessel_1st(beta).recip();
+    let beta_recip = modified_bessel_1st_a0(beta).recip();
     let inm1 = ((coeff_num - 1) as f64).recip();
     for coeff_i in 1..coeff_num {
         let v = (coeff_i as f64) * inm1; // [0, 1]。(2x/L)の部分
@@ -410,7 +411,7 @@ pub fn initialize_lpf_coeffs(coeff_num: usize, rolloff: f64, beta: f64, zero_cro
 
         // ここで値をベッセル関数に入れて補正する。
         // mul値自体は[0, 1]を持つ。
-        let mul = modified_bessel_1st(beta * v.sqrt()) * beta_recip;
+        let mul = modified_bessel_1st_a0(beta * v.sqrt()) * beta_recip;
         debug_assert!(mul >= 0.0);
         coeffs[coeff_i] *= mul;
     }
@@ -422,7 +423,7 @@ pub fn initialize_lpf_coeffs(coeff_num: usize, rolloff: f64, beta: f64, zero_cro
 /// を参考すること。
 ///
 /// alphaは0になので、基本1.0から始まる。
-fn modified_bessel_1st(x: f64) -> f64 {
+fn modified_bessel_1st_a0(x: f64) -> f64 {
     let mut sum = 1.0;
     let half_x = x * 0.5;
     let mut u = 1.0;
@@ -526,6 +527,7 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
 fn process_filter_down(setting: &ProcessFilterSetting) -> f64 {
     debug_assert!(setting.irs.len() > 0);
     debug_assert!(setting.wing_num > 0);
+    debug_assert!(setting.phase >= 0.0 && setting.phase <= 1.0);
 
     // [0, NPC)までの範囲を持つ。
     let phase_raw_i = setting.phase * setting.dh;
@@ -548,8 +550,6 @@ fn process_filter_down(setting: &ProcessFilterSetting) -> f64 {
 
     let mut output = 0.0;
     let mut input_i = setting.start_sample_index;
-    let mut is_oob = false;
-    let mut last_sample = 0.0;
     let inputs = setting.samples;
     loop {
         // サンプルを補完するためのIRがなければ、終わる。(FIRなのでタップの限界がある)
@@ -564,30 +564,17 @@ fn process_filter_down(setting: &ProcessFilterSetting) -> f64 {
             irs[irs_i]
         };
 
-        let input = if is_oob { last_sample } else { inputs[input_i].to_f64() };
-        last_sample = input; // oobした時にこれを使う。
-        let applied = coeff * input;
-        output += applied;
+        //dbg!(setting.is_increment, irs_i, input_i);
+        output += coeff * inputs[input_i].to_f64();
 
         // sinc関数を近接しているサンプルに当てるように調整する。
         irs_raw_i += setting.dh;
         irs_i = irs_raw_i.floor() as usize;
-        if is_oob {
-            continue;
-        }
 
         if setting.is_increment {
             input_i += 1;
-
-            if input_i >= inputs.len() {
-                is_oob = true;
-            }
         } else {
-            if input_i > 0 {
-                input_i -= 1;
-            } else {
-                is_oob = true;
-            }
+            input_i -= 1;
         }
     }
 

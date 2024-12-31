@@ -26,6 +26,8 @@ pub struct MetaResampleInfo {
     pub to_sample_rate: usize,
     /// ハイクオリティでリサンプリングするか
     pub high_quality: bool,
+    /// IRの差を使って処理するか
+    pub use_interp: bool,
 }
 
 #[derive(Debug)]
@@ -138,10 +140,10 @@ impl TProcess for ResampleProcessData {
         let result = {
             let setting = ProcessSamplingSetting {
                 src_buffer: &input_buffer,
-                use_interp: false,
                 start_phase_time: self.internal.next_phase_time,
                 start_sample_i: OFFSET, // 前オフセットが128なので。
                 process_length: input_buffer.len() - OFFSET - OFFSET /* Prev + Next */,
+                use_interp: self.info.use_interp,
             };
 
             // CRITICAL SECTION

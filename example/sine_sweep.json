@@ -4,7 +4,6 @@
         "time_tick_mode": "realtime",
         "set_offline_rendering_frame_time": 10,
         "sample_count_frame": 1024,
-        "sample_rate": 44100,
         "channels": 1
     },
     "node": {
@@ -22,22 +21,42 @@
             },
             "to_frequency": {
                 "type": "constant",
-                "value": 20000.0
+                "value": 10000.0
             },
             "intensity": 0.5,
             "range": {
                 "start": 0.0,
                 "length": 2.0
             },
+            "sample_rate": 24000
+        },
+        "input_sine": {
+            "type": "emitter-sine",
+            "frequency": {
+                "type": "constant",
+                "value": 440.0
+            },
+            "intensity": 0.5,
+            "range": {
+                "start": 0.0,
+                "length": 4.0
+            },
             "sample_rate": 44100
+        },
+        "resample": {
+            "type": "adapter-resample",
+            "to_sample_rate": 96000,
+            "high_quality": true,
+            "use_interp": false
         },
         "output": {
             "type": "output-file",
             "format": {
                 "type": "wav_lpcm16",
-                "sample_rate": 44100
+                "sample_rate": 96000
             },
-            "file_name": "resample_20_to_20k_44100.wav"
+            "file_name": "resample_sweep_960khz_to_441khz",
+            "add_date_time": true
         }
     },
     "relation": [
@@ -54,6 +73,16 @@
         {
             "prev": {
                 "node": "input",
+                "pin": "out"
+            },
+            "next": {
+                "node": "resample",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "resample",
                 "pin": "out"
             },
             "next": {
