@@ -5,6 +5,7 @@
         "sample_count_frame": 1024
     },
     "system_setting": {
+        "file_io": {}
     },
     "node": {
         "_start_pin": {

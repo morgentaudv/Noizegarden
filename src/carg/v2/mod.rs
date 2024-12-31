@@ -2,7 +2,7 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{system_category, SystemSetting};
+use crate::carg::v2::meta::system::{initialize_systems, system_category, SystemSetting};
 use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
@@ -248,29 +248,10 @@ pub fn process_v2(
 
     // 依存システムの初期化
     let dependent_systems = node_container.get_dependent_system_categories();
-    let mut audio_device_weak_proxy = None;
-    let mut resample_system_weak_proxy = None;
-    if dependent_systems != system_category::NONE {
-        // AudioDeviceの初期化
-        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
-            let setting = system_setting.audio_device.as_ref().expect("AudioDeviceSetting not set");
-            assert!(setting.channels > 0);
-
-            let mut config = AudioDeviceConfig::new();
-            config.set_channels(setting.channels).set_sample_rate(setting.sample_rate);
-
-            audio_device_weak_proxy = Some(AudioDevice::initialize(config));
-        }
-
-        // ResampleSystemの初期化
-        if (!dependent_systems & system_category::RESAMPLE_SYSTEM).is_zero() {
-            let config = ResampleSystemConfig::new();
-            resample_system_weak_proxy = Some(ResampleSystem::initialize(config));
-        }
-    }
+    let init_system_result = initialize_systems(dependent_systems, &system_setting);
     let system_setting = ProcessItemCreateSettingSystem {
-        audio_device: audio_device_weak_proxy.as_ref(),
-        resample_system: resample_system_weak_proxy.as_ref(),
+        audio_device: init_system_result.audio_device.as_ref(),
+        resample_system: init_system_result.resample_system.as_ref(),
     };
 
     // チェックができたので(validation)、relationを元にGraphを生成する。

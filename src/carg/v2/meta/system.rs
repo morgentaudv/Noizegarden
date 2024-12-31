@@ -1,4 +1,7 @@
-use crate::device::AudioDeviceSetting;
+use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr, AudioDeviceSetting};
+use crate::file::{FileIOProxyWeakPtr, FileIOSetting};
+use crate::resample::{ResampleSystem, ResampleSystemConfig, ResampleSystemProxyWeakPtr};
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -33,10 +36,13 @@ pub trait TSystemCategory {
     }
 }
 
+/// シリアライズできるシステムの設定コンテナ
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemSetting {
     /// [`AudioDevice`]の設定
     pub audio_device: Option<AudioDeviceSetting>,
+    /// [`FileIO`]の設定
+    pub file_io: Option<FileIOSetting>,
 }
 
 impl SystemSetting {
@@ -45,6 +51,48 @@ impl SystemSetting {
         let setting: Self = serde_json::from_value(value)?;
         Ok(setting)
     }
+}
+
+/// [`initialize_systems`]関数の結果。
+/// 初期化したシステムのアクセスアイテムなどが入っている。
+#[derive(Debug, Default)]
+pub struct InitializeSystemsResult {
+    /// [`AudioDevice`]システムに接近できるアクセサー
+    pub audio_device: Option<AudioDeviceProxyWeakPtr>,
+    /// [`ResampleSystem`]システムに接近できるアクセサー
+    pub resample_system: Option<ResampleSystemProxyWeakPtr>,
+    /// [`FileIO`]システムに接近できるアクセサー
+    pub file_io: Option<FileIOProxyWeakPtr>,
+}
+
+///
+pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSetting) -> InitializeSystemsResult {
+    let mut result = InitializeSystemsResult::default();
+
+    if flags != system_category::NONE {
+        // FileIOSystemの初期化
+        if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
+            let setting = system_setting.file_io.as_ref().expect("FileIOSetting not set.");
+        }
+
+        // AudioDeviceの初期化
+        if !(flags & system_category::AUDIO_DEVICE).is_zero() {
+            let setting = system_setting.audio_device.as_ref().expect("AudioDeviceSetting not set");
+            assert!(setting.channels > 0);
+
+            let mut config = AudioDeviceConfig::new();
+            config.set_channels(setting.channels).set_sample_rate(setting.sample_rate);
+            result.audio_device = Some(AudioDevice::initialize(config));
+        }
+
+        // ResampleSystemの初期化
+        if (!flags & system_category::RESAMPLE_SYSTEM).is_zero() {
+            let config = ResampleSystemConfig::new();
+            result.resample_system = Some(ResampleSystem::initialize(config));
+        }
+    }
+
+    result
 }
 
 // ----------------------------------------------------------------------------
