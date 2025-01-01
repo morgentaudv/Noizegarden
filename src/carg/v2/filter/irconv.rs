@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
-use crate::carg::v2::{ProcessControlItem, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
+use crate::carg::v2::{ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::nz_define_time_tick_for;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -84,20 +84,31 @@ impl TProcess for IRConvolutionProcessData {
     }
 }
 
-impl IRConvolutionProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::FilterIRConvolution(v) = node {
-            let item = Self {
-                setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::FilterIRConvolution),
-                info: v.clone(),
-            };
-            return SItemSPtr::new(item);
-        }
-        unreachable!("Unexpected branch");
+impl TProcessItem for IRConvolutionProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn update_state(&self, in_input: &ProcessProcessorInput) {
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        if let ENode::FilterIRConvolution(v) = setting.node {
+            let item = Self {
+                setting: setting.setting.clone(),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::FilterIRConvolution,
+                    systems: &system_setting,
+                }),
+                info: v.clone(),
+            };
+
+            return Ok(SItemSPtr::new(item));
+        }
+
+        unreachable!("Unexpected branch");
+    }
+}
+
+impl IRConvolutionProcessData {
+    fn update_state(&self, _in_input: &ProcessProcessorInput) {
         todo!()
     }
 }

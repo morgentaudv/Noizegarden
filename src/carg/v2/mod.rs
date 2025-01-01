@@ -2,14 +2,13 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{cleanup_systems, initialize_systems, system_category, SystemSetting};
+use crate::carg::v2::meta::system::{cleanup_systems, initialize_systems, system_category, InitializeSystemAccessor, SystemSetting};
 use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
 use crate::carg::v2::node::{process_result, RelationTreeNode};
 use crate::carg::v2::utility::{update_process_graph_connection, validate_node_relations};
 use crate::device::AudioDevice;
-use crate::resample::ResampleSystem;
 use crate::wave::analyze::sine_freq::SineFrequency;
 use crate::{math::timer::Timer, wave::sample::UniformedSample};
 use itertools::Itertools;
@@ -22,7 +21,6 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
-use meta::system::ProcessItemCreateSettingSystem;
 
 pub mod adapter;
 pub mod analyzer;
@@ -223,7 +221,7 @@ pub trait TProcessItem: TProcess {
     /// 処理アイテムを生成するための関数。
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &InitializeSystemAccessor,
     ) -> anyhow::Result<TProcessItemPtr>;
 }
 
@@ -241,9 +239,8 @@ pub fn process_v2(
     validate_node_relations(&setting, &node_container, &relations)?;
 
     // 依存システムの初期化
-    let dependent_systems = node_container.get_dependent_system_categories();
-    let init_system_result = initialize_systems(dependent_systems, &system_setting);
-    let system_setting = init_system_result.as_process_item_create_setting();
+    let system_flags = node_container.get_dependent_system_categories();
+    let systems = initialize_systems(system_flags, &system_setting);
 
     // チェックができたので(validation)、relationを元にGraphを生成する。
     // ただしそれぞれの独立したoutputをルートにして必要となるinputを子としてツリーを構成する。
@@ -253,7 +250,7 @@ pub fn process_v2(
         // 各ノードから処理に使うためのアイテムを全部生成しておく。
         // 中でinputピンとoutputピンを作る。
         for (node_name, node) in &node_container.map {
-            let processor = node.create_from(setting, &system_setting);
+            let processor = node.create_from(setting, &systems);
             let node = RelationTreeNode::new_item(&node_name, processor);
             map.insert(node_name.clone(), node);
         }
@@ -309,7 +306,7 @@ pub fn process_v2(
         elapsed_time += tick_timer.tick().as_secs_f64();
 
         // 24-12-12 依存システムの処理。
-        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+        if !(system_flags & system_category::AUDIO_DEVICE).is_zero() {
             AudioDevice::pre_process(prev_to_now_time);
         }
 
@@ -355,7 +352,7 @@ pub fn process_v2(
         }
 
         // 24-12-12 依存システムの処理。
-        if !(dependent_systems & system_category::AUDIO_DEVICE).is_zero() {
+        if !(system_flags & system_category::AUDIO_DEVICE).is_zero() {
             AudioDevice::post_process(prev_to_now_time);
         }
 
@@ -365,7 +362,7 @@ pub fn process_v2(
     }
 
     // 依存システムの解放
-    cleanup_systems(dependent_systems);
+    cleanup_systems(system_flags);
 
     Ok(())
 }

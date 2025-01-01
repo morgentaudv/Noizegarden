@@ -2,13 +2,10 @@ use crate::carg::v2::filter::{iir_compute_sample, EFilterMode};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::node::common::EProcessState;
-use crate::carg::v2::{
-    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
-    TProcessItemPtr,
-};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::math::window::EWindowFunction;
 use crate::wave::sample::UniformedSample;
 use crate::wave::PI2;
@@ -126,53 +123,71 @@ impl TProcess for IIRProcessData {
     }
 }
 
-impl IIRProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting, mode: EFilterMode) -> TProcessItemPtr {
-        match node {
+impl TProcessItem for IIRProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        Ok(match setting.node {
             ENode::FilterIIRLPF(v) => {
                 let item = Self {
-                    setting: setting.clone(),
-                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRLPF),
+                    setting: setting.setting.clone(),
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::FilterIIRLPF,
+                        systems: &system_setting,
+                    }),
                     info: v.clone(),
-                    internal: InternalInfo::new(mode),
+                    internal: InternalInfo::new(EFilterMode::LowPass),
                 };
 
                 SItemSPtr::new(item)
             }
             ENode::FilterIIRHPF(v) => {
                 let item = Self {
-                    setting: setting.clone(),
-                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRHPF),
+                    setting: setting.setting.clone(),
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::FilterIIRHPF,
+                        systems: &system_setting,
+                    }),
                     info: v.clone(),
-                    internal: InternalInfo::new(mode),
+                    internal: InternalInfo::new(EFilterMode::HighPass),
                 };
 
                 SItemSPtr::new(item)
             }
             ENode::FilterIIRBandPass(v) => {
                 let item = Self {
-                    setting: setting.clone(),
-                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRBandPass),
+                    setting: setting.setting.clone(),
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::FilterIIRBandPass,
+                        systems: &system_setting,
+                    }),
                     info: v.clone(),
-                    internal: InternalInfo::new(mode),
+                    internal: InternalInfo::new(EFilterMode::BandPass),
                 };
 
                 SItemSPtr::new(item)
             }
             ENode::FilterIIRBandStop(v) => {
                 let item = Self {
-                    setting: setting.clone(),
-                    common: ProcessControlItem::new(ENodeSpecifier::FilterIIRBandStop),
+                    setting: setting.setting.clone(),
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::FilterIIRBandStop,
+                        systems: &system_setting,
+                    }),
                     info: v.clone(),
-                    internal: InternalInfo::new(mode),
+                    internal: InternalInfo::new(EFilterMode::BandStop),
                 };
 
                 SItemSPtr::new(item)
             }
             _ => unreachable!("Unexpected branch"),
-        }
+        })
     }
+}
 
+impl IIRProcessData {
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         let all_finished = in_input.is_children_all_finished();
         let (can_process, _required_samples) = self.update_input_buffer(all_finished);

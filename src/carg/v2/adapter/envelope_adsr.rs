@@ -1,17 +1,14 @@
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{ENode, SItemSPtr, Setting, TProcessItemPtr};
-use crate::{
-    carg::v2::{
-        ProcessControlItem, ProcessOutputBuffer,
-        ProcessProcessorInput, TProcess,
-    },
-    wave::sample::UniformedSample,
-};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{ENode, ProcessItemCreateSetting, SItemSPtr, TProcessItem, TProcessItemPtr};
+use crate::{
+    carg::v2::{ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, TProcess},
+    wave::sample::UniformedSample,
+};
 
 #[derive(Debug)]
 pub struct AdapterEnvelopeAdsrProcessData {
@@ -31,10 +28,14 @@ pub struct AdapterEnvelopeAdsrProcessData {
 
 impl TPinCategory for AdapterEnvelopeAdsrProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
-    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+    fn get_input_pin_names() -> Vec<&'static str> {
+        vec!["in"]
+    }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec!["out"] }
+    fn get_output_pin_names() -> Vec<&'static str> {
+        vec!["out"]
+    }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
@@ -54,9 +55,16 @@ impl TPinCategory for AdapterEnvelopeAdsrProcessData {
     }
 }
 
-impl AdapterEnvelopeAdsrProcessData {
-    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
-        match node {
+impl TProcessItem for AdapterEnvelopeAdsrProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        match setting.node {
             ENode::AdapterEnvelopeAdsr {
                 attack_time,
                 decay_time,
@@ -67,47 +75,29 @@ impl AdapterEnvelopeAdsrProcessData {
                 release_curve,
                 sustain_value,
             } => {
-                let item = Self::new(
-                    *attack_time,
-                    *decay_time,
-                    *sustain_time,
-                    *release_time,
-                    *attack_curve,
-                    *decay_curve,
-                    *release_curve,
-                    *sustain_value);
-                SItemSPtr::new(item)
+                assert!(*attack_time >= 0.0);
+                assert!(*decay_time >= 0.0);
+                assert!(*attack_curve > 0.0);
+                assert!(*decay_curve > 0.0);
+
+                let item = Self {
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::AdapterEnvelopeAdsr,
+                        systems: &system_setting,
+                    }),
+                    output: None,
+                    attack_time: *attack_time,
+                    decay_time: *decay_time,
+                    attack_curve: *attack_curve,
+                    decay_curve: *decay_curve,
+                    sustain_time: *sustain_time,
+                    release_time: *release_time,
+                    release_curve: *release_curve,
+                    sustain_value: *sustain_value,
+                };
+                Ok(SItemSPtr::new(item))
             }
             _ => unreachable!("Unexpected branch."),
-        }
-    }
-
-    pub fn new(
-        attack_time: f64,
-        decay_time: f64,
-        sustain_time: f64,
-        release_time: f64,
-        attack_curve: f64,
-        decay_curve: f64,
-        release_curve: f64,
-        sustain_value: f64,
-    ) -> Self {
-        assert!(attack_time >= 0.0);
-        assert!(decay_time >= 0.0);
-        assert!(attack_curve > 0.0);
-        assert!(decay_curve > 0.0);
-
-        Self {
-            common: ProcessControlItem::new(ENodeSpecifier::AdapterEnvelopeAdsr),
-            output: None,
-            attack_time,
-            decay_time,
-            attack_curve,
-            decay_curve,
-            sustain_time,
-            release_time,
-            release_curve,
-            sustain_value,
         }
     }
 }

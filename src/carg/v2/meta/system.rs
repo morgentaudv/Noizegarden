@@ -65,27 +65,6 @@ pub struct InitializeSystemAccessor {
     pub file_io: Option<FileIOProxyWeakPtr>,
 }
 
-impl InitializeSystemAccessor {
-    pub fn as_process_item_create_setting(&self) -> ProcessItemCreateSettingSystem<'_> {
-        ProcessItemCreateSettingSystem {
-            audio_device: self.audio_device.as_ref(),
-            resample_system: self.resample_system.as_ref(),
-            file_io: self.file_io.as_ref(),
-        }
-    }
-}
-
-/// オーディオ処理ノードにシステムを渡すための構造体。
-/// [`InitializeSystemAccessor::as_process_item_create_setting`]から生成するのが普通。
-pub struct ProcessItemCreateSettingSystem<'a> {
-    /// [`AudioDevice`]システムに接近するためのアクセサー
-    pub audio_device: Option<&'a AudioDeviceProxyWeakPtr>,
-    /// リサンプリング処理に必要なシステムのアクセサー
-    pub resample_system: Option<&'a ResampleSystemProxyWeakPtr>,
-    /// [`FileIO`]システムに接近できるアクセサー
-    pub file_io: Option<&'a FileIOProxyWeakPtr>,
-}
-
 /// `flags`から関連システムを初期化する。
 /// 一回きりで実行すべき。
 pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSetting) -> InitializeSystemAccessor {

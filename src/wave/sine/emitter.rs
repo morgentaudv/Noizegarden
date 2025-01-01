@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use num_traits::float::FloatCore;
 use rand::{rngs, Rng};
 
 use crate::wave::{sample::UniformedSample, PI2};

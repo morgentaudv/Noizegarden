@@ -340,7 +340,7 @@ impl WaveBuilder {
         let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size);
         let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
 
-        /// [`WaveContainer::uniformed_buffer`]はStereoなのでleft→rightのようにする。
+        // [`WaveContainer::uniformed_buffer`]はStereoなのでleft→rightのようにする。
         let mut uniformed_buffer = vec![];
         uniformed_buffer.reserve(left.len() + right.len());
         for (l_s, r_s) in left.iter().zip(right.iter()) {

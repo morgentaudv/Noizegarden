@@ -1,16 +1,19 @@
-use itertools::Itertools;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::node::ENode;
-use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessOutputFrequency, ProcessOutputText, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
-use crate::carg::v2::meta::system::TSystemCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
+use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{
+    EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputFrequency, ProcessOutputText,
+    ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
+};
 use crate::math::window::EWindowFunction;
+use crate::nz_define_time_tick_for;
 use crate::wave::analyze::analyzer::{FrequencyAnalyzerV2, WaveContainerSetting};
 use crate::wave::analyze::method::EAnalyzeMethod;
 use crate::wave::sample::UniformedSample;
-use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::nz_define_time_tick_for;
+use itertools::Itertools;
 
 #[derive(Debug)]
 pub struct AnalyzerFFTProcessData {
@@ -53,22 +56,39 @@ impl TPinCategory for AnalyzerFFTProcessData {
     }
 }
 
-impl AnalyzerFFTProcessData {
-    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
-        match node {
-            ENode::AnalyzerFFT { level, window_function, overlap } => {
-                let item= Self {
-                    common: ProcessControlItem::new(ENodeSpecifier::AnalyzerFFT),
+impl TProcessItem for AnalyzerFFTProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        match setting.node {
+            ENode::AnalyzerFFT {
+                level,
+                window_function,
+                overlap,
+            } => {
+                let item = Self {
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::AnalyzerFFT,
+                        systems: &system_setting,
+                    }),
                     level: *level,
                     window_function: *window_function,
                     overlap: *overlap,
                 };
-                SItemSPtr::new(item)
+
+                Ok(SItemSPtr::new(item))
             }
             _ => unreachable!("Unexpected branch."),
         }
     }
+}
 
+impl AnalyzerFFTProcessData {
     fn drain_buffer(&mut self, in_input: &ProcessProcessorInput) -> (Vec<UniformedSample>, usize) {
         // チェックしてself.levelよりバッファが多くないと処理しない。
         let mut now_buffer_len = 0usize;
@@ -202,8 +222,7 @@ impl AnalyzerFFTProcessData {
             };
             if !can_more_process {
                 self.common.state = EProcessState::Finished;
-            }
-            else {
+            } else {
                 self.common.state = EProcessState::Playing;
             }
 
@@ -223,7 +242,9 @@ impl TProcess for AnalyzerFFTProcessData {
         self.common.state == EProcessState::Finished
     }
 
-    fn can_process(&self) -> bool { true }
+    fn can_process(&self) -> bool {
+        true
+    }
 
     fn get_common_ref(&self) -> &ProcessControlItem {
         &self.common

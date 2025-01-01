@@ -1,16 +1,19 @@
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
-use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::setting::Setting;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
-use crate::wave::EBitDepth;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{
+    EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput,
+    SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
+};
 use crate::wave::sample::UniformedSample;
+use crate::wave::EBitDepth;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 /// Limiterノードの設定入力情報
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -100,21 +103,33 @@ impl TProcess for AdapterLimiterProcessData {
     }
 }
 
-impl AdapterLimiterProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::AdapterLimiter(v) = node {
-            let item= Self {
-                setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::AdapterLimiter),
+impl TProcessItem for AdapterLimiterProcessData {
+    fn can_create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        if let ENode::AdapterLimiter(v) = setting.node {
+            let item = Self {
+                setting: setting.setting.clone(),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::AdapterLimiter,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
             };
 
-            return SItemSPtr::new(item);
+            return Ok(SItemSPtr::new(item));
         }
 
         unreachable!("Unexpected branch");
     }
+}
 
+impl AdapterLimiterProcessData {
     pub fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // Inputがなきゃ何もできぬ。
         // これなに…
@@ -143,31 +158,35 @@ impl AdapterLimiterProcessData {
         let interp_min = self.info.threshold_db - self.info.knee_width_db;
         let interp_max = self.info.threshold_db + self.info.knee_width_db;
         let interp_range = 2.0 * self.info.knee_width_db;
-        let output_buffer = input.buffer.iter().map(|v| {
-            let is_plus = v.to_f64().is_sign_positive();
-            let aligned_db = match v.apply_bit_depth(bit_depth) {
-                v if v < interp_min => v,
-                v if v >= interp_max => self.info.threshold_db,
-                v => {
-                    // Compressorとは違って、Ratioが無限に近いと思ってもいいので
-                    // cubic-hermiteの一部項がなくなる。
-                    let f = (v - interp_min) / interp_range;
-                    let fpow3 = f.powf(3.0);
-                    let fpow2 = f.powf(2.0);
+        let output_buffer = input
+            .buffer
+            .iter()
+            .map(|v| {
+                let is_plus = v.to_f64().is_sign_positive();
+                let aligned_db = match v.apply_bit_depth(bit_depth) {
+                    v if v < interp_min => v,
+                    v if v >= interp_max => self.info.threshold_db,
+                    v => {
+                        // Compressorとは違って、Ratioが無限に近いと思ってもいいので
+                        // cubic-hermiteの一部項がなくなる。
+                        let f = (v - interp_min) / interp_range;
+                        let fpow3 = f.powf(3.0);
+                        let fpow2 = f.powf(2.0);
 
-                    let l = (2.0 * fpow3) - (3.0 * fpow2) + 1.0;
-                    let m = fpow3 - (2.0 * fpow2) + f;
-                    let n = (-2.0 * fpow3) + (3.0 * fpow2);
+                        let l = (2.0 * fpow3) - (3.0 * fpow2) + 1.0;
+                        let m = fpow3 - (2.0 * fpow2) + f;
+                        let n = (-2.0 * fpow3) + (3.0 * fpow2);
 
-                    let a = v;
-                    let b = self.info.threshold_db;
+                        let a = v;
+                        let b = self.info.threshold_db;
 
-                    (l * a) + m + (n * b)
-                }
-            };
+                        (l * a) + m + (n * b)
+                    }
+                };
 
-            UniformedSample::from_db(aligned_db + self.info.makeup_gain_db, bit_depth, is_plus)
-        }).collect_vec();
+                UniformedSample::from_db(aligned_db + self.info.makeup_gain_db, bit_depth, is_plus)
+            })
+            .collect_vec();
 
         // outputのどこかに保持する。
         self.common

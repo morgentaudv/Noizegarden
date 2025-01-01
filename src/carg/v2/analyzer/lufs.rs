@@ -2,7 +2,7 @@ use crate::carg::v2::filter::iir_compute_sample;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{ProcessItemCreateSettingSystem, TSystemCategory};
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{
     EProcessOutput, ProcessControlItem, ProcessItemCreateSetting,
@@ -10,7 +10,7 @@ use crate::carg::v2::{
 };
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::nz_define_time_tick_for;
 
@@ -138,7 +138,7 @@ impl TProcessItem for AnalyzeLUFSProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        _system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &InitializeSystemAccessor,
     ) -> anyhow::Result<TProcessItemPtr> {
         // これで関数実行は行うようにするけど変数は受け取らないことができる。
         let _is_ok = Self::can_create_item(&setting)?;
@@ -146,7 +146,10 @@ impl TProcessItem for AnalyzeLUFSProcessData {
         if let ENode::AnalyzerLUFS(v) = setting.node {
             let item = Self {
                 setting: setting.setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::AnalyzerLUFS),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::AnalyzerLUFS,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
                 internal: InternalInfo::default(),
             };

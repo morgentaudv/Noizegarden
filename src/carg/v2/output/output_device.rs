@@ -2,15 +2,15 @@ use crate::carg::v2::meta::input::{BufferMonoDynamicItem, BufferStereoDynamicIte
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TProcessCategory};
-use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, ProcessItemCreateSettingSystem, TSystemCategory};
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::carg::v2::{
     ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, SItemSPtr,
     TProcess, TProcessItem, TProcessItemPtr,
 };
-use crate::device::{AudioDeviceProxyWeakPtr, EDrainedChannelBuffers};
+use crate::device::EDrainedChannelBuffers;
 use crate::nz_define_time_tick_for;
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
@@ -27,8 +27,6 @@ struct InternalData {}
 pub struct OutputDeviceProcessData {
     /// 共通アイテム
     common: ProcessControlItem,
-    /// デバイスに接近するためのプロキシ
-    device_proxy: AudioDeviceProxyWeakPtr,
     /// 内部用データ
     #[allow(dead_code)]
     internal: InternalData,
@@ -114,7 +112,7 @@ impl OutputDeviceProcessData {
         // ただしサンプルフォーマットはここで変更しない。
         // 送った先でなんとかやってくれる。
         // いったん[`UniformedSample`]自体はf32だとみなす。
-        let device = self.device_proxy.upgrade();
+        let device = self.common.systems.audio_device.as_ref().unwrap().upgrade();
         if device.is_none() {
             self.common.state = EProcessState::Finished;
             return;
@@ -201,13 +199,15 @@ impl TProcessItem for OutputDeviceProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &InitializeSystemAccessor,
     ) -> anyhow::Result<TProcessItemPtr> {
         match setting.node {
             ENode::OutputDevice(_info) => {
                 let item = Self {
-                    common: ProcessControlItem::new(ENodeSpecifier::OutputDevice),
-                    device_proxy: system_setting.audio_device.unwrap().clone(),
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::OutputDevice,
+                        systems: &system_setting,
+                    }),
                     internal: InternalData {},
                 };
                 Ok(SItemSPtr::new(item))

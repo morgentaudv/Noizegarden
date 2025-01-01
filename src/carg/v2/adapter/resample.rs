@@ -1,18 +1,18 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, ProcessItemCreateSettingSystem, TSystemCategory};
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::node::common::{EProcessState, ProcessControlItem};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItem, ProcessControlItemSetting};
 use crate::carg::v2::{
     EProcessOutput, ProcessItemCreateSetting, ProcessOutputBuffer,
     ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
 };
 use crate::nz_define_time_tick_for;
 use crate::resample::{
-    ProcessSamplingSetting, ResampleHeaderSetting,
-    ResampleSystemProxyWeakPtr,
+    ProcessSamplingSetting, ResampleHeaderSetting
+    ,
 };
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
@@ -34,7 +34,6 @@ pub struct MetaResampleInfo {
 pub struct ResampleProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    resample_proxy: ResampleSystemProxyWeakPtr,
     info: MetaResampleInfo,
     /// 内部用データ
     #[allow(dead_code)]
@@ -148,7 +147,7 @@ impl TProcess for ResampleProcessData {
 
             // CRITICAL SECTION
             {
-                let system = self.resample_proxy.upgrade();
+                let system = self.common.systems.resample_system.as_ref().unwrap().upgrade();
                 assert!(system.is_some());
 
                 let system = system.unwrap();
@@ -203,13 +202,15 @@ impl TProcessItem for ResampleProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &InitializeSystemAccessor,
     ) -> anyhow::Result<TProcessItemPtr> {
         if let ENode::AdapterResample(v) = setting.node {
             let item = Self {
                 setting: setting.setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::AdapterResample),
-                resample_proxy: system_setting.resample_system.unwrap().clone(),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::AdapterResample,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
                 internal: Default::default(),
             };
@@ -225,7 +226,7 @@ impl ResampleProcessData {
     fn initialize(&mut self, setting: &InitializeSetting) {
         self.internal.from_fs = Some(setting.from_fs);
 
-        let system = self.resample_proxy.upgrade();
+        let system = self.common.systems.resample_system.as_ref().unwrap().upgrade();
         assert!(system.is_some());
 
         // あとで特定のIRに接近するために保持する。

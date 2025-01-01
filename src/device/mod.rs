@@ -121,6 +121,7 @@ pub struct AudioDeviceInternal {
     /// 更新情報
     info: AudioDeviceStateInfo,
     /// 初期設定
+    #[allow(dead_code)]
     initial_config: AudioDeviceConfig,
 }
 

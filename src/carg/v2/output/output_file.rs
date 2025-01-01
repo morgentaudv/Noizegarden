@@ -13,8 +13,8 @@ use std::{
 };
 use chrono::Local;
 use itertools::Itertools;
-use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, ProcessItemCreateSettingSystem, TSystemCategory};
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor, TSystemCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::carg::v2::output::EOutputFileFormat;
 use crate::math::window::EWindowFunction;
 use crate::{
@@ -57,19 +57,17 @@ impl TProcessItem for OutputFileProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &InitializeSystemAccessor,
     ) -> anyhow::Result<TProcessItemPtr> {
         // これで関数実行は行うようにするけど変数は受け取らないことができる。
         let _is_ok = Self::can_create_item(&setting)?;
 
-        if system_setting.file_io.is_none() {
-            return Err(anyhow::anyhow!("File IO system is needed."));
-        }
-        let file_io = system_setting.file_io.unwrap().clone();
-
         if let ENode::OutputFile(v) = setting.node {
             let item = Self {
-                common: ProcessControlItem::new(ENodeSpecifier::OutputFile),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::OutputFile,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
             };
 

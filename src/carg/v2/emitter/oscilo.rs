@@ -1,12 +1,12 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::carg::v2::{
-    EProcessOutput, EmitterRange, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting,
-    TProcess, TProcessItemPtr,
+    EProcessOutput, EmitterRange, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer,
+    ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItem, TProcessItemPtr,
 };
 use crate::nz_define_time_tick_for;
 use crate::{
@@ -63,7 +63,7 @@ impl ESineWaveEmitterType {
             ESineWaveEmitterType::Sine(v) => v.range.length,
             ESineWaveEmitterType::Saw(v) => v.range.length,
             ESineWaveEmitterType::Triangle(v) => v.range.length,
-            ESineWaveEmitterType::Square(v) => v.range.length
+            ESineWaveEmitterType::Square(v) => v.range.length,
         }
     }
 
@@ -74,7 +74,7 @@ impl ESineWaveEmitterType {
             ESineWaveEmitterType::Sine(v) => v.sample_rate,
             ESineWaveEmitterType::Saw(v) => v.sample_rate,
             ESineWaveEmitterType::Triangle(v) => v.sample_rate,
-            ESineWaveEmitterType::Square(v) => v.sample_rate
+            ESineWaveEmitterType::Square(v) => v.sample_rate,
         }
     }
 }
@@ -93,43 +93,53 @@ pub struct SineWaveEmitterProcessData {
 const INPUT_IN: &'static str = "in";
 const OUTPUT_OUT: &'static str = "out";
 
-impl SineWaveEmitterProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        match node {
+impl TProcessItem for SineWaveEmitterProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        Ok(match setting.node {
             ENode::EmitterPinkNoise(v) => {
-                let item = SineWaveEmitterProcessData::new_pink(v, setting.clone());
+                let item = SineWaveEmitterProcessData::new_pink(v, setting.setting.clone(), &system_setting);
                 SItemSPtr::new(item)
             }
             ENode::EmitterWhiteNoise(v) => {
-                let item = SineWaveEmitterProcessData::new_white(v, setting.clone());
+                let item = SineWaveEmitterProcessData::new_white(v, setting.setting.clone(), &system_setting);
                 SItemSPtr::new(item)
             }
             ENode::EmitterSineWave(v) => {
-                let item = SineWaveEmitterProcessData::new_sine(v, setting.clone());
+                let item = SineWaveEmitterProcessData::new_sine(v, setting.setting.clone(), &system_setting);
                 SItemSPtr::new(item)
             }
             ENode::EmitterSawtooth(v) => {
-                let item = SineWaveEmitterProcessData::new_saw(v, setting.clone());
+                let item = SineWaveEmitterProcessData::new_saw(v, setting.setting.clone(), &system_setting);
                 SItemSPtr::new(item)
             }
             ENode::EmitterTriangle(v) => {
-                let item = SineWaveEmitterProcessData::new_triangle(v, setting.clone());
+                let item = SineWaveEmitterProcessData::new_triangle(v, setting.setting.clone(), &system_setting);
                 SItemSPtr::new(item)
             }
             ENode::EmitterSquare(v) => {
-                let item = SineWaveEmitterProcessData::new_square(v, setting.clone());
+                let item = SineWaveEmitterProcessData::new_square(v, setting.setting.clone(), &system_setting);
                 SItemSPtr::new(item)
             }
             _ => unreachable!("Unexpected branch."),
-        }
+        })
     }
 }
 
 impl SineWaveEmitterProcessData {
     /// ピンクノイズの生成
-    fn new_pink(info: &MetaSineNoiseInfo, setting: Setting) -> Self {
+    fn new_pink(info: &MetaSineNoiseInfo, setting: Setting, system_setting: &InitializeSystemAccessor) -> Self {
         Self {
-            common: ProcessControlItem::new(ENodeSpecifier::EmitterPinkNoise),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::EmitterPinkNoise,
+                systems: &system_setting,
+            }),
             emitter_type: ESineWaveEmitterType::PinkNoise(info.clone()),
             sample_elapsed_time: 0.0,
             setting,
@@ -138,9 +148,12 @@ impl SineWaveEmitterProcessData {
     }
 
     /// ホワイトノイズの生成
-    fn new_white(info: &MetaSineNoiseInfo, setting: Setting) -> Self {
+    fn new_white(info: &MetaSineNoiseInfo, setting: Setting, system_accessor: &InitializeSystemAccessor) -> Self {
         Self {
-            common: ProcessControlItem::new(ENodeSpecifier::EmitterWhiteNoise),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::EmitterWhiteNoise,
+                systems: &system_accessor,
+            }),
             emitter_type: ESineWaveEmitterType::WhiteNoise(info.clone()),
             sample_elapsed_time: 0.0,
             setting,
@@ -149,9 +162,12 @@ impl SineWaveEmitterProcessData {
     }
 
     /// サイン波形の生成
-    fn new_sine(info: &MetaSineEmitterInfo, setting: Setting) -> Self {
+    fn new_sine(info: &MetaSineEmitterInfo, setting: Setting, system_accessor: &InitializeSystemAccessor) -> Self {
         Self {
-            common: ProcessControlItem::new(ENodeSpecifier::EmitterSineWave),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::EmitterSineWave,
+                systems: &system_accessor,
+            }),
             emitter_type: ESineWaveEmitterType::Sine(info.clone()),
             sample_elapsed_time: 0.0,
             setting,
@@ -160,9 +176,12 @@ impl SineWaveEmitterProcessData {
     }
 
     /// ノコギリ波形の生成
-    fn new_saw(info: &MetaSineEmitterInfo, setting: Setting) -> Self {
+    fn new_saw(info: &MetaSineEmitterInfo, setting: Setting, system_accessor: &InitializeSystemAccessor) -> Self {
         Self {
-            common: ProcessControlItem::new(ENodeSpecifier::EmitterSawtooth),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::EmitterSawtooth,
+                systems: &system_accessor,
+            }),
             emitter_type: ESineWaveEmitterType::Saw(info.clone()),
             sample_elapsed_time: 0.0,
             setting,
@@ -171,9 +190,12 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 三角波形の生成
-    fn new_triangle(info: &MetaSineEmitterInfo, setting: Setting) -> Self {
+    fn new_triangle(info: &MetaSineEmitterInfo, setting: Setting, system_accessor: &InitializeSystemAccessor) -> Self {
         Self {
-            common: ProcessControlItem::new(ENodeSpecifier::EmitterTriangle),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::EmitterTriangle,
+                systems: &system_accessor,
+            }),
             emitter_type: ESineWaveEmitterType::Triangle(info.clone()),
             sample_elapsed_time: 0.0,
             setting,
@@ -182,9 +204,12 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 矩形波の生成
-    fn new_square(info: &MetaSineSquareInfo, setting: Setting) -> Self {
+    fn new_square(info: &MetaSineSquareInfo, setting: Setting, system_accessor: &InitializeSystemAccessor) -> Self {
         Self {
-            common: ProcessControlItem::new(ENodeSpecifier::EmitterSquare),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::EmitterSquare,
+                systems: &system_accessor,
+            }),
             emitter_type: ESineWaveEmitterType::Square(info.clone()),
             setting,
             emitter: None,
@@ -228,24 +253,15 @@ impl SineWaveEmitterProcessData {
         let emitter = match &self.emitter_type {
             ESineWaveEmitterType::PinkNoise(v) => SineUnitSampleEmitter::new_pinknoise(v.intensity),
             ESineWaveEmitterType::WhiteNoise(v) => SineUnitSampleEmitter::new_whitenoise(v.intensity),
-            ESineWaveEmitterType::Sine(v) => SineUnitSampleEmitter::new_sine(
-                v.frequency.to_frequency(),
-                0.0,
-                v.intensity,
-                v.sample_rate,
-            ),
-            ESineWaveEmitterType::Saw(v) => SineUnitSampleEmitter::new_sawtooth(
-                v.frequency.to_frequency(),
-                0.0,
-                v.intensity,
-                v.sample_rate,
-            ),
-            ESineWaveEmitterType::Triangle(v) => SineUnitSampleEmitter::new_triangle(
-                v.frequency.to_frequency(),
-                0.0,
-                v.intensity,
-                v.sample_rate,
-            ),
+            ESineWaveEmitterType::Sine(v) => {
+                SineUnitSampleEmitter::new_sine(v.frequency.to_frequency(), 0.0, v.intensity, v.sample_rate)
+            }
+            ESineWaveEmitterType::Saw(v) => {
+                SineUnitSampleEmitter::new_sawtooth(v.frequency.to_frequency(), 0.0, v.intensity, v.sample_rate)
+            }
+            ESineWaveEmitterType::Triangle(v) => {
+                SineUnitSampleEmitter::new_triangle(v.frequency.to_frequency(), 0.0, v.intensity, v.sample_rate)
+            }
             ESineWaveEmitterType::Square(v) => SineUnitSampleEmitter::new_square(
                 v.frequency.to_frequency(),
                 v.duty_rate,
@@ -258,7 +274,7 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, _input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.emitter.is_some());
 
         // 設定のサンプル数ずつ吐き出す。

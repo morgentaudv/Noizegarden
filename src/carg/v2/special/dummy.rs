@@ -1,9 +1,12 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
-use crate::carg::v2::meta::node::ENode;
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{ProcessControlItem, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::ProcessControlItemSetting;
+use crate::carg::v2::{
+    ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem,
+    TProcessItemPtr,
+};
 
 /// ダミーノード
 #[derive(Debug)]
@@ -39,12 +42,22 @@ impl TPinCategory for DummyProcessData {
     }
 }
 
-impl DummyProcessData {
-    pub fn create_from(_node: &ENode, _setting: &Setting) -> TProcessItemPtr {
+impl TProcessItem for DummyProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(
+        _setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
         let item = Self {
-            common: ProcessControlItem::new(ENodeSpecifier::InternalDummy),
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::InternalDummy,
+                systems: &system_setting,
+            }),
         };
-        SItemSPtr::new(item)
+        Ok(SItemSPtr::new(item))
     }
 }
 

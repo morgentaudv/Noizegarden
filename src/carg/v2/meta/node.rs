@@ -14,10 +14,9 @@ use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo}
 use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
 use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
-use crate::carg::v2::filter::EFilterMode;
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
-use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, ProcessItemCreateSettingSystem};
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
 use crate::carg::v2::mix::stereo::MixStereoProcessData;
 use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
@@ -166,52 +165,85 @@ pub enum ENode {
 
 impl ENode {
     /// ノードから処理アイテムを生成する。
-    pub fn create_from(&self, setting: &Setting, system_setting: &ProcessItemCreateSettingSystem) -> TProcessItemPtr {
+    pub fn create_from(&self, setting: &Setting, system_setting: &InitializeSystemAccessor) -> TProcessItemPtr {
+        let setting = ProcessItemCreateSetting { node: &self, setting };
+
         match self {
             ENode::EmitterPinkNoise { .. }
             | ENode::EmitterWhiteNoise { .. }
             | ENode::EmitterSineWave { .. }
             | ENode::EmitterTriangle { .. }
             | ENode::EmitterSquare { .. }
-            | ENode::EmitterSawtooth { .. } => SineWaveEmitterProcessData::create_from(self, setting),
-            ENode::AdapterEnvelopeAd { .. } => AdapterEnvelopeAdProcessData::create_from(self, setting),
-            ENode::AdapterEnvelopeAdsr { .. } => AdapterEnvelopeAdsrProcessData::create_from(self, setting),
-            ENode::AdapterCompressor(_) => AdapterCompressorProcessData::create_from(self, setting),
-            ENode::AdapterLimiter(_) => AdapterLimiterProcessData::create_from(self, setting),
-            ENode::AdapterWaveSum => AdapterWaveSumProcessData::create_from(self, setting),
-            ENode::AdapterResample(_) => {
-                let setting = ProcessItemCreateSetting { node: &self, setting };
-                ResampleProcessData::create_item(&setting, &system_setting).expect("Failed to create resample process")
+            | ENode::EmitterSawtooth { .. } => {
+                SineWaveEmitterProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
-            ENode::OutputLog { .. } => OutputLogProcessData::create_from(self, setting),
-            ENode::AnalyzerDFT { .. } => AnalyzerDFTProcessData::create_from(self, setting),
-            ENode::AnalyzerFFT { .. } => AnalyzerFFTProcessData::create_from(self, setting),
-            ENode::InternalStartPin => StartProcessData::create_from(self, setting),
-            ENode::EmitterIDFT { .. } => IDFTEmitterProcessData::create_from(self, setting),
-            ENode::EmitterIFFT { .. } => IFFTEmitterProcessData::create_from(self, setting),
-            ENode::EmitterWavMono(_) => EmitterWavMonoProcessData::create_from(self, setting),
-            ENode::InternalDummy => DummyProcessData::create_from(self, setting),
-            ENode::MixStereo { .. } => MixStereoProcessData::create_from(self, setting),
-            ENode::FilterFIR(_) => FIRProcessData::create_from(self, setting),
-            ENode::FilterIIRLPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::LowPass),
-            ENode::FilterIIRHPF(_) => IIRProcessData::create_from(self, setting, EFilterMode::HighPass),
-            ENode::FilterIIRBandPass(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandPass),
-            ENode::FilterIIRBandStop(_) => IIRProcessData::create_from(self, setting, EFilterMode::BandStop),
-            ENode::FilterIRConvolution(_) => IRConvolutionProcessData::create_from(self, setting),
+            ENode::AdapterEnvelopeAd { .. } => {
+                AdapterEnvelopeAdProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::AdapterEnvelopeAdsr { .. } => {
+                AdapterEnvelopeAdsrProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::AdapterCompressor(_) => {
+                AdapterCompressorProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::AdapterLimiter(_) => {
+                AdapterLimiterProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::AdapterWaveSum => {
+                AdapterWaveSumProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::AdapterResample(_) => {
+                ResampleProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::AnalyzerDFT { .. } => {
+                AnalyzerDFTProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::AnalyzerFFT { .. } => {
+                AnalyzerFFTProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::InternalStartPin => {
+                StartProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::EmitterIDFT { .. } => {
+                IDFTEmitterProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::EmitterIFFT { .. } => {
+                IFFTEmitterProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::EmitterWavMono(_) => {
+                EmitterWavMonoProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::InternalDummy => {
+                DummyProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::MixStereo { .. } => {
+                MixStereoProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::FilterFIR(_) => {
+                FIRProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::FilterIIRHPF(_) |
+            ENode::FilterIIRBandPass(_) |
+            ENode::FilterIIRBandStop(_) |
+            ENode::FilterIIRLPF(_) => {
+                IIRProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::FilterIRConvolution(_) => {
+                IRConvolutionProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::OutputLog { .. } => {
+                OutputLogProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
             ENode::OutputFile(_) => {
-                let setting = ProcessItemCreateSetting { node: &self, setting };
                 OutputFileProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
             ENode::AnalyzerLUFS(_) => {
-                let setting = ProcessItemCreateSetting { node: &self, setting };
                 AnalyzeLUFSProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
             ENode::OutputDevice(_) => {
-                let setting = ProcessItemCreateSetting { node: &self, setting };
                 OutputDeviceProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
             ENode::EmitterSineSweep(_) => {
-                let setting = ProcessItemCreateSetting { node: &self, setting };
                 SineSweepEmitterProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
         }

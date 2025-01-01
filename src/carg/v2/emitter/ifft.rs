@@ -2,9 +2,9 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItemPtr};
-use crate::carg::v2::meta::system::TSystemCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItem, TProcessItemPtr};
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::wave::analyze::method::ETransformMethod;
 use crate::wave::analyze::transformer::{EExportSampleCountMode, FrequencyTransformer};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
@@ -49,22 +49,32 @@ impl TPinCategory for IFFTEmitterProcessData {
     }
 }
 
-impl IFFTEmitterProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        match node {
+impl TProcessItem for IFFTEmitterProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        match setting.node {
             ENode::EmitterIFFT { sample_length, overlap } => {
                 let item = IFFTEmitterProcessData {
-                    setting: setting.clone(),
-                    common: ProcessControlItem::new(ENodeSpecifier::EmitterIFFT),
+                    setting: setting.setting.clone(),
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::EmitterIFFT,
+                        systems: &system_setting,
+                    }),
                     sample_length: *sample_length,
                     overlap: *overlap,
                 };
-                SItemSPtr::new(item)
+
+                Ok(SItemSPtr::new(item))
             }
             _ => unreachable!("Unexpected branch."),
         }
     }
+}
 
+impl IFFTEmitterProcessData {
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // Inputがなきゃ何もできぬ。
         // これなに…

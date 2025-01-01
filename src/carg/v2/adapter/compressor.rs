@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
-use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItemPtr};
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::wave::EBitDepth;
 use crate::wave::sample::UniformedSample;
 
@@ -102,21 +102,30 @@ impl TProcess for AdapterCompressorProcessData {
     }
 }
 
-impl AdapterCompressorProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::AdapterCompressor(v) = node {
+impl TProcessItem for AdapterCompressorProcessData {
+    fn can_create_item(setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        if let ENode::AdapterCompressor(v) = setting.node {
             let item= Self {
-                setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::AdapterCompressor),
+                setting: setting.setting.clone(),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::AdapterCompressor,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
             };
 
-            return SItemSPtr::new(item);
+            return Ok(SItemSPtr::new(item));
         }
 
         unreachable!("Unexpected branch");
     }
+}
 
+impl AdapterCompressorProcessData {
     pub fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // Inputがなきゃ何もできぬ。
         // これなに…

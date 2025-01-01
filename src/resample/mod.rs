@@ -474,7 +474,7 @@ fn process_filter_up(setting: &ProcessFilterSetting) -> f64 {
     // `setting::irs`、`setting:irs_delta`はNPC分を何個も持っているので、
     // 元コードではポインターを操作したけど、ここではirsとdeltaに接近するためのインデックスを操作する。
     let phase_raw_i = setting.phase * NPC as f64;
-    let mut phase_i = phase_raw_i.floor() as usize;
+    let phase_i = phase_raw_i.floor() as usize;
 
     let mut irs_i = phase_i;
     let irs_end_i = setting.wing_num;

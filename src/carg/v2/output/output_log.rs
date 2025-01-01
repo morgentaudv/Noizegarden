@@ -1,12 +1,14 @@
-use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer, TextDynamicItem, BufferMonoDynamicItem};
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{
-    ENode, EParsedOutputLogMode, ProcessControlItem, ProcessProcessorInput, SItemSPtr,
-    Setting, TProcess, TProcessItemPtr,
+use crate::carg::v2::meta::input::{
+    BufferMonoDynamicItem, EInputContainerCategoryFlag, EProcessInputContainer, TextDynamicItem,
 };
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::system::TSystemCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{
+    ENode, EParsedOutputLogMode, ProcessControlItem, ProcessItemCreateSetting, ProcessProcessorInput, SItemSPtr
+    , TProcess, TProcessItem, TProcessItemPtr,
+};
 
 #[derive(Debug)]
 pub struct OutputLogProcessData {
@@ -14,31 +16,43 @@ pub struct OutputLogProcessData {
     mode: EParsedOutputLogMode,
 }
 
-impl OutputLogProcessData {
-    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
-        match node {
-            ENode::OutputLog { mode } => {
-                let item = Self::new(mode.clone());
-                SItemSPtr::new(item)
-            }
-            _ => unreachable!("Unexpected branch."),
-        }
+impl TProcessItem for OutputLogProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn new(mode: EParsedOutputLogMode) -> Self {
-        Self {
-            common: ProcessControlItem::new(ENodeSpecifier::OutputLog),
-            mode,
-        }
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        Ok(match setting.node {
+            ENode::OutputLog { mode } => {
+                let item = Self {
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::OutputLog,
+                        systems: &system_setting,
+                    }),
+                    mode: *mode,
+                };
+
+                SItemSPtr::new(item)
+            }
+
+            _ => unreachable!("Unexpected branch."),
+        })
     }
 }
 
 impl TPinCategory for OutputLogProcessData {
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの入力側のピンの名前を返す。
-    fn get_input_pin_names() -> Vec<&'static str> { vec!["in"] }
+    fn get_input_pin_names() -> Vec<&'static str> {
+        vec!["in"]
+    }
 
     /// 処理ノード（[`ProcessControlItem`]）に必要な、ノードの出力側のピンの名前を返す。
-    fn get_output_pin_names() -> Vec<&'static str> { vec![] }
+    fn get_output_pin_names() -> Vec<&'static str> {
+        vec![]
+    }
 
     /// 関係ノードに書いているピンのカテゴリ（複数可）を返す。
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {

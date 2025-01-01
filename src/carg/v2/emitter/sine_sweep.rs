@@ -1,16 +1,19 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
+use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{ProcessItemCreateSettingSystem, TSystemCategory};
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::node::common::{EProcessState, ProcessControlItem};
-use crate::carg::v2::{EProcessOutput, EmitterRange, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItem, ProcessControlItemSetting};
+use crate::carg::v2::{
+    EProcessOutput, EmitterRange, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
+    TProcess, TProcessItem, TProcessItemPtr,
+};
 use crate::nz_define_time_tick_for;
+use crate::wave::sample::UniformedSample;
 use crate::wave::sine::emitter::SineUnitSampleEmitter;
 use serde::{Deserialize, Serialize};
 use soundprog::math::frequency::EFrequency;
-use crate::carg::v2::meta::node::ENode;
-use crate::wave::sample::UniformedSample;
 
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,7 +76,7 @@ impl TProcessItem for SineSweepEmitterProcessData {
 
     fn create_item(
         setting: &ProcessItemCreateSetting,
-        _system_setting: &ProcessItemCreateSettingSystem,
+        system_setting: &InitializeSystemAccessor,
     ) -> anyhow::Result<TProcessItemPtr> {
         // これで関数実行は行うようにするけど変数は受け取らないことができる。
         let _is_ok = Self::can_create_item(&setting)?;
@@ -81,7 +84,10 @@ impl TProcessItem for SineSweepEmitterProcessData {
         if let ENode::EmitterSineSweep(v) = setting.node {
             let item = Self {
                 setting: setting.setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::EmitterSineSweep),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::EmitterSineSweep,
+                    systems: system_setting,
+                }),
                 info: v.clone(),
                 sample_elapsed_time: 0.0,
                 emitter: None,
@@ -160,7 +166,7 @@ impl SineSweepEmitterProcessData {
             self.info.to_frequency.to_frequency(),
             self.info.range.length,
             self.info.intensity,
-            self.info.sample_rate
+            self.info.sample_rate,
         );
         self.emitter = Some(emitter);
     }

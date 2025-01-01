@@ -1,16 +1,12 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
-use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{
-    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput,
-    SItemSPtr, Setting, TProcess, TProcessItemPtr,
-};
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItem, TProcessItemPtr};
 use crate::wave::sample::UniformedSample;
 use itertools::Itertools;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug)]
@@ -48,15 +44,25 @@ impl TPinCategory for AdapterWaveSumProcessData {
     }
 }
 
-impl AdapterWaveSumProcessData {
-    pub fn create_from(_node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        let item = Self {
-            common: ProcessControlItem::new(ENodeSpecifier::AdapterWaveSum),
-            setting: setting.clone(),
-        };
-        SItemSPtr::new(item)
+impl TProcessItem for AdapterWaveSumProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
     }
 
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        let item = Self {
+            common: ProcessControlItem::new(ProcessControlItemSetting {
+                specifier: ENodeSpecifier::AdapterWaveSum,
+                systems: &system_setting,
+            }),
+            setting: setting.setting.clone(),
+        };
+
+        Ok(SItemSPtr::new(item))
+    }
+}
+
+impl AdapterWaveSumProcessData {
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         let output_pins = Self::get_input_pin_names()
             .into_iter()

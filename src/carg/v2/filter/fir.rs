@@ -3,15 +3,12 @@ use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputCon
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{
-    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
-    TProcessItemPtr,
-};
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::wave::filter::compute_fir_filters_count;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -44,20 +41,30 @@ pub struct FIRProcessData {
 const INPUT_IN: &'static str = "in";
 const OUTPUT_OUT: &'static str = "out";
 
-impl FIRProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::FilterFIR(v) = node {
+impl TProcessItem for FIRProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        if let ENode::FilterFIR(v) = setting.node {
             let item = Self {
-                setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::FilterFIR),
+                setting: setting.setting.clone(),
+                common: ProcessControlItem::new(ProcessControlItemSetting {
+                    specifier: ENodeSpecifier::FilterFIR,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
                 internal: InternalInfo::default(),
             };
-            return SItemSPtr::new(item);
+
+            return Ok(SItemSPtr::new(item));
         }
         unreachable!("Unexpected branch");
     }
+}
 
+impl FIRProcessData {
     fn update_state(&mut self, in_input: &ProcessProcessorInput) {
         // まずFIRでは標本周波数が1として前提して計算を行うので、edgeとdeltaも変換する。
         let sample_rate = self.common.try_get_input_sample_rate(INPUT_IN);

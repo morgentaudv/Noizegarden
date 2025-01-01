@@ -1,14 +1,11 @@
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::node::common::EProcessState;
-use crate::carg::v2::{
-    EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess,
-    TProcessItemPtr,
-};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr, TProcess, TProcessItem, TProcessItemPtr};
 use crate::nz_define_time_tick_for;
 use crate::wave::container::WaveContainer;
 use crate::wave::sample::UniformedSample;
@@ -118,20 +115,30 @@ impl TProcess for EmitterWavMonoProcessData {
     }
 }
 
-impl EmitterWavMonoProcessData {
-    pub fn create_from(node: &ENode, setting: &Setting) -> TProcessItemPtr {
-        if let ENode::EmitterWavMono(v) = node {
+impl TProcessItem for EmitterWavMonoProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
+        if let ENode::EmitterWavMono(v) = setting.node {
             let item = Self {
-                setting: setting.clone(),
-                common: ProcessControlItem::new(ENodeSpecifier::EmitterWavMono),
+                setting: setting.setting.clone(),
+                common: ProcessControlItem::new(ProcessControlItemSetting{
+                    specifier: ENodeSpecifier::EmitterWavMono,
+                    systems: &system_setting,
+                }),
                 info: v.clone(),
                 internal: InternalInfo::default(),
             };
-            return SItemSPtr::new(item);
+            return Ok(SItemSPtr::new(item));
         }
+
         unreachable!("Unexpected branch");
     }
+}
 
+impl EmitterWavMonoProcessData {
     fn initialize(&mut self) {
         let container = {
             let file = fs::File::open(&self.info.path).expect(&format!("Could not find {}.", &self.info.path));

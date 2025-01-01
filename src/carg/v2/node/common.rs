@@ -6,6 +6,8 @@ use crate::carg::v2::meta::process::EProcessCategoryFlag;
 use crate::carg::v2::meta::system::InitializeSystemAccessor;
 use crate::carg::v2::node::pin::{NodePinItem, NodePinItemList, NodePinItemWPtr};
 
+/// すべてのノードが持つ共用アイテム。
+/// いろいろな制御情報やシステムなどのアクセス変数を持つ。
 #[derive(Debug, Clone)]
 pub struct ProcessControlItem {
     /// アイテムの状態を表す。
@@ -24,16 +26,23 @@ pub struct ProcessControlItem {
     pub systems: InitializeSystemAccessor,
 }
 
+/// [`ProcessControlItem`]を生成するための設定構造体
+pub struct ProcessControlItemSetting<'a> {
+    pub specifier: ENodeSpecifier,
+    pub systems: &'a InitializeSystemAccessor,
+}
+
 impl ProcessControlItem {
-    pub fn new(specifier: ENodeSpecifier, systems: &InitializeSystemAccessor) -> Self {
+    /// [`ProcessControlItem`]を生成する。
+    pub fn new(setting: ProcessControlItemSetting) -> Self {
         Self {
             state: EProcessState::Stopped,
             state_rtn: [0; 4],
-            specifier,
+            specifier: setting.specifier,
             elapsed_time: 0.0,
-            input_pins: specifier.create_input_pins(),
-            output_pins: specifier.create_output_pins(),
-            systems: systems.clone(),
+            input_pins: setting.specifier.create_input_pins(),
+            output_pins: setting.specifier.create_output_pins(),
+            systems: setting.systems.clone(),
         }
     }
 

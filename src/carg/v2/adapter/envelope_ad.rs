@@ -3,14 +3,14 @@ use num_traits::Pow;
 
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
-use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
-use crate::carg::v2::{
-    ENode, EProcessOutput, ProcessControlItem, ProcessOutputBuffer, ProcessProcessorInput, SItemSPtr,
-    Setting, TProcess, TProcessItemPtr,
-};
-use crate::carg::v2::meta::system::TSystemCategory;
+use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
-use crate::carg::v2::node::common::EProcessState;
+use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::{
+    ENode, EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBuffer, ProcessProcessorInput,
+    SItemSPtr, TProcess, TProcessItem, TProcessItemPtr,
+};
 
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug, Clone)]
@@ -109,31 +109,37 @@ impl TPinCategory for AdapterEnvelopeAdProcessData {
     }
 }
 
-impl AdapterEnvelopeAdProcessData {
-    pub fn create_from(node: &ENode, _setting: &Setting) -> TProcessItemPtr {
-        match node {
+impl TProcessItem for AdapterEnvelopeAdProcessData {
+    fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn create_item(
+        setting: &ProcessItemCreateSetting,
+        system_setting: &InitializeSystemAccessor,
+    ) -> anyhow::Result<TProcessItemPtr> {
+        match setting.node {
             ENode::AdapterEnvelopeAd {
                 attack_time,
                 decay_time,
                 attack_curve,
                 decay_curve,
             } => {
-                let item = Self::new(*attack_time, *decay_time, *attack_curve, *decay_curve);
-                SItemSPtr::new(item)
+                assert!(*attack_time >= 0.0);
+                assert!(*decay_time >= 0.0);
+                assert!(*attack_curve > 0.0);
+                assert!(*decay_curve > 0.0);
+
+                let item =         Self {
+                    common: ProcessControlItem::new(ProcessControlItemSetting {
+                        specifier: ENodeSpecifier::AdapterEnvelopeAd,
+                        systems: &system_setting,
+                    }),
+                    emitter: EnvelopeAdValueEmitter::new(*attack_time, *decay_time, *attack_curve, *decay_curve),
+                };
+                Ok(SItemSPtr::new(item))
             }
             _ => unreachable!("Unexpected branch."),
-        }
-    }
-
-    fn new(attack_time: f64, decay_time: f64, attack_curve: f64, decay_curve: f64) -> Self {
-        assert!(attack_time >= 0.0);
-        assert!(decay_time >= 0.0);
-        assert!(attack_curve > 0.0);
-        assert!(decay_curve > 0.0);
-
-        Self {
-            common: ProcessControlItem::new(ENodeSpecifier::AdapterEnvelopeAd),
-            emitter: EnvelopeAdValueEmitter::new(attack_time, decay_time, attack_curve, decay_curve),
         }
     }
 }
