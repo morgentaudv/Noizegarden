@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
 use crate::file::{EFileAccessSetting, FileController, FileControllerPtr, FileControllerWeakPtr};
-use crate::file::internal::FileWriter;
+use crate::file::writer::FileWriter;
 
 /// システム外部からファイルの操作を行うためのハンドル。
 /// RAIIでドロップしたらファイル制御の破棄通知がいく。

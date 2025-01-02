@@ -1,4 +1,3 @@
-use std::sync::MutexGuard;
 use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr, AudioDeviceSetting};
 use crate::file::{FileIO, FileIOProxy, FileIOProxyWeakPtr, FileIOSetting};
 use crate::resample::{ResampleSystem, ResampleSystemConfig, ResampleSystemProxyWeakPtr};
@@ -84,50 +83,60 @@ impl InitializeSystemAccessor {
 pub fn initialize_systems(flags: ESystemCategoryFlag, system_setting: &SystemSetting) -> InitializeSystemAccessor {
     let mut result = InitializeSystemAccessor::default();
 
-    if flags != system_category::NONE {
-        // FileIOSystemの初期化
-        if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
-            let setting = system_setting.file_io.as_ref().expect("FileIOSetting not set.");
-            result.file_io = Some(FileIO::initialize(setting.clone()));
-        }
+    // FileIOSystemの初期化
+    if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
+        let setting = system_setting.file_io.as_ref().expect("FileIOSetting not set.");
+        result.file_io = Some(FileIO::initialize(setting.clone()));
+    }
 
-        // AudioDeviceの初期化
-        if !(flags & system_category::AUDIO_DEVICE).is_zero() {
-            let setting = system_setting.audio_device.as_ref().expect("AudioDeviceSetting not set");
-            assert!(setting.channels > 0);
+    // AudioDeviceの初期化
+    if !(flags & system_category::AUDIO_DEVICE).is_zero() {
+        let setting = system_setting.audio_device.as_ref().expect("AudioDeviceSetting not set");
+        assert!(setting.channels > 0);
 
-            let mut config = AudioDeviceConfig::new();
-            config.set_channels(setting.channels).set_sample_rate(setting.sample_rate);
-            result.audio_device = Some(AudioDevice::initialize(config));
-        }
+        let mut config = AudioDeviceConfig::new();
+        config.set_channels(setting.channels).set_sample_rate(setting.sample_rate);
+        result.audio_device = Some(AudioDevice::initialize(config));
+    }
 
-        // ResampleSystemの初期化
-        if (!flags & system_category::RESAMPLE_SYSTEM).is_zero() {
-            let config = ResampleSystemConfig::new();
-            result.resample_system = Some(ResampleSystem::initialize(config));
-        }
+    // ResampleSystemの初期化
+    if (!flags & system_category::RESAMPLE_SYSTEM).is_zero() {
+        let config = ResampleSystemConfig::new();
+        result.resample_system = Some(ResampleSystem::initialize(config));
     }
 
     result
 }
 
+/// グラフ処理前のシステムの前処理
+pub fn preprocess_systems(flags: ESystemCategoryFlag, prev_to_now_time: f64) {
+    if !(flags & system_category::AUDIO_DEVICE).is_zero() {
+        AudioDevice::pre_process(prev_to_now_time);
+    }
+}
+
+/// グラフ処理後のシステムの後処理
+pub fn postprocess_systems(flags: ESystemCategoryFlag, prev_to_now_time: f64) {
+    if !(flags & system_category::AUDIO_DEVICE).is_zero() {
+        AudioDevice::post_process(prev_to_now_time);
+    }
+}
+
 /// 依存システムの解放
 pub fn cleanup_systems(flags: ESystemCategoryFlag) {
-    if flags != system_category::NONE {
-        // AudioDeviceの解放
-        if !(flags & system_category::AUDIO_DEVICE).is_zero() {
-            AudioDevice::cleanup();
-        }
+    // AudioDeviceの解放
+    if !(flags & system_category::AUDIO_DEVICE).is_zero() {
+        AudioDevice::cleanup();
+    }
 
-        // ResampleSystemの解放
-        if (!flags & system_category::RESAMPLE_SYSTEM).is_zero() {
-            ResampleSystem::cleanup();
-        }
+    // ResampleSystemの解放
+    if (!flags & system_category::RESAMPLE_SYSTEM).is_zero() {
+        ResampleSystem::cleanup();
+    }
 
-        // FileIOSystemの解放
-        if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
-            FileIO::cleanup();
-        }
+    // FileIOSystemの解放
+    if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
+        FileIO::cleanup();
     }
 }
 

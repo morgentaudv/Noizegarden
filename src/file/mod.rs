@@ -1,5 +1,5 @@
 mod handle;
-mod internal;
+mod writer;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

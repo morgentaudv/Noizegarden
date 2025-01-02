@@ -2,7 +2,7 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{cleanup_systems, initialize_systems, system_category, InitializeSystemAccessor, SystemSetting};
+use crate::carg::v2::meta::system::{cleanup_systems, initialize_systems, postprocess_systems, preprocess_systems, system_category, InitializeSystemAccessor, SystemSetting};
 use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
@@ -306,9 +306,7 @@ pub fn process_v2(
         elapsed_time += tick_timer.tick().as_secs_f64();
 
         // 24-12-12 依存システムの処理。
-        if !(system_flags & system_category::AUDIO_DEVICE).is_zero() {
-            AudioDevice::pre_process(prev_to_now_time);
-        }
+        preprocess_systems(system_flags, prev_to_now_time);
 
         // 共通で使う処理時の入力。
         let mut input = ProcessCommonInput {
@@ -352,9 +350,7 @@ pub fn process_v2(
         }
 
         // 24-12-12 依存システムの処理。
-        if !(system_flags & system_category::AUDIO_DEVICE).is_zero() {
-            AudioDevice::post_process(prev_to_now_time);
-        }
+        postprocess_systems(system_flags, prev_to_now_time);
 
         if end_node_processed && is_all_finished {
             break;
