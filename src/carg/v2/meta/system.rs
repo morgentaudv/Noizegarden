@@ -1,5 +1,6 @@
+use std::sync::MutexGuard;
 use crate::device::{AudioDevice, AudioDeviceConfig, AudioDeviceProxyWeakPtr, AudioDeviceSetting};
-use crate::file::{FileIO, FileIOProxyWeakPtr, FileIOSetting};
+use crate::file::{FileIO, FileIOProxy, FileIOProxyWeakPtr, FileIOSetting};
 use crate::resample::{ResampleSystem, ResampleSystemConfig, ResampleSystemProxyWeakPtr};
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,19 @@ pub struct InitializeSystemAccessor {
     pub resample_system: Option<ResampleSystemProxyWeakPtr>,
     /// [`FileIO`]システムに接近できるアクセサー
     pub file_io: Option<FileIOProxyWeakPtr>,
+}
+
+impl InitializeSystemAccessor {
+    /// [`FileIO`]に接近する。
+    pub fn access_file_io_fn<F>(&self, f: F) where F: FnOnce(/*system: */ &mut FileIOProxy) {
+        // うわ。。あんまりだ。
+        if let Some(v) = &self.file_io {
+            let v = v.upgrade().expect("Must be successful");
+            let mut v = v.lock();
+            let mut v = v.as_deref_mut().unwrap();
+            f(&mut v);
+        }
+    }
 }
 
 /// `flags`から関連システムを初期化する。

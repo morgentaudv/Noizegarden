@@ -11,6 +11,7 @@ use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 /// ユニット単位でADEnvelopeを生成するための時間に影響しないエミッタ。
 #[derive(Debug)]
 pub struct AdapterWaveSumProcessData {
+    #[allow(dead_code)]
     setting: Setting,
     common: ProcessControlItem,
 }

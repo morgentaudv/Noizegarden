@@ -56,7 +56,7 @@
                 "type": "wav_lpcm16",
                 "sample_rate": 96000
             },
-            "file_name": "resample_sweep_960khz_to_441khz",
+            "file_name": "resample_sweep_24khz_to_96khz",
             "add_date_time": true
         }
     },

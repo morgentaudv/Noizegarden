@@ -11,6 +11,7 @@ use std::{
     fs,
     io::{self, Write},
 };
+use std::cell::UnsafeCell;
 use chrono::Local;
 use itertools::Itertools;
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor, TSystemCategory};
@@ -24,6 +25,7 @@ use crate::{
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
+use crate::file::EFileAccessSetting;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetaOutputFileInfo {
@@ -164,13 +166,17 @@ impl OutputFileProcessData {
         };
 
         // 書き込み。
+        let this_pointer = UnsafeCell::new(self as *mut Self);
+        self.common.systems.access_file_io_fn(move |system| {
+            // これ絶対よくない。
+            let this = unsafe { &mut **this_pointer.get() };
 
-        {
-            let dest_file = fs::File::create(&self.get_applied_file_name()).expect("Could not create 500hz.wav.");
-            let mut writer = io::BufWriter::new(dest_file);
+            // 書き込み。
+            let file_setting = EFileAccessSetting::Write { path: this.get_applied_file_name() };
+            let file_handle = system.create_handle(file_setting);
+            let mut writer = file_handle.try_write().unwrap();
             container.write(&mut writer);
-            writer.flush().expect("Failed to flush writer.")
-        }
+        });
     }
 
     fn process_stereo(&mut self, v: &BufferStereoDynamicItem) {
@@ -221,12 +227,18 @@ impl OutputFileProcessData {
         };
 
         // 書き込み。
-        {
-            let dest_file = fs::File::create(&self.get_applied_file_name()).expect("Could not create 500hz.wav.");
-            let mut writer = io::BufWriter::new(dest_file);
+
+        let this_pointer = UnsafeCell::new(self as *mut Self);
+        self.common.systems.access_file_io_fn(move |system| {
+            // これ絶対よくない。
+            let this = unsafe { &mut **this_pointer.get() };
+
+            // 書き込み。
+            let file_setting = EFileAccessSetting::Write { path: this.get_applied_file_name() };
+            let file_handle = system.create_handle(file_setting);
+            let mut writer = file_handle.try_write().unwrap();
             container.write(&mut writer);
-            writer.flush().expect("Failed to flush writer.")
-        }
+        });
     }
 
     fn get_applied_file_name(&self) -> String {
