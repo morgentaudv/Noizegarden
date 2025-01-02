@@ -1,14 +1,16 @@
 mod handle;
 mod writer;
+mod internal;
+mod reader;
 
+use crate::device::ESystemProcessResult;
+use crate::file::handle::FileHandle;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::{Arc, Mutex, OnceLock, Weak};
-use std::{fs, io};
 use std::io::Write;
-use std::marker::PhantomData;
-use crate::file::handle::FileHandle;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::fs;
+use crate::file::internal::EInternalData;
 
 /// 24-12-31
 /// ファイルIO制御のシステム
@@ -76,6 +78,32 @@ impl FileIO {
         }
     }
 
+    /// Tick関数。
+    pub fn post_process(_frame_time: f64) -> ESystemProcessResult {
+        assert!(SYSTEM.get().is_some());
+
+        let instance = SYSTEM.get().unwrap();
+        let mut instance = instance.lock().unwrap();
+        debug_assert!(instance.v.is_some());
+
+        // 25-01-02 外部からハンドルを持たないものは消す。
+        let mut instance = instance.v.as_mut().unwrap();
+        let mut removal_keys = vec![];
+        for (key, value) in &instance.file_map {
+            let value = value.lock().unwrap();
+            if !value.can_remove() {
+                continue;
+            }
+
+            removal_keys.push(key.clone());
+        }
+        for key in removal_keys {
+            instance.file_map.remove(&key);
+        }
+
+        ESystemProcessResult::Nothing
+    }
+
     /// システムを解放する。
     /// すべての関連処理が終わった後に解放すべき。
     pub fn cleanup() {
@@ -125,6 +153,10 @@ pub enum EFileAccessSetting {
     /// テキストで書き込み専用
     Write {
         path: String,
+    },
+    Read {
+        /// 読み込むファイルのパスを指定する。
+        path: String,
     }
 }
 
@@ -148,13 +180,15 @@ struct FileController {
     /// ファイルの制御状態
     state: FileControllerState,
     /// 読み込み・書き込みのファイル先
-    file: Option<fs::File>,
+    internal: Option<EInternalData>,
 }
 
 /// ファイルの読み込み・書き込み状態
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum FileControllerState {
+    /// 柄だけあって、何も処理していない状態。
     Idle,
+    /// 内部処理が走って、コントロールアイテムが何かをもっている状態
     Flying,
 }
 
@@ -181,7 +215,7 @@ impl FileController {
             handle: None,
             handle_count: 0,
             state: FileControllerState::Idle,
-            file: None,
+            internal: None,
         };
         let result_item = Arc::new(Mutex::new(item));
 
@@ -196,7 +230,18 @@ impl FileController {
             match &item.setting {
                 EFileAccessSetting::Write { path } => {
                     let file = fs::File::create(path).expect("Could not create a file.");
-                    item.file = Some(file);
+                    item.internal = Some(EInternalData::Write {
+                        file
+                    });
+
+                    item.state = FileControllerState::Flying;
+                }
+                EFileAccessSetting::Read { path } => {
+                    let file = fs::File::open(&path).expect(&format!("Could not find {}.", &path));
+                    item.internal = Some(EInternalData::Read {
+                        file
+                    });
+
                     item.state = FileControllerState::Flying;
                 }
             }
@@ -204,6 +249,15 @@ impl FileController {
 
         // 返す。
         result_item
+    }
+
+    /// このコントロールアイテムがシステムから削除できる状態になっているか？
+    fn can_remove(&self) -> bool {
+        if self.state != FileControllerState::Flying {
+            return false;
+        }
+
+        self.handle_count <= 0
     }
 }
 

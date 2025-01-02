@@ -1,8 +1,7 @@
-use std::io::BufWriter;
-use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use crate::file::{EFileAccessSetting, FileController, FileControllerPtr, FileControllerWeakPtr};
+use crate::file::reader::{FileReader, FileReaderSetting};
 use crate::file::writer::FileWriter;
 
 /// システム外部からファイルの操作を行うためのハンドル。
@@ -84,6 +83,7 @@ impl FileHandle {
                 let v = v.lock().unwrap();
                 match v.setting {
                     EFileAccessSetting::Write { .. } => true,
+                    _ => false
                 }
             }
         };
@@ -95,9 +95,34 @@ impl FileHandle {
             // 25-01-01 BufWriterを使ってみる。
             // 既存ロジックのコードをほぼそのまま持ってくる。
             let v = self.v.upgrade().unwrap();
-            assert!(v.lock().unwrap().file.is_some());
+            assert!(v.lock().unwrap().internal.is_some());
 
             let item = FileWriter::new(v);
+            Some(item)
+        }
+    }
+
+    /// 読み込み可能状態なら、ファイルから読み込めるようにするためのものを用意する。
+    pub fn try_read(&self, setting: FileReaderSetting) -> Option<Box<FileReader>> {
+        let is_readable = match self.v.upgrade() {
+            None => false,
+            Some(v) => {
+                let v = v.lock().unwrap();
+                match v.setting {
+                    EFileAccessSetting::Read { .. } => true,
+                    _ => false
+                }
+            }
+        };
+
+        if !is_readable {
+            None
+        }
+        else {
+            let v = self.v.upgrade().unwrap();
+            assert!(v.lock().unwrap().internal.is_some());
+
+            let item = FileReader::new(v, setting);
             Some(item)
         }
     }

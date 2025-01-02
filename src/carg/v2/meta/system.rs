@@ -120,6 +120,11 @@ pub fn postprocess_systems(flags: ESystemCategoryFlag, prev_to_now_time: f64) {
     if !(flags & system_category::AUDIO_DEVICE).is_zero() {
         AudioDevice::post_process(prev_to_now_time);
     }
+
+    // FileIOSystemの処理
+    if !(flags & system_category::FILE_IO_SYSTEM).is_zero() {
+        FileIO::post_process(prev_to_now_time);
+    }
 }
 
 /// 依存システムの解放
