@@ -32,7 +32,7 @@ pub struct FileReader<'a> {
 #[derive(Debug, Clone)]
 pub struct FileReaderSetting {
     /// [`FileReader`]がDropしたらファイルのSeekを最初に戻すか？
-    seek_to_first_when_drop: bool,
+    pub seek_to_first_when_drop: bool,
 }
 
 unsafe impl Sync for FileReader<'_> {}

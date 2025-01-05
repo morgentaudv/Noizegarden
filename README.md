@@ -35,7 +35,7 @@ Node based musical analysis application written in Rustlang, also features makin
 - [ ] Resamplingのバグ対応
 - [x] sine-sweepのEmitterノード
 - [ ] Emitter音源発生系ノードのトリガー統合？
-- [ ] FileIO制御のシステム化
+- [x] FileIO制御のシステム化
 - [ ] ピンのアイテムプール化の検証
 - [ ] eguiの導入
 

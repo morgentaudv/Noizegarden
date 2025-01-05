@@ -1,7 +1,7 @@
 mod handle;
 mod writer;
 mod internal;
-mod reader;
+pub mod reader;
 
 use crate::device::ESystemProcessResult;
 use crate::file::handle::FileHandle;
