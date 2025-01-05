@@ -1,3 +1,4 @@
+use std::cell::UnsafeCell;
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
@@ -12,6 +13,8 @@ use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufReader;
+use crate::file::EFileAccessSetting;
+use crate::file::reader::FileReaderSetting;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaWavInfo {
@@ -141,6 +144,23 @@ impl TProcessItem for EmitterWavMonoProcessData {
 impl EmitterWavMonoProcessData {
     fn initialize(&mut self) {
         let container = {
+            //let this_pointer = UnsafeCell::new(self as *mut Self);
+            //self.common.systems.access_file_io_fn(move |system| {
+            //    // これ絶対よくない。
+            //    let this = unsafe { &mut **this_pointer.get() };
+
+            //    // 書き込み。
+            //    let file_setting = EFileAccessSetting::Read { path: this.info.path.clone() };
+            //    let file_handle = system.create_handle(file_setting);
+
+            //    let setting = FileReaderSetting {
+            //        seek_to_first_when_drop: true,
+            //    };
+            //    let mut reader = file_handle.try_read(setting).unwrap();
+            //    let container = WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.");
+
+            //});
+
             let file = fs::File::open(&self.info.path).expect(&format!("Could not find {}.", &self.info.path));
             let mut reader = BufReader::new(file);
             WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
