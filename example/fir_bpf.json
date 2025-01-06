@@ -1,0 +1,67 @@
+{
+    "version": 2,
+    "setting": {
+        "time_tick_mode": "realtime",
+        "sample_count_frame": 1024
+    },
+    "node": {
+        "_start_pin": {
+            "type": "_start_pin"
+        },
+        "_dummy": {
+            "type": "_dummy"
+        },
+        "input": {
+            "type": "emitter-wav-mono",
+            "path": "./example/sample01_44100.wav"
+        },
+        "filter": {
+            "type": "filter-fir",
+            "edge_frequency": 1000.0,
+            "frequency_width": 500.0,
+            "delta_frequency": 1000.0,
+            "mode": "band-pass"
+        },
+        "output": {
+            "type": "output-file",
+            "format": {
+                "type": "wav_lpcm16",
+                "sample_rate": 44100
+            },
+            "file_name": "sample01_44100_fir_bpf_output",
+            "add_date_time": true
+        }
+    },
+    "relation": [
+        {
+            "prev": {
+                "node": "_start_pin",
+                "pin": "out"
+            },
+            "next":{
+                "node": "input",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "input",
+                "pin": "out"
+            },
+            "next": {
+                "node": "filter",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "filter",
+                "pin": "out"
+            },
+            "next": {
+                "node": "output",
+                "pin": "in"
+            }
+        }
+    ]
+}

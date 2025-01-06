@@ -2,8 +2,7 @@
     "version": 2,
     "setting": {
         "time_tick_mode": "realtime",
-        "sample_count_frame": 1024,
-        "sample_rate": 48000
+        "sample_count_frame": 1024
     },
     "node": {
         "_start_pin": {
@@ -12,20 +11,16 @@
         "_dummy": {
             "type": "_dummy"
         },
-        "input_1": {
+        "input": {
             "type": "emitter-whitenoise",
             "intensity": 0.75,
             "range": {
                 "start": 0.0,
                 "length": 3.0
-            }
+            },
+            "sample_rate": 48000
         },
-        "filter_1": {
-            "type": "filter-iir-lpf",
-            "edge_frequency": 4000.0,
-            "quality_factor": 1.0
-        },
-        "filter_2": {
+        "filter": {
             "type": "filter-iir-hpf",
             "edge_frequency": 2000.0,
             "quality_factor": 1.0
@@ -36,7 +31,8 @@
                 "type": "wav_lpcm16",
                 "sample_rate": 48000
             },
-            "file_name": "test_iir_hpf.wav"
+            "file_name": "test_iir_hpf",
+            "add_date_time": true
         }
     },
     "relation": [
@@ -56,23 +52,13 @@
                 "pin": "out"
             },
             "next": {
-                "node": "filter_1",
+                "node": "filter",
                 "pin": "in"
             }
         },
         {
             "prev": {
-                "node": "filter_1",
-                "pin": "out"
-            },
-            "next": {
-                "node": "filter_2",
-                "pin": "in"
-            }
-        },
-        {
-            "prev": {
-                "node": "filter_2",
+                "node": "filter",
                 "pin": "out"
             },
             "next": {

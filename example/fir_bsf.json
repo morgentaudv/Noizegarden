@@ -2,8 +2,7 @@
     "version": 2,
     "setting": {
         "time_tick_mode": "realtime",
-        "sample_count_frame": 1024,
-        "sample_rate": 48000
+        "sample_count_frame": 1024
     },
     "node": {
         "_start_pin": {
@@ -12,26 +11,25 @@
         "_dummy": {
             "type": "_dummy"
         },
-        "input_1": {
-            "type": "emitter-whitenoise",
-            "intensity": 0.75,
-            "range": {
-                "start": 0.0,
-                "length": 3.0
-            }
+        "input": {
+            "type": "emitter-wav-mono",
+            "path": "./example/sample01_44100.wav"
         },
         "filter": {
-            "type": "filter-iir-lpf",
-            "edge_frequency": 1000.0,
-            "quality_factor": 1.0
+            "type": "filter-fir",
+            "edge_frequency": 2000.0,
+            "frequency_width": 500.0,
+            "delta_frequency": 1000.0,
+            "mode": "band-stop"
         },
         "output": {
             "type": "output-file",
             "format": {
                 "type": "wav_lpcm16",
-                "sample_rate": 48000
+                "sample_rate": 44100
             },
-            "file_name": "test_iir_lpf.wav"
+            "file_name": "sample01_44100_fir_bsf_output",
+            "add_date_time": true
         }
     },
     "relation": [
@@ -41,13 +39,13 @@
                 "pin": "out"
             },
             "next":{
-                "node": "input_1",
+                "node": "input",
                 "pin": "in"
             }
         },
         {
             "prev": {
-                "node": "input_1",
+                "node": "input",
                 "pin": "out"
             },
             "next": {
@@ -55,7 +53,6 @@
                 "pin": "in"
             }
         },
-
         {
             "prev": {
                 "node": "filter",

@@ -2,8 +2,7 @@
     "version": 2,
     "setting": {
         "time_tick_mode": "realtime",
-        "sample_count_frame": 1024,
-        "sample_rate": 48000
+        "sample_count_frame": 1024
     },
     "node": {
         "_start_pin": {
@@ -13,17 +12,28 @@
             "type": "_dummy"
         },
         "input_1": {
-            "type": "emitter-whitenoise",
+            "type": "emitter-sine",
+            "frequency": {
+                "type": "a440",
+                "value": "A4"
+            },
             "intensity": 0.75,
             "range": {
                 "start": 0.0,
                 "length": 3.0
-            }
+            },
+            "sample_rate": 44100
         },
-        "filter": {
-            "type": "filter-iir-bpf",
-            "edge_frequency": 2000.0,
-            "quality_factor": 1.0
+        "analyze": {
+            "type": "analyze-dft",
+            "level": 8192,
+            "window_function": "hann",
+            "overlap": true
+        },
+        "invert": {
+            "type": "emitter-idft",
+            "sample_length": 8192,
+            "overlap": true
         },
         "output": {
             "type": "output-file",
@@ -31,7 +41,7 @@
                 "type": "wav_lpcm16",
                 "sample_rate": 48000
             },
-            "file_name": "test_iir_bpf.wav"
+            "file_name": "test_envelope_adsr_idft.wav"
         }
     },
     "relation": [
@@ -51,14 +61,23 @@
                 "pin": "out"
             },
             "next": {
-                "node": "filter",
+                "node": "analyze",
                 "pin": "in"
             }
         },
-
         {
             "prev": {
-                "node": "filter",
+                "node": "analyze",
+                "pin": "out_freq"
+            },
+            "next": {
+                "node": "invert",
+                "pin": "in"
+            }
+        },
+        {
+            "prev": {
+                "node": "invert",
                 "pin": "out"
             },
             "next": {
