@@ -7,7 +7,7 @@ Rust言語で作成中の、ノードベースのプロシージャルの音型�
 
 Node based musical analysis application written in Rust-lang, also features making procedural sound waves, and so on.
 
-# Example（サンプル設定）の実行方法
+## Example（サンプル設定）の実行方法
 
 まず`Noizegarden`を作るためには、最新の`rust`や`cargo`をインストールして以下のコマンドを実行します。
 
@@ -23,7 +23,7 @@ noizegarden -i ./example/sine_sweep.json
 
 のように読み込ませたいファイルのパスを入力して実行します。
 
-# Examples
+## Examples
 
 `./example`フォルダーに音波の処理を行う設定ファイルがあります。
 これを起動してみることで、処理を構成しているノードの構成がわかります。
@@ -67,7 +67,7 @@ noizegarden -i ./example/sine_sweep.json
 * ゲームと連携してStarveなく音が流れるような仕組みにする。
 * エディターツールを作り、音響合成の作成をやりやすくする。(egui, webgpu)
 
-# Todo List
+## Todo List
 
 - [x] FFT分析、IFFT変換ノードの実装
 - [x] DFTの窓関数の適用
