@@ -1,5 +1,9 @@
 # Noizegarden
 
+<img src="./example/Screenshot 2025-01-06 175759.png" width=800 alt="resample.jsonを実行した図"/>
+
+resample.jsonを実行した図
+
 > 前FourierPractice (Formerly, FourierPractice)
 
 Rust言語で作成中の、ノードベースのプロシージャルの音型生成、音型分析プログラムです。
