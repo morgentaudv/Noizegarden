@@ -2,7 +2,10 @@ use super::container::ENodeContainer;
 use crate::carg::v2::meta::node::{ENode, MetaNodeContainer};
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, StartItemGroup};
 use crate::carg::v2::meta::setting::Setting;
-use crate::carg::v2::meta::system::{cleanup_systems, initialize_systems, postprocess_systems, preprocess_systems, system_category, InitializeSystemAccessor, SystemSetting};
+use crate::carg::v2::meta::system::{
+    cleanup_systems, initialize_systems, postprocess_systems, preprocess_systems, system_category,
+    InitializeSystemAccessor, SystemSetting,
+};
 use crate::carg::v2::meta::tick::ETimeTickMode;
 use crate::carg::v2::meta::{pin_category, EPinCategoryFlag};
 use crate::carg::v2::node::common::ProcessControlItem;
@@ -97,6 +100,8 @@ pub struct ProcessCommonInput {
     pub frame_time: f64,
     /// 処理カテゴリ
     pub category: EProcessCategoryFlag,
+    /// フレームの処理カウント
+    pub process_counter: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -307,9 +312,11 @@ pub fn process_v2(
     // vvv オーディオレンダリングフレーム処理
     let mut node_queue = VecDeque::new();
     let mut elapsed_time = 0.0;
+    let mut process_counter = 0;
     loop {
         let prev_to_now_time = tick_timer.tick().as_secs_f64();
         elapsed_time += tick_timer.tick().as_secs_f64();
+        process_counter += 1;
 
         // 24-12-12 依存システムの処理。
         preprocess_systems(system_flags, prev_to_now_time);
@@ -320,6 +327,7 @@ pub fn process_v2(
             elapsed_time,
             frame_time: prev_to_now_time,
             category: process_category::NORMAL,
+            process_counter,
         };
 
         let mut end_node_processed = false;
@@ -343,7 +351,7 @@ pub fn process_v2(
                 // 次ノードをQueueに入れる。
                 let next_nodes = node.borrow().get_next_nodes();
                 let is_node_end = next_nodes.is_empty();
-                for next_node in next_nodes.into_iter().filter(|v| v.borrow().can_process()) {
+                for next_node in next_nodes.into_iter().filter(|v| v.borrow().can_process(&input)) {
                     node_queue.push_back(next_node);
                 }
 

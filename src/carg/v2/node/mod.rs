@@ -1,13 +1,13 @@
-pub mod pin;
 pub mod common;
+pub mod pin;
 
+use crate::carg::v2::meta::process::EProcessCategoryFlag;
+use crate::carg::v2::meta::ENodeSpecifier;
+use crate::carg::v2::node::pin::NodePinItemWPtr;
+use crate::carg::v2::{ItemSPtr, ItemWPtr, ProcessCommonInput, ProcessProcessorInput, SItemSPtr, TProcessItemPtr};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::rc::Rc;
-use itertools::Itertools;
-use crate::carg::v2::{ItemSPtr, ItemWPtr, ProcessCommonInput, ProcessProcessorInput, SItemSPtr, TProcessItemPtr};
-use crate::carg::v2::meta::ENodeSpecifier;
-use crate::carg::v2::meta::process::EProcessCategoryFlag;
-use crate::carg::v2::node::pin::NodePinItemWPtr;
 
 /// [`RelationTreeNode::process`]の結果や後処理の指示を示す。
 pub mod process_result {
@@ -42,6 +42,13 @@ pub struct RelationTreeNode {
     pub(crate) next_nodes: HashMap<String, RelationTreeNodeWPtr>,
     /// このノードから処理するアイテム
     processor: TProcessItemPtr,
+    /// フレームプロセスカウンター
+    counter: ProcessCounter,
+}
+
+#[derive(Debug, Default, Clone)]
+struct ProcessCounter {
+    process_counter: usize,
 }
 
 impl RelationTreeNode {
@@ -57,6 +64,7 @@ impl RelationTreeNode {
             prev_nodes: HashMap::new(),
             next_nodes: HashMap::new(),
             processor,
+            counter: Default::default(),
         })
     }
 
@@ -102,7 +110,15 @@ impl RelationTreeNode {
 
     /// ノード自分の処理が可能か？
     /// たとえば、インプットが全部更新されている状態だったりとか。
-    pub fn can_process(&self) -> bool {
+    pub fn can_process(&self, input: &ProcessCommonInput) -> bool {
+        let is_all_prev_processed = self
+            .prev_nodes
+            .iter()
+            .all(|(_, v)| v.upgrade().unwrap().borrow().counter.process_counter >= input.process_counter);
+        if !is_all_prev_processed {
+            return false;
+        }
+
         self.processor.borrow().can_process()
     }
 
@@ -121,7 +137,12 @@ impl RelationTreeNode {
                 .map(|(_, v)| v.upgrade().unwrap().borrow().is_finished())
                 .collect_vec(),
         };
+
         self.processor.borrow_mut().try_process(&input);
+
+        // 25-01-07 更新
+        self.counter.process_counter = input.common.process_counter;
+
         process_result::PROPAGATE_CHILDREN
     }
 
