@@ -44,10 +44,10 @@ noizegarden -i ./example/sine_sweep.json
 | fft.json           | FFT(Fast Fourier Transform)と、その逆変換を使って音源の周波数を分析、再現します。       |
 | envelope_ad.json   | エンベロープ(AD)ノードを使って、音源の振幅を調整します。                               |
 | envelope_adsr.json | エンベロープ(ADSR)ノードを使って、音源振幅を調整します。                              |
-| lufs.rs            | mono音源のLUFSを測定します。ただしゲーティング処理や音源全体のLUFSの測定は行いません。            |
-| wave_sum.rs        | C長調のmaj5の和音の正弦波を合成し、mono音源として出力します。                          |
-| compressor.rs      | compressorを使って元mono音源のレベルを抑制します。                             |
-| limiter.rs         | limiterを使って元mono音源のレベルを抑制します。                                |
+| lufs.json          | mono音源のLUFSを測定します。ただしゲーティング処理や音源全体のLUFSの測定は行いません。            |
+| wave_sum.json      | C長調のmaj5の和音の正弦波を合成し、mono音源として出力します。                          |
+| compressor.json    | compressorを使って元mono音源のレベルを抑制します。                             |
+| limiter.json       | limiterを使って元mono音源のレベルを抑制します。                                |
 | fir_lpf.json       | `wav_mono.json`と設定は同じです。FIRフィルターを使い、元音源から400Hz以下だけを残します。     |
 | fir_hpf.json       | FIRフィルターを使い、元音源から2kHz以上の音だけを残します。                            |
 | fir_bpf.json       | FIRフィルターを使い、元音源から1kHz回りの音だけを残します。                            |
