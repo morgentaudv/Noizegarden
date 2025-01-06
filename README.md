@@ -33,9 +33,21 @@ noizegarden -i ./example/sine_sweep.json
 | File | Description                            |
 | --- |----------------------------------------|
 | sine.json | A4(440Hz)のサイン波形を3秒間発生したmonoの音源を出力します。  | 
-| 
+| square.json | A4(440Hz)の矩形波を3秒発生したmonoの音源を出力します。 |
+| sawtooth.json | A4(440Hz)のノコギリ波を3秒発生したmonoの音源を出力します。 |
+| triangle.json | A4(440Hz)の三角波を3秒発生したmonoの音源を出力します。 |
+| whitenoise.json | ホワイトノイズを3秒発生したmonoの音源を出力します。 |
+| pinknoise.json | ピンクノイズを3秒発生したmonoの音源を出力します。 |
+| sweep.json | サインスイープを20Hzから20000Hzまで発生したmonoの音源を出力します。 |
+
 
 ---
+
+# 目標
+
+* (最優先) PureData/SuperColliderのような音響合成プログラムを目指す
+* ゲームと連携してStarveなく音が流れるような仕組みにする。
+* エディターツールを作り、音響合成の作成をやりやすくする。(egui, webgpu)
 
 # Todo List
 
@@ -62,6 +74,8 @@ noizegarden -i ./example/sine_sweep.json
 - [x] Resamplingのバグ対応?
 - [x] sine-sweepのEmitterノード
 - [x] FileIO制御のシステム化
+- [ ] `sample_count_frame`の廃止と代替案の導入
+- [ ] LUFSのゲーティング処理やそれに伴うIntegratedの実装
 - [ ] eguiの導入
 - [ ] webgpuの導入 (vulkanは難易度高すぎたため)
 - [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
@@ -70,6 +84,7 @@ noizegarden -i ./example/sine_sweep.json
 - [ ] リアルタイムプレビューノード
 - [ ] Emitter音源発生系ノードのトリガー統合？
 - [ ] ピンのアイテムプール化の検証
+- [ ] 最適化
 
 ---
 

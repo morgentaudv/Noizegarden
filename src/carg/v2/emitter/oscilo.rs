@@ -38,6 +38,7 @@ pub struct MetaSineEmitterInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetaSineSquareInfo {
     frequency: EFrequency,
+    /// `[0, 1]`まで
     duty_rate: f64,
     /// `[0, 1]`まで
     intensity: f64,
