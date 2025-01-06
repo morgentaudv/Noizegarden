@@ -143,10 +143,8 @@ impl AdapterDelayProcessData {
         // まずRealtimeだけで。
         // @todo OFFLINE用はバッチにしたい。
 
-        // Inputがあるかを確認する。
-        // なければ無視。
-        let mut sample_rate = 0usize;
-        {
+        // Inputがあるかを確認する。なければ無視。
+        let sample_rate = {
             let input_internal = self.common.get_input_internal(INPUT_IN).unwrap();
             let input = input_internal.buffer_mono_dynamic().unwrap();
             // もしインプットがきてなくて、Fsがセットされたなきゃなんもしない。
@@ -154,8 +152,8 @@ impl AdapterDelayProcessData {
                 return;
             }
 
-            sample_rate = input.sample_rate;
-        }
+            input.sample_rate
+        };
 
         self.internal.internal_time += input.common.frame_time;
         let time_offset = self.internal.internal_time - self.internal.last_process_time;

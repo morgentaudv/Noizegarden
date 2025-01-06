@@ -93,6 +93,8 @@ impl ProcessControlItem {
         //
         for (_, pin) in &mut self.input_pins {
             let mut borrowed = pin.borrow_mut();
+            borrowed.try_initialize();
+
             if borrowed.is_update_requested {
                 // 何をやるかはちょっと考える…
                 assert_eq!(borrowed.is_output, false);
@@ -144,7 +146,10 @@ impl ProcessControlItem {
                 Some(v.sample_rate)
             }
             EProcessInputContainer::BufferStereoDynamic(v) => {
-                todo!("Not yet implemented.");
+                if !v.can_process() {
+                    return None;
+                }
+                Some(v.sample_rate)
             }
             _ => None,
         }

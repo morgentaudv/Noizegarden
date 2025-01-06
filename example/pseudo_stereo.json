@@ -48,7 +48,7 @@
         "type": "wav_lpcm16",
         "sample_rate": 44100
       },
-      "file_name": "sine_440_44kHz_delay_50ms",
+      "file_name": "pseudo_stereo",
       "add_date_time": true
     }
   },

@@ -1,40 +1,72 @@
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
-use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBufferStereo, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItem, TProcessItemPtr};
 use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::math::float::EFloatCommonPin;
+use crate::math::get_required_sample_count;
+use crate::wave::sample::UniformedSample;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MetaStereoInfo {
+    pub gain_0: EFloatCommonPin,
+    pub gain_1: EFloatCommonPin,
+}
 
 /// モノラルをステレオに変換する
 #[derive(Debug)]
 pub struct MixStereoProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    gain_0: f64,
-    gain_1: f64,
+    info: MetaStereoInfo,
+    internal: InternalInfo,
 }
+
+#[derive(Debug)]
+struct InternalInfo {
+    internal_time: f64,
+    /// サンプルを取得するための最後に処理した時間
+    last_process_time: f64,
+}
+
+impl InternalInfo {
+    pub fn new() -> Self {
+        Self {
+            internal_time: 0.0,
+            last_process_time: 0.0,
+        }
+    }
+}
+
+const INPUT_IN_1: &'static str = "in_1";
+const INPUT_IN_2: &'static str = "in_2";
+const OUTPUT_OUT: &'static str = "out";
 
 impl TPinCategory for MixStereoProcessData {
     fn get_input_pin_names() -> Vec<&'static str> {
-        vec!["in_1", "in_2"]
+        vec![INPUT_IN_1, INPUT_IN_2]
     }
 
     fn get_output_pin_names() -> Vec<&'static str> {
-        vec!["out"]
+        vec![OUTPUT_OUT]
     }
 
     fn get_pin_categories(pin_name: &str) -> Option<EPinCategoryFlag> {
         match pin_name {
-            "in_1" | "in_2" => Some(pin_category::BUFFER_MONO),
-            "out" => Some(pin_category::BUFFER_STEREO),
+            INPUT_IN_1 => Some(pin_category::BUFFER_MONO),
+            INPUT_IN_2 => Some(pin_category::BUFFER_MONO),
+            OUTPUT_OUT => Some(pin_category::BUFFER_STEREO),
             _ => None,
         }
     }
 
     fn get_input_container_flag(pin_name: &str) -> Option<EInputContainerCategoryFlag> {
         match pin_name {
-            "in_1" | "in_2" => Some(input::container_category::BUFFER_MONO_PHANTOM),
+            INPUT_IN_1 => Some(input::container_category::BUFFER_MONO_DYNAMIC),
+            INPUT_IN_2 => Some(input::container_category::BUFFER_MONO_DYNAMIC),
             _ => None,
         }
     }
@@ -47,16 +79,15 @@ impl TProcessItem for MixStereoProcessData {
 
     fn create_item(setting: &ProcessItemCreateSetting, system_setting: &InitializeSystemAccessor) -> anyhow::Result<TProcessItemPtr> {
         match setting.node {
-            // @todo 対応する。
-            ENode::MixStereo{ .. } => {
+            ENode::MixStereo(v) => {
                 let item = Self {
                     setting: setting.setting.clone(),
                     common: ProcessControlItem::new(ProcessControlItemSetting {
                         specifier: ENodeSpecifier::MixStereo,
                         systems: &system_setting,
                     }),
-                    gain_0: 0.707,
-                    gain_1: 0.707,
+                    info: v.clone(),
+                    internal: InternalInfo::new(),
                 };
 
                 Ok(SItemSPtr::new(item))
@@ -67,60 +98,88 @@ impl TProcessItem for MixStereoProcessData {
 }
 
 impl MixStereoProcessData {
-    fn update_state(&mut self, in_input: &ProcessProcessorInput) {
-        let left_buffer = {
-            let left_output_pin = self
-                .common
-                .get_input_pin("in_1")
-                .unwrap()
-                .upgrade()
-                .unwrap()
-                .borrow()
-                .linked_pins
-                .first()
-                .unwrap()
-                .upgrade()
-                .unwrap();
-            let borrowed = left_output_pin.borrow();
-            match &borrowed.output {
-                EProcessOutputContainer::BufferMono(v) => v.buffer.clone(),
-                _ => unreachable!("Unexpected branch"),
-            }
-        };
+    fn update_state(&mut self, input: &ProcessProcessorInput) {
+        // まずRealtimeだけで。
+        // @todo OFFLINE用はバッチにしたい。
 
-        let right_buffer = {
-            let left_output_pin = self
-                .common
-                .get_input_pin("in_2")
-                .unwrap()
-                .upgrade()
-                .unwrap()
-                .borrow()
-                .linked_pins
-                .first()
-                .unwrap()
-                .upgrade()
-                .unwrap();
-            let borrowed = left_output_pin.borrow();
-            match &borrowed.output {
-                EProcessOutputContainer::BufferMono(v) => v.buffer.clone(),
-                _ => unreachable!("Unexpected branch"),
+        // Inputがあるかを確認する。なければ無視。
+        let sample_rate_1 = {
+            let input_internal = self.common.get_input_internal(INPUT_IN_1).unwrap();
+            let input = input_internal.buffer_mono_dynamic().unwrap();
+            // もしインプットがきてなくて、Fsがセットされたなきゃなんもしない。
+            if input.sample_rate == 0 {
+                return;
             }
+
+            input.sample_rate
         };
+        let sample_rate_2 = {
+            let input_internal = self.common.get_input_internal(INPUT_IN_2).unwrap();
+            let input = input_internal.buffer_mono_dynamic().unwrap();
+            // もしインプットがきてなくて、Fsがセットされたなきゃなんもしない。
+            if input.sample_rate == 0 {
+                return;
+            }
+
+            input.sample_rate
+        };
+        debug_assert_eq!(sample_rate_1, sample_rate_2);
+
+        self.internal.internal_time += input.common.frame_time;
+        let time_offset = self.internal.internal_time - self.internal.last_process_time;
+        let sample_counts = get_required_sample_count(time_offset, sample_rate_1);
+        if sample_counts <= 0 {
+            return;
+        }
+
+        // タイマーがまだ動作前なら何もしない。
+        let old_internal_time = self.internal.last_process_time;
+        self.internal.last_process_time = self.internal.internal_time;
+
+        if self.internal.internal_time <= 0.0 {
+            // ゼロ入りのバッファだけを作る。
+            let buffer = vec![UniformedSample::MIN; sample_counts];
+            self.common
+                .insert_to_output_pin(
+                    OUTPUT_OUT,
+                    EProcessOutput::BufferStereo(ProcessOutputBufferStereo{
+                        ch_left: buffer.clone(),
+                        ch_right: buffer,
+                        sample_rate: sample_rate_1,
+                    }),
+                )
+                .unwrap();
+
+            self.common.state = EProcessState::Playing;
+            return;
+        }
+
+        // sample_countsからバッファ分をとる。
+        // もしたりなきゃ作って返す。
+        let pre_blank_counts = if old_internal_time < 0.0 {
+            ((old_internal_time * -1.0) * (sample_rate_1 as f64)).floor() as usize
+        } else {
+            0
+        };
+        debug_assert!(sample_counts >= pre_blank_counts);
+
+        // 処理したものを渡す。
+        let result_1 = self.drain_buffer(input, sample_counts, pre_blank_counts, INPUT_IN_1);
+        let result_2 = self.drain_buffer(input, sample_counts, pre_blank_counts, INPUT_IN_2);
 
         // outputのどこかに保持する。
         self.common
             .insert_to_output_pin(
-                "out",
+                OUTPUT_OUT,
                 EProcessOutput::BufferStereo(ProcessOutputBufferStereo{
-                    ch_left: left_buffer,
-                    ch_right: right_buffer,
-                    setting: self.setting.clone(),
+                    ch_left: result_1.buffer,
+                    ch_right: result_2.buffer,
+                    sample_rate: sample_rate_1,
                 }),
             )
             .unwrap();
 
-        if in_input.is_children_all_finished() {
+        if result_1.is_finished && result_2.is_finished && input.is_children_all_finished() {
             self.common.state = EProcessState::Finished;
             return;
         } else {
@@ -128,6 +187,47 @@ impl MixStereoProcessData {
             return;
         }
     }
+
+    fn drain_buffer(
+        &mut self,
+        in_input: &ProcessProcessorInput,
+        sample_counts: usize,
+        pre_blank_counts: usize,
+        pin: &str
+    ) -> DrainBufferResult {
+        debug_assert!(sample_counts >= pre_blank_counts);
+        let mut input_internal = self.common.get_input_internal_mut(pin).unwrap();
+        let input = input_internal.buffer_mono_dynamic_mut().unwrap();
+
+        // `pre_blank_counts`が0より大きければバッファを作る。
+        let mut buffer = vec![];
+        if pre_blank_counts > 0 {
+            buffer.resize(pre_blank_counts, UniformedSample::MIN);
+        }
+        let sample_counts = sample_counts - pre_blank_counts;
+
+        // バッファ0補充分岐
+        let now_buffer_len = input.buffer.len();
+        let is_buffer_enough = now_buffer_len >= sample_counts;
+        if !is_buffer_enough {
+            buffer.append(&mut input.buffer.drain(..).collect_vec());
+            buffer.resize(sample_counts, UniformedSample::MIN);
+        }
+        else {
+            buffer.append(&mut input.buffer.drain(..sample_counts).collect_vec());
+        }
+
+        DrainBufferResult {
+            buffer,
+            is_finished: !is_buffer_enough && in_input.is_children_all_finished(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct DrainBufferResult {
+    buffer: Vec<UniformedSample>,
+    is_finished: bool,
 }
 
 impl TSystemCategory for MixStereoProcessData {}
@@ -139,7 +239,7 @@ impl TProcess for MixStereoProcessData {
     }
 
     fn can_process(&self) -> bool {
-        self.common.is_all_input_pins_update_notified()
+        true
     }
 
     fn get_common_ref(&self) -> &ProcessControlItem {

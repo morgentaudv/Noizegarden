@@ -180,7 +180,7 @@ impl ProcessOutputBuffer {
 pub struct ProcessOutputBufferStereo {
     ch_left: Vec<UniformedSample>,
     ch_right: Vec<UniformedSample>,
-    setting: Setting,
+    sample_rate: usize,
 }
 
 #[derive(Debug, Clone)]

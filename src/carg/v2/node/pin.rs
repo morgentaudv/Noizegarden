@@ -90,15 +90,17 @@ impl NodePinItem {
         }
     }
 
-    /// Input処理を行う。
-    pub fn process_input(&mut self) {
-        assert_eq!(self.is_output, false);
-
+    pub fn try_initialize(&mut self) {
         // もしUninitializedなら、初期化する。
         if !self.input.is_initialized() {
             // 初期化する。
             self.input.initialize(self.input_flag);
         }
+    }
+
+    /// Input処理を行う。
+    pub fn process_input(&mut self) {
+        assert_eq!(self.is_output, false);
 
         // output側から情報を処理する。
         // ただしinputではlinked_pinsの数は1個までで、Emptyなことはないと。

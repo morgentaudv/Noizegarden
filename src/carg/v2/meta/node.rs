@@ -18,7 +18,7 @@ use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag};
 use crate::carg::v2::meta::relation::{Relation, RelationItemPin};
 use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor};
 use crate::carg::v2::meta::{ENodeSpecifier, EPinCategoryFlag, SPinCategory};
-use crate::carg::v2::mix::stereo::MixStereoProcessData;
+use crate::carg::v2::mix::stereo::{MetaStereoInfo, MixStereoProcessData};
 use crate::carg::v2::output::output_device::{MetaOutputDeviceInfo, OutputDeviceProcessData};
 use crate::carg::v2::output::output_file::{MetaOutputFileInfo, OutputFileProcessData};
 use crate::carg::v2::output::output_log::OutputLogProcessData;
@@ -153,10 +153,7 @@ pub enum ENode {
     #[serde(rename = "filter-irconv")]
     FilterIRConvolution(MetaIRConvInfo),
     #[serde(rename = "mix-stereo")]
-    MixStereo {
-        gain_0: EFloatCommonPin,
-        gain_1: EFloatCommonPin,
-    },
+    MixStereo(MetaStereoInfo),
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
     OutputFile(MetaOutputFileInfo),

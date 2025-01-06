@@ -1,7 +1,6 @@
 use crate::carg::v2::meta::output::EProcessOutputContainer;
 use crate::carg::v2::output::output_file::EOutputFileInput;
 use crate::carg::v2::output::output_log::EOutputLogItem;
-use crate::carg::v2::{Setting};
 use crate::carg::v2::output::output_device::EOutputDeviceInput;
 use crate::wave::sample::UniformedSample;
 
@@ -159,7 +158,7 @@ impl BufferMonoDynamicItem {
 pub struct BufferStereoDynamicItem {
     pub ch_left: Vec<UniformedSample>,
     pub ch_right: Vec<UniformedSample>,
-    pub setting: Option<Setting>,
+    pub sample_rate: usize,
 }
 
 impl BufferStereoDynamicItem {
@@ -167,9 +166,15 @@ impl BufferStereoDynamicItem {
         Self {
             ch_left: vec![],
             ch_right: vec![],
-            setting: None,
+            sample_rate: 0,
         }
     }
+
+    /// 処理可能か？
+    pub fn can_process(&self) -> bool {
+        self.sample_rate != 0
+    }
+
 }
 
 /// [`EProcessInputContainer::TextDynamic`]の内部コンテナ
@@ -263,7 +268,7 @@ impl EProcessInputContainer {
                     EProcessOutputContainer::BufferStereo(v) => {
                         dst.ch_left.append(&mut v.ch_left.clone());
                         dst.ch_right.append(&mut v.ch_right.clone());
-                        dst.setting = Some(v.setting.clone());
+                        dst.sample_rate = v.sample_rate;
                     }
                     _ => unreachable!("Unexpected output"),
                 }
@@ -287,9 +292,9 @@ impl EProcessInputContainer {
                     }
                     EOutputFileInput::Stereo(dst) => match output {
                         EProcessOutputContainer::BufferStereo(v) => {
-                            dst.setting = Some(v.setting.clone());
                             dst.ch_left.append(&mut v.ch_left.clone());
                             dst.ch_right.append(&mut v.ch_right.clone());
+                            dst.sample_rate = v.sample_rate;
                         }
                         _ => unreachable!("Unexpected output"),
                     },
@@ -336,9 +341,9 @@ impl EProcessInputContainer {
                     }
                     EOutputDeviceInput::Stereo(dst) => match output {
                         EProcessOutputContainer::BufferStereo(v) => {
-                            dst.setting = Some(v.setting.clone());
                             dst.ch_left.append(&mut v.ch_left.clone());
                             dst.ch_right.append(&mut v.ch_right.clone());
+                            dst.sample_rate = v.sample_rate;
                         }
                         _ => unreachable!("Unexpected output"),
                     },

@@ -2,21 +2,14 @@ use crate::carg::v2::meta::input::{
     BufferMonoDynamicItem, BufferStereoDynamicItem, EInputContainerCategoryFlag, EProcessInputContainer,
 };
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
+use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
+use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::{
     ENode, ProcessItemCreateSetting, SItemSPtr, TProcessItem, TProcessItemPtr,
 };
-use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    io::{self, Write},
-};
-use std::cell::UnsafeCell;
-use chrono::Local;
-use itertools::Itertools;
-use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, InitializeSystemAccessor, TSystemCategory};
-use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
-use crate::carg::v2::output::EOutputFileFormat;
+use crate::file::EFileAccessSetting;
 use crate::math::window::EWindowFunction;
 use crate::{
     carg::v2::{ProcessControlItem, ProcessProcessorInput, TProcess},
@@ -25,7 +18,11 @@ use crate::{
         stretch::pitch::{PitchShifterBufferSetting, PitchShifterBuilder},
     },
 };
-use crate::file::EFileAccessSetting;
+use chrono::Local;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use std::cell::UnsafeCell;
+use std::io::Write;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetaOutputFileInfo {
@@ -180,11 +177,7 @@ impl OutputFileProcessData {
     }
 
     fn process_stereo(&mut self, v: &BufferStereoDynamicItem) {
-        let sample_rate = self.common.try_get_input_sample_rate(INPUT_IN);
-        if sample_rate.is_none() {
-            return;
-        }
-        let source_sample_rate = sample_rate.unwrap() as f64;
+        let source_sample_rate = v.sample_rate as f64;
 
         let container = match self.info.format {
             EOutputFileFormat::WavLPCM16 { sample_rate } => {
