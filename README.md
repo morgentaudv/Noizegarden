@@ -57,6 +57,7 @@ noizegarden -i ./example/sine_sweep.json
 | iir_bpf.json       | IIRフィルター(biquad)を使い、元音源から1kHz周りの音だけを残します。                    |
 | iir_bef.json       | IIRフィルター(biquad)を使い、元音源から2kHz周りを除いた音だけを残します。                 |
 | mix_stereo.json    | mono音源をステレオの各チャンネルに構成します。現在パンニングの調整はできません。                   |
+| resample.json      | 20hzから20kHzまで続くサインスイープを96kHzレートから48kHzに変換して出力します。            |
 | ir_conv.json       | (TODO) mono音源に対しIR畳み込みを行います。                                 |
 
 ---
