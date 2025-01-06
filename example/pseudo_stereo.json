@@ -15,21 +15,12 @@
       "type": "_dummy"
     },
     "input": {
-      "type": "emitter-sine",
-      "frequency": {
-        "type": "a440",
-        "value": "A4"
-      },
-      "intensity": 0.5,
-      "range": {
-        "start": 0.0,
-        "length": 3.0
-      },
-      "sample_rate": 44100
+      "type": "emitter-wav-mono",
+      "path": "./example/sample01.wav"
     },
     "delay": {
       "type": "adapter-delay",
-      "delay": 0.05
+      "delay": 0.025
     },
     "mixer": {
       "type": "mix-stereo",
