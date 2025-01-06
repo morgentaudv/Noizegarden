@@ -46,3 +46,14 @@ macro_rules! ulaw_impl {
 
 ulaw_impl!(f32, 255.0);
 ulaw_impl!(f64, 255.0);
+
+// ----------------------------------------------------------------------------
+
+/// `sample_rate`から`time_second`分のサンプル数を取得する。
+pub fn get_required_sample_count(time_second: f64, sample_rate: usize) -> usize {
+    (time_second * sample_rate as f64).floor() as usize
+}
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

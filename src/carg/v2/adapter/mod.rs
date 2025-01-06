@@ -4,6 +4,7 @@ pub mod wave_sum;
 pub mod compressor;
 pub mod limiter;
 pub mod resample;
+pub mod delay;
 
 // ----------------------------------------------------------------------------
 // EOF

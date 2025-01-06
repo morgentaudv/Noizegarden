@@ -25,6 +25,7 @@ use crate::carg::v2::special::dummy::DummyProcessData;
 use crate::carg::v2::special::start::StartProcessData;
 use num_traits::Zero;
 use crate::carg::v2::adapter::compressor::AdapterCompressorProcessData;
+use crate::carg::v2::adapter::delay::AdapterDelayProcessData;
 use crate::carg::v2::adapter::limiter::AdapterLimiterProcessData;
 use crate::carg::v2::adapter::resample::ResampleProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
@@ -110,6 +111,7 @@ pub enum ENodeSpecifier {
     AdapterCompressor,
     AdapterLimiter,
     AdapterResample,
+    AdapterDelay,
     FilterFIR,
     FilterIIRLPF,
     FilterIIRHPF,
@@ -157,6 +159,7 @@ impl ENodeSpecifier {
             ENode::FilterIRConvolution(_) => Self::FilterIRConvolution,
             ENode::AdapterLimiter(_) => Self::AdapterLimiter,
             ENode::AdapterResample(_) => Self::AdapterResample,
+            ENode::AdapterDelay(_) => Self::AdapterDelay,
         }
     }
 
@@ -193,6 +196,7 @@ impl ENodeSpecifier {
             Self::FilterIRConvolution => IRConvolutionProcessData::get_input_pin_names(),
             Self::AdapterResample => ResampleProcessData::get_input_pin_names(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::get_input_pin_names(),
+            Self::AdapterDelay => AdapterDelayProcessData::get_input_pin_names(),
         }
     }
 
@@ -229,6 +233,7 @@ impl ENodeSpecifier {
             Self::FilterIRConvolution => IRConvolutionProcessData::get_output_pin_names(),
             Self::AdapterResample => ResampleProcessData::get_output_pin_names(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::get_output_pin_names(),
+            Self::AdapterDelay => AdapterDelayProcessData::get_output_pin_names(),
         }
     }
 
@@ -314,6 +319,7 @@ impl ENodeSpecifier {
             Self::FilterIRConvolution => IRConvolutionProcessData::get_pin_categories(pin_name),
             Self::AdapterResample => ResampleProcessData::get_pin_categories(pin_name),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::get_pin_categories(pin_name),
+            Self::AdapterDelay => AdapterDelayProcessData::get_pin_categories(pin_name),
         }
     }
 
@@ -350,6 +356,7 @@ impl ENodeSpecifier {
             Self::FilterIRConvolution => IRConvolutionProcessData::get_input_container_flag(pin_name),
             Self::AdapterResample => ResampleProcessData::get_input_container_flag(pin_name),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::get_input_container_flag(pin_name),
+            Self::AdapterDelay => AdapterDelayProcessData::get_input_container_flag(pin_name),
         }
         .unwrap()
     }
@@ -387,6 +394,7 @@ impl ENodeSpecifier {
             Self::FilterIRConvolution => IRConvolutionProcessData::get_dependent_system_categories(),
             Self::AdapterResample => ResampleProcessData::get_dependent_system_categories(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::get_dependent_system_categories(),
+            Self::AdapterDelay => AdapterDelayProcessData::get_dependent_system_categories(),
         }
     }
 
@@ -426,6 +434,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::can_support_offline(),
             Self::AdapterResample => ResampleProcessData::can_support_offline(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::can_support_offline(),
+            Self::AdapterDelay => AdapterDelayProcessData::can_support_offline(),
             _ => false,
         }
     }
@@ -458,6 +467,7 @@ impl ENodeSpecifier {
             Self::EmitterIFFT => IFFTEmitterProcessData::can_support_realtime(),
             Self::AdapterResample => ResampleProcessData::can_support_realtime(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::can_support_realtime(),
+            Self::AdapterDelay => AdapterDelayProcessData::can_support_realtime(),
             _ => false,
         }
     }

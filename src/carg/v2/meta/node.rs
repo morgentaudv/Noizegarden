@@ -32,6 +32,7 @@ use crate::math::float::EFloatCommonPin;
 use crate::math::window::EWindowFunction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::carg::v2::adapter::delay::{AdapterDelayProcessData, MetaDelayInfo};
 use crate::carg::v2::emitter::sine_sweep::{MetaSineSweepInfo, SineSweepEmitterProcessData};
 // ----------------------------------------------------------------------------
 // ENode
@@ -132,6 +133,8 @@ pub enum ENode {
     AdapterLimiter(MetaLimiterInfo),
     #[serde(rename = "adapter-resample")]
     AdapterResample(MetaResampleInfo),
+    #[serde(rename = "adapter-delay")]
+    AdapterDelay(MetaDelayInfo),
     /// 昔に作っておいたFIRのLPFフィルター（2次FIR）
     #[serde(rename = "filter-fir")]
     FilterFIR(MetaFIRInfo),
@@ -194,6 +197,9 @@ impl ENode {
             },
             ENode::AdapterResample(_) => {
                 ResampleProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
+            ENode::AdapterDelay(_) => {
+                AdapterDelayProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
             ENode::AnalyzerDFT { .. } => {
                 AnalyzerDFTProcessData::create_item(&setting, &system_setting).expect("Failed to create item")

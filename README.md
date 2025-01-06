@@ -62,6 +62,7 @@ noizegarden -i ./example/sine_sweep.json
 | iir_bef.json       | IIRフィルター(biquad)を使い、元音源から2kHz周りを除いた音だけを残します。                 |
 | mix_stereo.json    | mono音源をステレオの各チャンネルに構成します。現在パンニングの調整はできません。                   |
 | resample.json      | 20hzから20kHzまで続くサインスイープを96kHzレートから48kHzに変換して出力します。            |
+| delay.json         | mono音源を50msずらして流します。                                         |
 | ir_conv.json       | (TODO) mono音源に対しIR畳み込みを行います。                                 |
 
 ---
@@ -97,6 +98,7 @@ noizegarden -i ./example/sine_sweep.json
 - [x] Resamplingのバグ対応?
 - [x] sine-sweepのEmitterノード
 - [x] FileIO制御のシステム化
+- [x] monoのDelayノード
 - [ ] `sample_count_frame`の廃止と代替案の導入
 - [ ] LUFSのゲーティング処理やそれに伴うIntegratedの実装
 - [ ] eguiの導入

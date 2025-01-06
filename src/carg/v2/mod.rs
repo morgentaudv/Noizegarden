@@ -114,6 +114,12 @@ impl ProcessProcessorInput {
 
         self.children_states.iter().all(|v| *v == true)
     }
+
+    /// `sample_rate`から`frame_time`分のサンプル数を取得する。
+    pub fn get_realtime_required_samples(&self, sample_rate: usize) -> usize {
+        // 余裕分をとる
+        (sample_rate as f64 * self.common.frame_time).floor() as usize
+    }
 }
 
 // ----------------------------------------------------------------------------
