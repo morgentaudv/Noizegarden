@@ -63,6 +63,7 @@ noizegarden -i ./example/sine_sweep.json
 | mix_stereo.json    | mono音源をステレオの各チャンネルに構成します。現在パンニングの調整はできません。                   |
 | resample.json      | 20hzから20kHzまで続くサインスイープを96kHzレートから48kHzに変換して出力します。            |
 | delay.json         | mono音源を50msずらして流します。                                         |
+| pseudo_stereo.json | Delayノードを使い、mono音源から疑似的なステレオを構築します。                          |
 | ir_conv.json       | (TODO) mono音源に対しIR畳み込みを行います。                                 |
 
 ---
