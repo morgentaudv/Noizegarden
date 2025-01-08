@@ -100,6 +100,8 @@ noizegarden -i ./example/sine_sweep.json
 - [x] sine-sweepのEmitterノード
 - [x] FileIO制御のシステム化
 - [x] monoのDelayノード
+- [x] bext, junkヘッダーの読み込み対応
+- [x] 24bit(LPCM)の読み込み対応
 - [ ] IRConvolutionノード
 - [ ] `sample_count_frame`の廃止と代替案の導入
 - [ ] 音源(wav, 16bit, stereo)Emitterノードの追加

@@ -10,10 +10,12 @@ use super::{
     sample::UniformedSample,
     stretch::time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
 };
-use std::io;
 use crate::wave::container::wav::bext::LowWaveBextHeader;
 use crate::wave::container::wav::junk::LowWaveJunkHeader;
 use crate::wave::container::wav::try_read_wave_header_id_str;
+use num_traits::Zero;
+use std::io;
+use std::ops::BitAnd;
 
 pub mod wav;
 
@@ -67,27 +69,31 @@ impl WaveContainer {
             let id = try_read_wave_header_id_str(reader);
             match id.as_str() {
                 "RIFF" => {
-                    wave_riff_header = Some(LowWaveRiffHeader::from_bufread(reader).expect("Failed to get riff header."));
-                },
+                    wave_riff_header =
+                        Some(LowWaveRiffHeader::from_bufread(reader).expect("Failed to get riff header."));
+                }
                 "fmt " => {
-                    wave_fmt_header = Some(LowWaveFormatHeader::from_bufread(reader).expect("Failed to get fmt header."));
+                    wave_fmt_header =
+                        Some(LowWaveFormatHeader::from_bufread(reader).expect("Failed to get fmt header."));
                 }
                 "fact" => {
                     wave_fact_chunk = Some(LowWaveFactChunk::from_bufread(reader).expect("Failed to get fact chunk."))
-                },
+                }
                 "bext" => {
                     // 25-01-08 放送業界(EBC)で決めたWav拡張ヘッダーらしい。
                     // このプログラムではまだ活用しない。
                     // bext, 4bytesで次に来るチャンクの大きさ、そしてチャンクのデータがくる。
-                    wave_bext_header = Some(LowWaveBextHeader::from_bufread(reader).expect("Failed to get bext chunk."));
-                },
+                    wave_bext_header =
+                        Some(LowWaveBextHeader::from_bufread(reader).expect("Failed to get bext chunk."));
+                }
                 "junk" => {
                     // 25-01-08
-                    wave_junk_header = Some(LowWaveJunkHeader::from_bufread(reader).expect("Failed to get junk chunk."));
+                    wave_junk_header =
+                        Some(LowWaveJunkHeader::from_bufread(reader).expect("Failed to get junk chunk."));
                 }
                 "data" => {
                     break; // data以降はデータしか含まないはず。
-                },
+                }
                 _ => unreachable!("Unexpected header ID."),
             }
         }
@@ -106,18 +112,51 @@ impl WaveContainer {
         // bufferの各ブロックから`UniformedSample`に変換する。
         let unit_block_size = wave_fmt_header.unit_block_size();
         let bits_per_sample = wave_fmt_header.bits_per_sample as usize;
-        assert_eq!(bits_per_sample, 16);
+        let uniformed_buffer = match bits_per_sample {
+            16 => {
+                // LPCM 16bits
+                //
+                // 16Bitsは [-32768, 32768)の範囲を持つ。
+                // 読み取ったバッファーからブロックサイズと量子化ビットサイズに合わせてsliceに変換する。
+                let p_buffer = buffer.as_ptr() as *const i16;
+                let data_count = (wave_data_chunk.data_chunk_size as usize) / unit_block_size;
+                let buffer_slice = unsafe { std::slice::from_raw_parts(p_buffer, data_count) };
 
-        // 今の量子化は16Bitsしか対応しない。
-        // 16Bitsは [-32768, 32768)の範囲を持つ。
-        let uniformed_buffer: Vec<UniformedSample> = {
-            // 読み取ったバッファーからブロックサイズと量子化ビットサイズに合わせてsliceに変換する。
-            let p_buffer = buffer.as_ptr() as *const i16;
-            let data_count = (wave_data_chunk.data_chunk_size as usize) / unit_block_size;
-            let buffer_slice = unsafe { std::slice::from_raw_parts(p_buffer, data_count) };
+                buffer_slice.iter().map(|&v| UniformedSample::from_16bits(v)).collect_vec()
+            }
+            24 => {
+                // LPCM 24bits
+                //
+                // −8,388,608 to +8,388,607を持つ。
+                // 一つのサンプルが3Bytesパッキングされているので、慎重に読み取る。
+                let data_count = (wave_data_chunk.data_chunk_size as usize) / unit_block_size;
 
-            let converted_buffer = buffer_slice.iter().map(|&v| UniformedSample::from_16bits(v)).collect();
-            converted_buffer
+                // ここ最適化できそうだけど、今は愚直な方法で。
+                // 実は元バッファーのSliceを渡して変換することもできるという。
+                let mut raw_buffer = vec![];
+                raw_buffer.reserve(data_count);
+                for i in 0..data_count {
+                    let start_i = 3 * i;
+                    let raw_sample = &buffer[start_i..(start_i + 3)];
+                    // データの入り方がBig Endianになっているので、sample[2]の一番前のビットが1なら負の数扱いにする。
+                    // この辺ちょっとめんどくさい。
+                    let offset = if raw_sample[2].bitand(0b10000000).is_zero() { 0x00 } else { 0xFF };
+                    let raw_sample = [offset, raw_sample[2], raw_sample[1], raw_sample[0]];
+                    let raw_sample = i32::from_be_bytes(raw_sample);
+
+                    // チェック
+                    debug_assert!(raw_sample >= -8_388_608);
+                    debug_assert!(raw_sample < 8_388_608);
+                    // 3Bytesすすむ。
+                    raw_buffer.push(raw_sample);
+                }
+
+                raw_buffer
+                    .into_iter()
+                    .map(|v| UniformedSample::from_i32_as_24bit(v))
+                    .collect_vec()
+            }
+            _ => unreachable!("Unexpected branch"),
         };
 
         Some(WaveContainer {
@@ -125,7 +164,6 @@ impl WaveContainer {
             fmt: wave_fmt_header,
             fact: wave_fact_chunk,
             data: wave_data_chunk,
-            //raw_buffer: buffer,
             uniformed_buffer,
         })
     }

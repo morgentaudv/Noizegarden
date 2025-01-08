@@ -80,6 +80,14 @@ impl UniformedSample {
         Self((sample as f64) / (i16::MAX as f64))
     }
 
+    /// `[−8,388,608, +8,388,608)`までの24Bitsの振幅[`i32`]を変換する。
+    pub fn from_i32_as_24bit(sample: i32) -> Self {
+        // LPCM 24bits
+        // −8,388,608 to +8,388,607を持つ。
+        const MAX: i32 = 8_388_608;
+        Self((sample as f64) / (MAX as f64))
+    }
+
     /// 任意のデシベルから`depth`範囲に合わせて変換する。
     pub fn from_db(decibel: f64, depth: EBitDepth, is_plus: bool) -> Self {
         match depth {
