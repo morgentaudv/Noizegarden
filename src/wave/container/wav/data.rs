@@ -10,7 +10,7 @@ pub(crate) struct LowWaveDataChunk {
 const_assert_eq!(LowWaveDataChunk::STRUCTURE_SIZE, 8usize);
 
 impl LowWaveDataChunk {
-    const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveDataChunk>();
+    const STRUCTURE_SIZE: usize = size_of::<LowWaveDataChunk>();
     const ID_SPECIFIER: [u8; 4] = ['d' as u8, 'a' as u8, 't' as u8, 'a' as u8];
 
     pub fn from_chunk_size(data_chunk_size: u32) -> Self {
@@ -53,3 +53,7 @@ impl LowWaveDataChunk {
         writer.write(&buffer).expect("Failed to write LowWaveDataChunk to writer.");
     }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

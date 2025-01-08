@@ -11,6 +11,9 @@ use super::{
     stretch::time::{TimeStretcherBufferSetting, TimeStretcherBuilder},
 };
 use std::io;
+use crate::wave::container::wav::bext::LowWaveBextHeader;
+use crate::wave::container::wav::junk::LowWaveJunkHeader;
+use crate::wave::container::wav::try_read_wave_header_id_str;
 
 pub mod wav;
 
@@ -55,16 +58,44 @@ impl WaveContainer {
         }
 
         // 情報を取得する。
-        let wave_riff_header = LowWaveRiffHeader::from_bufread(reader).expect("Failed to get riff header.");
-        let wave_fmt_header = LowWaveFormatHeader::from_bufread(reader).expect("Failed to get fmt header.");
-        let wave_fact_chunk = {
-            if LowWaveFactChunk::can_be_chunk(reader) {
-                Some(LowWaveFactChunk::from_bufread(reader).expect("Failed to get fact chunk."))
-            } else {
-                None
+        let mut wave_riff_header = None;
+        let mut wave_fmt_header = None;
+        let mut wave_fact_chunk = None;
+        let mut wave_bext_header = None;
+        let mut wave_junk_header = None;
+        loop {
+            let id = try_read_wave_header_id_str(reader);
+            match id.as_str() {
+                "RIFF" => {
+                    wave_riff_header = Some(LowWaveRiffHeader::from_bufread(reader).expect("Failed to get riff header."));
+                },
+                "fmt " => {
+                    wave_fmt_header = Some(LowWaveFormatHeader::from_bufread(reader).expect("Failed to get fmt header."));
+                }
+                "fact" => {
+                    wave_fact_chunk = Some(LowWaveFactChunk::from_bufread(reader).expect("Failed to get fact chunk."))
+                },
+                "bext" => {
+                    // 25-01-08 放送業界(EBC)で決めたWav拡張ヘッダーらしい。
+                    // このプログラムではまだ活用しない。
+                    // bext, 4bytesで次に来るチャンクの大きさ、そしてチャンクのデータがくる。
+                    wave_bext_header = Some(LowWaveBextHeader::from_bufread(reader).expect("Failed to get bext chunk."));
+                },
+                "junk" => {
+                    // 25-01-08
+                    wave_junk_header = Some(LowWaveJunkHeader::from_bufread(reader).expect("Failed to get junk chunk."));
+                }
+                "data" => {
+                    break; // data以降はデータしか含まないはず。
+                },
+                _ => unreachable!("Unexpected header ID."),
             }
-        };
+        }
+
         let wave_data_chunk = LowWaveDataChunk::from_bufread(reader).expect("Failed to get data chunk");
+        debug_assert!(wave_fmt_header.is_some());
+
+        let wave_fmt_header = wave_fmt_header.unwrap();
         let buffer_size = wave_data_chunk.data_chunk_size / (wave_fmt_header.channel as u32);
 
         // 最後に実際データが入っているバッファーを読み取る。
@@ -90,7 +121,7 @@ impl WaveContainer {
         };
 
         Some(WaveContainer {
-            riff: wave_riff_header,
+            riff: wave_riff_header.unwrap(),
             fmt: wave_fmt_header,
             fact: wave_fact_chunk,
             data: wave_data_chunk,
