@@ -34,7 +34,7 @@ impl LowWaveDataChunk {
         // chunk_idの確認。
         {
             let id = std::str::from_utf8(&maybe_header.data_chunk_id).unwrap();
-            assert!(id == "data");
+            assert_eq!(id, "data");
         }
 
         Some(maybe_header)

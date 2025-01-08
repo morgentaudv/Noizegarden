@@ -100,12 +100,12 @@ noizegarden -i ./example/sine_sweep.json
 - [x] sine-sweepのEmitterノード
 - [x] FileIO制御のシステム化
 - [x] monoのDelayノード
+- [ ] IRConvolutionノード
 - [ ] `sample_count_frame`の廃止と代替案の導入
+- [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
 - [ ] LUFSのゲーティング処理やそれに伴うIntegratedの実装
 - [ ] eguiの導入
 - [ ] webgpuの導入 (vulkanは難易度高すぎたため)
-- [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
-- [ ] IRConvolutionノード
 - [ ] Delta Timeのモードの反映
 - [ ] リアルタイムプレビューノード
 - [ ] Emitter音源発生系ノードのトリガー統合？

@@ -4,10 +4,10 @@ use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::{EProcessOutput, ProcessControlItem, ProcessItemCreateSetting, ProcessOutputBufferStereo, ProcessProcessorInput, SItemSPtr, Setting, TProcess, TProcessItem, TProcessItemPtr};
+use crate::carg::v2::meta::sample_timer::SampleTimer;
 use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::math::float::EFloatCommonPin;
-use crate::math::get_required_sample_count;
 use crate::wave::sample::UniformedSample;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -22,23 +22,7 @@ pub struct MixStereoProcessData {
     setting: Setting,
     common: ProcessControlItem,
     info: MetaStereoInfo,
-    internal: InternalInfo,
-}
-
-#[derive(Debug)]
-struct InternalInfo {
-    internal_time: f64,
-    /// サンプルを取得するための最後に処理した時間
-    last_process_time: f64,
-}
-
-impl InternalInfo {
-    pub fn new() -> Self {
-        Self {
-            internal_time: 0.0,
-            last_process_time: 0.0,
-        }
-    }
+    timer: SampleTimer,
 }
 
 const INPUT_IN_1: &'static str = "in_1";
@@ -87,7 +71,7 @@ impl TProcessItem for MixStereoProcessData {
                         systems: &system_setting,
                     }),
                     info: v.clone(),
-                    internal: InternalInfo::new(),
+                    timer: SampleTimer::new(0.0),
                 };
 
                 Ok(SItemSPtr::new(item))
@@ -125,20 +109,16 @@ impl MixStereoProcessData {
         };
         debug_assert_eq!(sample_rate_1, sample_rate_2);
 
-        self.internal.internal_time += input.common.frame_time;
-        let time_offset = self.internal.internal_time - self.internal.last_process_time;
-        let sample_counts = get_required_sample_count(time_offset, sample_rate_1);
-        if sample_counts <= 0 {
+        let time_result = self.timer.process_time(input.common.frame_time, sample_rate_1);
+        if time_result.required_sample_count <= 0 {
             return;
         }
 
         // タイマーがまだ動作前なら何もしない。
-        let old_internal_time = self.internal.last_process_time;
-        self.internal.last_process_time = self.internal.internal_time;
-
-        if self.internal.internal_time <= 0.0 {
+        let old_internal_time = time_result.old_time;
+        if self.timer.internal_time() <= 0.0 {
             // ゼロ入りのバッファだけを作る。
-            let buffer = vec![UniformedSample::MIN; sample_counts];
+            let buffer = vec![UniformedSample::MIN; time_result.required_sample_count];
             self.common
                 .insert_to_output_pin(
                     OUTPUT_OUT,
@@ -161,11 +141,11 @@ impl MixStereoProcessData {
         } else {
             0
         };
-        debug_assert!(sample_counts >= pre_blank_counts);
+        debug_assert!(time_result.required_sample_count >= pre_blank_counts);
 
         // 処理したものを渡す。
-        let result_1 = self.drain_buffer(input, sample_counts, pre_blank_counts, INPUT_IN_1);
-        let result_2 = self.drain_buffer(input, sample_counts, pre_blank_counts, INPUT_IN_2);
+        let result_1 = self.drain_buffer(input, time_result.required_sample_count, pre_blank_counts, INPUT_IN_1);
+        let result_2 = self.drain_buffer(input, time_result.required_sample_count, pre_blank_counts, INPUT_IN_2);
 
         // outputのどこかに保持する。
         self.common

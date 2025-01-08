@@ -26,7 +26,6 @@ use std::{
 
 pub mod adapter;
 pub mod analyzer;
-pub mod base;
 pub mod emitter;
 pub mod filter;
 pub mod meta;

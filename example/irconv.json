@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "setting": {
+    "time_tick_mode": "realtime",
+    "sample_count_frame": 1024
+  },
+  "system_setting": {
+    "file_io": {}
+  },
+  "node": {
+    "_start_pin": {
+      "type": "_start_pin"
+    },
+    "_dummy": {
+      "type": "_dummy"
+    },
+    "input": {
+      "type": "emitter-sine",
+      "frequency": {
+        "type": "a440",
+        "value": "A4"
+      },
+      "intensity": 0.5,
+      "range": {
+        "start": 0.0,
+        "length": 3.0
+      },
+      "sample_rate": 48000
+    },
+    "irconv": {
+      "type": "filter-irconv",
+      "path": "./example/ir/C414_1_foot_pres_1.wav"
+    },
+    "output": {
+      "type": "output-file",
+      "format": {
+        "type": "wav_lpcm16",
+        "sample_rate": 48000
+      },
+      "file_name": "sine_440_48kHz",
+      "add_date_time": true
+    }
+  },
+  "relation": [
+    {
+      "prev": {
+        "node": "_start_pin",
+        "pin": "out"
+      },
+      "next":{
+        "node": "input",
+        "pin": "in"
+      }
+    },
+    {
+      "prev": {
+        "node": "input",
+        "pin": "out"
+      },
+      "next": {
+        "node": "irconv",
+        "pin": "in"
+      }
+    },
+    {
+      "prev": {
+        "node": "irconv",
+        "pin": "out"
+      },
+      "next": {
+        "node": "output",
+        "pin": "in"
+      }
+    }
+  ]
+}

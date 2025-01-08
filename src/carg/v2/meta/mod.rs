@@ -6,6 +6,7 @@ pub mod setting;
 pub mod system;
 pub mod process;
 pub mod tick;
+pub mod sample_timer;
 
 use crate::carg::v2::adapter::envelope_ad::AdapterEnvelopeAdProcessData;
 use crate::carg::v2::adapter::envelope_adsr::AdapterEnvelopeAdsrProcessData;
