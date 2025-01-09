@@ -8,6 +8,7 @@ pub mod fmt;
 pub mod riff;
 pub mod bext;
 pub mod junk;
+pub mod qlty;
 
 /// WavファイルのカーソルからヘッダーのIDと見られる4文字を読み込みした後、元の位置に戻す。
 pub fn try_read_wave_header_id_str<T>(reader: &mut T) -> String

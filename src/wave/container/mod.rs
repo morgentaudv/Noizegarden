@@ -12,6 +12,7 @@ use super::{
 };
 use crate::wave::container::wav::bext::LowWaveBextHeader;
 use crate::wave::container::wav::junk::LowWaveJunkHeader;
+use crate::wave::container::wav::qlty::LowWaveQualityHeader;
 use crate::wave::container::wav::try_read_wave_header_id_str;
 use num_traits::Zero;
 use std::io;
@@ -64,6 +65,7 @@ impl WaveContainer {
         let mut wave_fmt_header = None;
         let mut wave_fact_chunk = None;
         let mut wave_bext_header = None;
+        let mut wave_qlty_header = None;
         let mut wave_junk_header = None;
         loop {
             let id = try_read_wave_header_id_str(reader);
@@ -90,6 +92,11 @@ impl WaveContainer {
                     // 25-01-08
                     wave_junk_header =
                         Some(LowWaveJunkHeader::from_bufread(reader).expect("Failed to get junk chunk."));
+                }
+                "qlty" => {
+                    // 25-01-09
+                    wave_qlty_header =
+                        Some(LowWaveQualityHeader::from_bufread(reader).expect("Failed to get qlty chunk."));
                 }
                 "data" => {
                     break; // data以降はデータしか含まないはず。
