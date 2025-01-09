@@ -281,7 +281,7 @@ impl SineWaveEmitterProcessData {
         // 設定のサンプル数ずつ吐き出す。
         // ただし今のと最終長さと比べて最終長さより長い分は0に埋める。
         let required_sample_count = input.get_realtime_required_samples(self.emitter_type.sample_rate());
-        if required_sample_count < 0 {
+        if required_sample_count == 0 {
             return vec![];
         }
 
