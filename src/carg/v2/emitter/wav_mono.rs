@@ -1,4 +1,3 @@
-use std::cell::UnsafeCell;
 use crate::carg::v2::meta::input::EInputContainerCategoryFlag;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::setting::Setting;
@@ -13,8 +12,6 @@ use crate::wave::sample::UniformedSample;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::BufReader;
-use crate::file::EFileAccessSetting;
-use crate::file::reader::FileReaderSetting;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetaWavInfo {
@@ -102,6 +99,10 @@ impl TProcess for EmitterWavMonoProcessData {
 
         // バッファを出力する。
         let buffer = self.next_samples(input);
+        if buffer.is_empty() {
+            return;
+        }
+
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
@@ -173,14 +174,15 @@ impl EmitterWavMonoProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    fn next_samples(&mut self, _input: &ProcessProcessorInput) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.internal.container.is_some());
 
-        // 24-11-06
-        // TODO リアルタイムのDeltaTimeに対応する。
-        // 今は固定サンプルを汲み取る。
         let (sample_counts, end) = {
-            let ideal_count = self.setting.sample_count_frame;
+            let ideal_count = input.get_realtime_required_samples(self.internal.sample_rate);
+            if ideal_count <= 0 {
+                return vec![]
+            }
+
             let next_start_i = self.internal.next_start_i + ideal_count;
 
             let buffer = self.internal.container.as_ref().unwrap().uniformed_sample_buffer();

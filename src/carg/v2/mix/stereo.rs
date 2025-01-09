@@ -109,7 +109,7 @@ impl MixStereoProcessData {
         };
         debug_assert_eq!(sample_rate_1, sample_rate_2);
 
-        let time_result = self.timer.process_time(input.common.frame_time, sample_rate_1);
+        let time_result = self.timer.process_time(input.common.sample_frame_time, sample_rate_1);
         if time_result.required_sample_count <= 0 {
             return;
         }

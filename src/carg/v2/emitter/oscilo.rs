@@ -275,13 +275,18 @@ impl SineWaveEmitterProcessData {
     }
 
     /// 初期化した情報から設定分のOutputを更新する。
-    fn next_samples(&mut self, _input: &ProcessProcessorInput) -> Vec<UniformedSample> {
+    fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.emitter.is_some());
 
         // 設定のサンプル数ずつ吐き出す。
         // ただし今のと最終長さと比べて最終長さより長い分は0に埋める。
+        let required_sample_count = input.get_realtime_required_samples(self.emitter_type.sample_rate());
+        if required_sample_count < 0 {
+            return vec![];
+        }
+
         let end_sample_index = {
-            let ideal_add_time = (self.setting.sample_count_frame as f64) / (self.emitter_type.sample_rate() as f64);
+            let ideal_add_time = (required_sample_count as f64) / (self.emitter_type.sample_rate() as f64);
             let ideal_next_time = self.common.elapsed_time + ideal_add_time;
 
             let mut add_time = ideal_add_time;
@@ -293,11 +298,11 @@ impl SineWaveEmitterProcessData {
             let sample_rate = self.emitter_type.sample_rate();
             let samples = (add_time * sample_rate as f64).ceil() as usize;
 
-            assert!(samples <= self.setting.sample_count_frame);
+            debug_assert!(samples <= required_sample_count);
             samples
         };
 
-        let mut samples = self.emitter.as_mut().unwrap().next_samples(self.setting.sample_count_frame);
+        let mut samples = self.emitter.as_mut().unwrap().next_samples(required_sample_count);
         if end_sample_index < samples.len() {
             // [end_sample_index, len())までに0に埋める。
             samples
@@ -349,6 +354,10 @@ impl TProcess for SineWaveEmitterProcessData {
         // 初期化した情報から設定分のOutputを更新する。
         // output_pinに入力。
         let buffer = self.next_samples(input);
+        if buffer.is_empty() {
+            return;
+        }
+
         let sample_rate = self.emitter_type.sample_rate();
         let elapsed_time = buffer.len() as f64 / sample_rate as f64;
         self.common

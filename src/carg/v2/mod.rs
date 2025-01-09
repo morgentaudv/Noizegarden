@@ -96,6 +96,10 @@ pub struct ProcessCommonInput {
     pub elapsed_time: f64,
     /// 前のフレーム処理から何秒経ったか
     pub frame_time: f64,
+    /// サンプル処理で使う、フレーム時間。
+    /// フレーム間処理が長すぎてその分のサンプルカウントをとって処理する場合に
+    /// その影響でさらにフレーム時間が長くなる（発散する）ことを防ぐためのもの。
+    pub sample_frame_time: f64,
     /// 処理カテゴリ
     pub category: EProcessCategoryFlag,
     /// フレームの処理カウント
@@ -121,7 +125,7 @@ impl ProcessProcessorInput {
     /// `sample_rate`から`frame_time`分のサンプル数を取得する。
     pub fn get_realtime_required_samples(&self, sample_rate: usize) -> usize {
         // 余裕分をとる
-        (sample_rate as f64 * self.common.frame_time).floor() as usize
+        (sample_rate as f64 * self.common.sample_frame_time).floor() as usize
     }
 }
 
@@ -324,6 +328,7 @@ pub fn process_v2(
             time_tick_mode: setting.time_tick_mode,
             elapsed_time,
             frame_time: prev_to_now_time,
+            sample_frame_time: prev_to_now_time.min(setting.process_limit_time),
             category: process_category::NORMAL,
             process_counter,
         };

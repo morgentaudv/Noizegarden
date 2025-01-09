@@ -156,14 +156,14 @@ impl IRConvolutionProcessData {
 
     fn update_state(&mut self, input: &ProcessProcessorInput) {
         let sample_rate = self.internal.sample_rate;
-        let time_result = self.timer.process_time(input.common.frame_time, sample_rate);
+        let time_result = self.timer.process_time(input.common.sample_frame_time, sample_rate);
         if time_result.required_sample_count <= 0 {
             self.common.state = EProcessState::Playing;
             return;
         }
 
         // バッファを出力する。
-        let result = self.next_samples(input, time_result.required_sample_count.min(self.setting.sample_count_frame));
+        let result = self.next_samples(input, time_result.required_sample_count);
         self.common
             .insert_to_output_pin(
                 OUTPUT_OUT,
