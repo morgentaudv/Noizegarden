@@ -89,6 +89,8 @@ pub fn validate_node_relations(
                 let route_item = GraphNodeRoute {
                     from: (*search_name).clone(),
                     to: relation.next.node.clone(),
+                    from_pin: relation.prev.pin.clone(),
+                    to_pin: relation.next.pin.clone(),
                 };
                 if route_set.contains(&route_item) {
                     return Err(anyhow::anyhow!("Node {} is cycled.", node_name));
@@ -108,6 +110,8 @@ pub fn validate_node_relations(
 struct GraphNodeRoute {
     from: String,
     to: String,
+    from_pin: String,
+    to_pin: String,
 }
 
 /// `_start_pin`から始める処理フラグのノードにフラグをONする。
