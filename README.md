@@ -102,8 +102,8 @@ noizegarden -i ./example/sine_sweep.json
 - [x] monoのDelayノード
 - [x] bext, junkヘッダーの読み込み対応
 - [x] 24bit(LPCM)の読み込み対応
-- [ ] IRConvolutionノード
-- [ ] `quality`Chunkの読み込み（解読はしない）
+- [x] IRConvolutionノード
+- [x] `quality`Chunkの読み込み（解読はしない）
 - [ ] `sample_count_frame`の廃止と代替案の導入
 - [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
 - [ ] LUFSのゲーティング処理やそれに伴うIntegratedの実装

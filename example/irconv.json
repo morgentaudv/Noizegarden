@@ -15,17 +15,8 @@
       "type": "_dummy"
     },
     "input": {
-      "type": "emitter-sine",
-      "frequency": {
-        "type": "a440",
-        "value": "A4"
-      },
-      "intensity": 0.5,
-      "range": {
-        "start": 0.0,
-        "length": 3.0
-      },
-      "sample_rate": 48000
+      "type": "emitter-wav-mono",
+      "path": "./example/sample01_44100.wav"
     },
     "irconv": {
       "type": "filter-irconv",
@@ -35,9 +26,9 @@
       "type": "output-file",
       "format": {
         "type": "wav_lpcm16",
-        "sample_rate": 48000
+        "sample_rate": 44100
       },
-      "file_name": "sine_440_48kHz",
+      "file_name": "irconv_44100",
       "add_date_time": true
     }
   },
