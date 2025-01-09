@@ -2,7 +2,7 @@
     "version": 2,
     "setting": {
         "time_tick_mode": "realtime",
-        "sample_count_frame": 4096
+        "process_limit_time": 0.016
     },
     "node": {
         "_start_pin": {
