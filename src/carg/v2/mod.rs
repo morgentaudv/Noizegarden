@@ -23,6 +23,8 @@ use std::{
     collections::{HashMap, VecDeque},
     rc::Rc,
 };
+use std::thread::sleep;
+use std::time::Duration;
 
 pub mod adapter;
 pub mod analyzer;
@@ -372,6 +374,8 @@ pub fn process_v2(
         if end_node_processed && is_all_finished {
             break;
         }
+
+        sleep(Duration::from_millis(1));
     }
 
     // 依存システムの解放
