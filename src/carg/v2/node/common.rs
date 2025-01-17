@@ -32,6 +32,13 @@ pub struct ProcessControlItemSetting<'a> {
     pub systems: &'a InitializeSystemAccessor,
 }
 
+///
+#[derive(Debug, Clone)]
+pub struct ProcessInputPinsSetting {
+    /// 内部でリサンプリングを行うための基準サンプルレート。
+    pub sync_sample_rate: usize,
+}
+
 impl ProcessControlItem {
     /// [`ProcessControlItem`]を生成する。
     pub fn new(setting: ProcessControlItemSetting) -> Self {
@@ -89,7 +96,7 @@ impl ProcessControlItem {
     }
 
     /// Updateフラグが立っているすべてのInputピンを更新する。
-    pub fn process_input_pins(&mut self) {
+    pub fn process_input_pins_deprecated(&mut self) {
         //
         for (_, pin) in &mut self.input_pins {
             let mut borrowed = pin.borrow_mut();

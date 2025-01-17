@@ -264,7 +264,7 @@ impl TProcess for AnalyzerFFTProcessData {
         }
 
         self.common.elapsed_time = input.common.elapsed_time;
-        self.common.process_input_pins();
+        self.common.process_input_pins_deprecated();
         match self.common.state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
             _ => (),

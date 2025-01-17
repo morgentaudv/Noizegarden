@@ -155,7 +155,7 @@ impl TProcess for IFFTEmitterProcessData {
     fn try_process(&mut self, input: &ProcessProcessorInput) {
         // 時間更新。またInputピンのリソース更新はしなくてもいい。
         self.common.elapsed_time = input.common.elapsed_time;
-        self.common.process_input_pins();
+        self.common.process_input_pins_deprecated();
 
         match self.common.state {
             EProcessState::Stopped | EProcessState::Playing => self.update_state(input),
