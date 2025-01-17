@@ -107,7 +107,7 @@ noizegarden -i ./example/sine_sweep.json
 - [x] IRConvolutionノード
 - [x] `quality`Chunkの読み込み（解読はしない）
 - [x] `sample_count_frame`の廃止と代替案の導入
-- [ ] 音源(wav, 16bit, stereo)Emitterノードの追加
+- [x] 音源(wav, 16bit, stereo)Emitterノードの追加
 - [ ] LUFSのゲーティング処理やそれに伴うIntegratedの実装
 - [ ] eguiの導入
 - [ ] webgpuの導入 (vulkanは難易度高すぎたため)
