@@ -23,7 +23,7 @@
         },
         "filter_1": {
             "type": "filter-fir",
-            "edge_frequency": 400.0,
+            "edge_frequency": 800.0,
             "frequency_width": 0.0,
             "delta_frequency": 1000.0,
             "mode": "low-pass"
