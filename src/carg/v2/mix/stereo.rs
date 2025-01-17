@@ -8,6 +8,8 @@ use crate::carg::v2::meta::sample_timer::SampleTimer;
 use crate::carg::v2::meta::system::{InitializeSystemAccessor, TSystemCategory};
 use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::math::float::EFloatCommonPin;
+use crate::nz_define_time_tick_for;
+use crate::carg::v2::meta::tick::TTimeTickCategory;
 use crate::wave::sample::UniformedSample;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -55,6 +57,9 @@ impl TPinCategory for MixStereoProcessData {
         }
     }
 }
+
+impl TSystemCategory for MixStereoProcessData {}
+nz_define_time_tick_for!(MixStereoProcessData, true, true);
 
 impl TProcessItem for MixStereoProcessData {
     fn can_create_item(_setting: &ProcessItemCreateSetting) -> anyhow::Result<()> {
@@ -209,9 +214,6 @@ struct DrainBufferResult {
     buffer: Vec<UniformedSample>,
     is_finished: bool,
 }
-
-impl TSystemCategory for MixStereoProcessData {}
-
 
 impl TProcess for MixStereoProcessData {
     fn is_finished(&self) -> bool {
