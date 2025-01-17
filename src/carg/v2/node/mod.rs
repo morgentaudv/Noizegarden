@@ -129,6 +129,7 @@ impl RelationTreeNode {
             return process_result::DIFFERENT_CATEGORY;
         }
 
+        //dbg!(&self.name);
         let input = ProcessProcessorInput {
             common: *input,
             children_states: self

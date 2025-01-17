@@ -153,7 +153,7 @@ impl MixSeparatorProcessData {
             .unwrap();
         self.common
             .insert_to_output_pin(
-                OUTPUT_OUT_1,
+                OUTPUT_OUT_2,
                 EProcessOutput::BufferMono(ProcessOutputBuffer::new(out_2, sample_rate)),
             )
             .unwrap();
