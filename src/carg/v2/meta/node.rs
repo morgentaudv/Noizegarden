@@ -10,7 +10,7 @@ use crate::carg::v2::analyzer::lufs::{AnalyzeLUFSProcessData, MetaLufsInfo};
 use crate::carg::v2::emitter::idft::IDFTEmitterProcessData;
 use crate::carg::v2::emitter::ifft::IFFTEmitterProcessData;
 use crate::carg::v2::emitter::oscilo::{MetaSineEmitterInfo, MetaSineNoiseInfo, MetaSineSquareInfo, SineWaveEmitterProcessData};
-use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavInfo};
+use crate::carg::v2::emitter::wav_mono::{EmitterWavMonoProcessData, MetaWavMonoInfo};
 use crate::carg::v2::filter::fir::{FIRProcessData, MetaFIRInfo};
 use crate::carg::v2::filter::iir::{IIRProcessData, MetaIIRInfo};
 use crate::carg::v2::filter::irconv::{IRConvolutionProcessData, MetaIRConvInfo};
@@ -33,6 +33,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::carg::v2::adapter::delay::{AdapterDelayProcessData, MetaDelayInfo};
 use crate::carg::v2::emitter::sine_sweep::{MetaSineSweepInfo, SineSweepEmitterProcessData};
+use crate::carg::v2::emitter::wav_stereo::{EmitterWavStereoProcessData, MetaWavStereoInfo};
+use crate::carg::v2::mix::separator::{MetaSeparatorInfo, MixSeparatorProcessData};
 // ----------------------------------------------------------------------------
 // ENode
 // ----------------------------------------------------------------------------
@@ -80,7 +82,9 @@ pub enum ENode {
     },
     /// パスからサポートできるWavを読み込み、サンプルをバッファで出力する。
     #[serde(rename = "emitter-wav-mono")]
-    EmitterWavMono(MetaWavInfo),
+    EmitterWavMono(MetaWavMonoInfo),
+    #[serde(rename = "emitter-wav-stereo")]
+    EmitterWavStereo(MetaWavStereoInfo),
     #[serde(rename = "emitter-sinesweep")]
     EmitterSineSweep(MetaSineSweepInfo),
     /// DFTで音波を分析する。
@@ -153,6 +157,8 @@ pub enum ENode {
     FilterIRConvolution(MetaIRConvInfo),
     #[serde(rename = "mix-stereo")]
     MixStereo(MetaStereoInfo),
+    #[serde(rename = "mix-separator")]
+    MixSeparator(MetaSeparatorInfo),
     /// 何かからファイルを出力する
     #[serde(rename = "output-file")]
     OutputFile(MetaOutputFileInfo),
@@ -214,6 +220,9 @@ impl ENode {
             }
             ENode::EmitterWavMono(_) => {
                 EmitterWavMonoProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            },
+            ENode::EmitterWavStereo(_) => {
+                EmitterWavStereoProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }
             ENode::InternalDummy => {
                 DummyProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
@@ -221,6 +230,9 @@ impl ENode {
             ENode::MixStereo { .. } => {
                 MixStereoProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             },
+            ENode::MixSeparator(_) => {
+                MixSeparatorProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
+            }
             ENode::FilterFIR(_) => {
                 FIRProcessData::create_item(&setting, &system_setting).expect("Failed to create item")
             }

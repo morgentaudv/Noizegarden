@@ -14,7 +14,7 @@ use std::fs;
 use std::io::BufReader;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MetaWavInfo {
+pub struct MetaWavMonoInfo {
     /// ファイルのパス
     pub path: String,
 }
@@ -23,7 +23,7 @@ pub struct MetaWavInfo {
 pub struct EmitterWavMonoProcessData {
     setting: Setting,
     common: ProcessControlItem,
-    info: MetaWavInfo,
+    info: MetaWavMonoInfo,
     internal: InternalInfo,
 }
 
@@ -129,7 +129,7 @@ impl TProcessItem for EmitterWavMonoProcessData {
             let item = Self {
                 setting: setting.setting.clone(),
                 common: ProcessControlItem::new(ProcessControlItemSetting{
-                    specifier: ENodeSpecifier::EmitterWavMono,
+                    specifier: ENodeSpecifier::EmitterWavStereo,
                     systems: &system_setting,
                 }),
                 info: v.clone(),
@@ -166,7 +166,6 @@ impl EmitterWavMonoProcessData {
             let mut reader = BufReader::new(file);
             WaveContainer::from_bufread(&mut reader).expect("Could not create WaveContainer.")
         };
-        assert_eq!(container.bits_per_sample(), 16);
 
         // 移動して終わり。
         self.internal.sample_rate = container.samples_per_second() as usize;
@@ -177,15 +176,14 @@ impl EmitterWavMonoProcessData {
     fn next_samples(&mut self, input: &ProcessProcessorInput) -> Vec<UniformedSample> {
         assert!(self.internal.container.is_some());
 
+        let ideal_count = input.get_realtime_required_samples(self.internal.sample_rate);
+        if ideal_count <= 0 {
+            return vec![]
+        }
+        let buffer = self.internal.container.as_ref().unwrap().uniformed_sample_buffer();
+
         let (sample_counts, end) = {
-            let ideal_count = input.get_realtime_required_samples(self.internal.sample_rate);
-            if ideal_count <= 0 {
-                return vec![]
-            }
-
             let next_start_i = self.internal.next_start_i + ideal_count;
-
-            let buffer = self.internal.container.as_ref().unwrap().uniformed_sample_buffer();
             if next_start_i >= buffer.len() {
                 (buffer.len() - self.internal.next_start_i, true)
             } else {
@@ -194,12 +192,7 @@ impl EmitterWavMonoProcessData {
         };
 
         // 汲み取る
-        let buffer = self
-            .internal
-            .container
-            .as_ref()
-            .unwrap()
-            .uniformed_sample_buffer()
+        let buffer = buffer
             .iter()
             .skip(self.internal.next_start_i)
             .take(sample_counts)
