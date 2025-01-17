@@ -140,7 +140,7 @@ impl TProcessItem for EmitterWavStereoProcessData {
             let item = Self {
                 setting: setting.setting.clone(),
                 common: ProcessControlItem::new(ProcessControlItemSetting {
-                    specifier: ENodeSpecifier::EmitterWavMono,
+                    specifier: ENodeSpecifier::EmitterWavStereo,
                     systems: &system_setting,
                 }),
                 info: v.clone(),

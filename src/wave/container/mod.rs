@@ -109,12 +109,10 @@ impl WaveContainer {
         debug_assert!(wave_fmt_header.is_some());
 
         let wave_fmt_header = wave_fmt_header.unwrap();
-        let buffer_size = wave_data_chunk.data_chunk_size / (wave_fmt_header.channel as u32);
 
         // 最後に実際データが入っているバッファーを読み取る。
         let mut buffer = vec![];
         reader.read_to_end(&mut buffer).expect("Failed to read buffer.");
-        assert_eq!(buffer.len(), buffer_size as usize);
 
         // bufferの各ブロックから`UniformedSample`に変換する。
         let unit_block_size = wave_fmt_header.unit_block_size();

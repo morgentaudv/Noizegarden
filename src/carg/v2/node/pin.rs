@@ -61,9 +61,10 @@ impl NodePinItem {
         // カテゴリを見て`new_output`がサポートできない種類であればエラーを返す。
         if !new_output.check(self.categories) {
             return Err(anyhow::anyhow!(
-                "Not supported output category of ({} pin, {} flags).",
+                "Not supported output category of (`{}` pin, `{}` flags) to (`{}` flags).",
                 self.name,
-                self.categories
+                self.categories,
+                new_output.as_pin_category_flag(),
             ));
         }
 

@@ -243,6 +243,9 @@ impl EProcessInputContainer {
             container_category::BUFFER_MONO_DYNAMIC => {
                 EProcessInputContainer::BufferMonoDynamic(BufferMonoDynamicItem::new())
             }
+            container_category::BUFFER_STEREO_DYNAMIC => {
+                EProcessInputContainer::BufferStereoDynamic(BufferStereoDynamicItem::new())
+            }
             container_category::TEXT_DYNAMIC => EProcessInputContainer::TextDynamic(TextDynamicItem::new()),
             container_category::OUTPUT_LOG => {
                 EProcessInputContainer::OutputLog(EOutputLogItem::TextDynamic(TextDynamicItem { buffer: vec![] }))
