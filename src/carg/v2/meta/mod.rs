@@ -32,11 +32,13 @@ use crate::carg::v2::adapter::resample::ResampleProcessData;
 use crate::carg::v2::analyzer::lufs::AnalyzeLUFSProcessData;
 use crate::carg::v2::emitter::sine_sweep::SineSweepEmitterProcessData;
 use crate::carg::v2::emitter::wav_mono::EmitterWavMonoProcessData;
+use crate::carg::v2::emitter::wav_stereo::EmitterWavStereoProcessData;
 use crate::carg::v2::filter::irconv::IRConvolutionProcessData;
 use crate::carg::v2::meta::node::ENode;
 use crate::carg::v2::meta::process::{process_category, EProcessCategoryFlag, TProcessCategory};
 use crate::carg::v2::meta::system::{ESystemCategoryFlag, TSystemCategory};
 use crate::carg::v2::meta::tick::TTimeTickCategory;
+use crate::carg::v2::mix::separator::MixSeparatorProcessData;
 use crate::carg::v2::node::pin::{NodePinItem, NodePinItemList};
 use crate::carg::v2::output::output_device::OutputDeviceProcessData;
 
@@ -103,6 +105,7 @@ pub enum ENodeSpecifier {
     EmitterIFFT,
     EmitterSineSweep,
     EmitterWavMono,
+    EmitterWavStereo,
     AnalyzerDFT,
     AnalyzerFFT,
     AnalyzerLUFS,
@@ -120,6 +123,7 @@ pub enum ENodeSpecifier {
     FilterIIRBandStop,
     FilterIRConvolution,
     MixStereo,
+    MixSeparator,
     OutputFile,
     OutputLog,
     OutputDevice,
@@ -141,6 +145,7 @@ impl ENodeSpecifier {
             ENode::EmitterIFFT { .. } => Self::EmitterIFFT,
             ENode::EmitterSineSweep { .. } => Self::EmitterSineSweep,
             ENode::EmitterWavMono(_) => Self::EmitterWavMono,
+            ENode::EmitterWavStereo(_) => Self::EmitterWavStereo,
             ENode::AnalyzerDFT { .. } => Self::AnalyzerDFT,
             ENode::AnalyzerFFT { .. } => Self::AnalyzerFFT,
             ENode::AnalyzerLUFS(_) => Self::AnalyzerLUFS,
@@ -152,6 +157,7 @@ impl ENodeSpecifier {
             ENode::OutputDevice(_) => Self::OutputDevice,
             ENode::AdapterWaveSum => Self::AdapterWaveSum,
             ENode::MixStereo { .. } => Self::MixStereo,
+            ENode::MixSeparator(_) => Self::MixSeparator,
             ENode::FilterFIR(_) => Self::FilterFIR,
             ENode::FilterIIRLPF(_) => Self::FilterIIRLPF,
             ENode::FilterIIRHPF(_) => Self::FilterIIRHPF,
@@ -181,6 +187,7 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_pin_names(),
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_input_pin_names(),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::get_input_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_pin_names(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_pin_names(),
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_input_pin_names(),
@@ -190,6 +197,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_pin_names(),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_input_pin_names(),
+            Self::MixSeparator => MixSeparatorProcessData::get_input_pin_names(),
             Self::FilterFIR => FIRProcessData::get_input_pin_names(),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_input_pin_names()
@@ -218,6 +226,7 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_output_pin_names(),
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_output_pin_names(),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::get_output_pin_names(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_output_pin_names(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_output_pin_names(),
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_output_pin_names(),
@@ -227,6 +236,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::get_output_pin_names(),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_output_pin_names(),
             Self::MixStereo => MixStereoProcessData::get_output_pin_names(),
+            Self::MixSeparator => MixSeparatorProcessData::get_output_pin_names(),
             Self::FilterFIR => FIRProcessData::get_output_pin_names(),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_output_pin_names()
@@ -304,6 +314,7 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_pin_categories(pin_name),
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_pin_categories(pin_name),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::get_pin_categories(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_pin_categories(pin_name),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_pin_categories(pin_name),
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_pin_categories(pin_name),
@@ -313,6 +324,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::get_pin_categories(pin_name),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_pin_categories(pin_name),
             Self::MixStereo => MixStereoProcessData::get_pin_categories(pin_name),
+            Self::MixSeparator => MixSeparatorProcessData::get_pin_categories(pin_name),
             Self::FilterFIR => FIRProcessData::get_pin_categories(pin_name),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_pin_categories(pin_name)
@@ -341,6 +353,7 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_input_container_flag(pin_name),
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_input_container_flag(pin_name),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_input_container_flag(pin_name),
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_input_container_flag(pin_name),
@@ -350,6 +363,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_input_container_flag(pin_name),
             Self::MixStereo => MixStereoProcessData::get_input_container_flag(pin_name),
+            Self::MixSeparator => MixSeparatorProcessData::get_input_container_flag(pin_name),
             Self::FilterFIR => FIRProcessData::get_input_container_flag(pin_name),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_input_container_flag(pin_name)
@@ -379,6 +393,7 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::get_dependent_system_categories(),
             Self::EmitterWavMono => EmitterWavMonoProcessData::get_dependent_system_categories(),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::get_dependent_system_categories(),
             Self::AnalyzerDFT => AnalyzerDFTProcessData::get_dependent_system_categories(),
             Self::AnalyzerFFT => AnalyzerFFTProcessData::get_dependent_system_categories(),
             Self::AnalyzerLUFS => AnalyzeLUFSProcessData::get_dependent_system_categories(),
@@ -388,6 +403,7 @@ impl ENodeSpecifier {
             Self::EmitterIDFT => IDFTEmitterProcessData::get_dependent_system_categories(),
             Self::EmitterIFFT => IFFTEmitterProcessData::get_dependent_system_categories(),
             Self::MixStereo => MixStereoProcessData::get_dependent_system_categories(),
+            Self::MixSeparator => MixSeparatorProcessData::get_dependent_system_categories(),
             Self::FilterFIR => FIRProcessData::get_dependent_system_categories(),
             Self::FilterIIRLPF | Self::FilterIIRHPF | Self::FilterIIRBandPass | Self::FilterIIRBandStop => {
                 IIRProcessData::get_dependent_system_categories()
@@ -431,11 +447,14 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::can_support_offline(),
             Self::EmitterWavMono => EmitterWavMonoProcessData::can_support_offline(),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::can_support_offline(),
             Self::EmitterIDFT => IDFTEmitterProcessData::can_support_offline(),
             Self::EmitterIFFT => IFFTEmitterProcessData::can_support_offline(),
             Self::AdapterResample => ResampleProcessData::can_support_offline(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::can_support_offline(),
             Self::AdapterDelay => AdapterDelayProcessData::can_support_offline(),
+            Self::MixStereo => MixStereoProcessData::can_support_offline(),
+            Self::MixSeparator => MixSeparatorProcessData::can_support_offline(),
             _ => false,
         }
     }
@@ -464,11 +483,14 @@ impl ENodeSpecifier {
             | Self::EmitterWhiteNoise
             | Self::EmitterSineWave => SineWaveEmitterProcessData::can_support_realtime(),
             Self::EmitterWavMono => EmitterWavMonoProcessData::can_support_realtime(),
+            Self::EmitterWavStereo => EmitterWavStereoProcessData::can_support_realtime(),
             Self::EmitterIDFT => IDFTEmitterProcessData::can_support_realtime(),
             Self::EmitterIFFT => IFFTEmitterProcessData::can_support_realtime(),
             Self::AdapterResample => ResampleProcessData::can_support_realtime(),
             Self::EmitterSineSweep => SineSweepEmitterProcessData::can_support_realtime(),
             Self::AdapterDelay => AdapterDelayProcessData::can_support_realtime(),
+            Self::MixStereo => MixStereoProcessData::can_support_realtime(),
+            Self::MixSeparator => MixSeparatorProcessData::can_support_realtime(),
             _ => false,
         }
     }

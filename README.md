@@ -34,37 +34,39 @@ noizegarden -i ./example/sine_sweep.json
 
 ここでは各ファイルの概要だけを紹介いたします。
 
-| File               | Description                                                  |
-|--------------------|--------------------------------------------------------------|
-| sine.json          | A4(440Hz)のサイン波形を3秒間発生したmonoの音源を出力します。                        | 
-| square.json        | A4(440Hz)の矩形波を3秒発生したmonoの音源を出力します。                           |
-| sawtooth.json      | A4(440Hz)のノコギリ波を3秒発生したmonoの音源を出力します。                         |
-| triangle.json      | A4(440Hz)の三角波を3秒発生したmonoの音源を出力します。                           |
-| whitenoise.json    | ホワイトノイズを3秒発生したmonoの音源を出力します。                                 |
-| pinknoise.json     | ピンクノイズを3秒発生したmonoの音源を出力します。                                  |
-| sweep.json         | サインスイープを20Hzから20000Hzまで発生したmonoの音源を出力します。                    |
-| wav_mono.json      | 特定のmono音源を読み込み、400HzをカットオフとするLPF(FIR)をかけて出力します。              |
-| dft.json           | DFT(Discrete Fourier Transform)と、逆変換を使って音源の周波数を分析して結果を出力します。 |
-| fft.json           | FFT(Fast Fourier Transform)と、その逆変換を使って音源の周波数を分析、再現します。       |
-| envelope_ad.json   | エンベロープ(AD)ノードを使って、音源の振幅を調整します。                               |
-| envelope_adsr.json | エンベロープ(ADSR)ノードを使って、音源振幅を調整します。                              |
-| lufs.json          | mono音源のLUFSを測定します。ただしゲーティング処理や音源全体のLUFSの測定は行いません。            |
-| wave_sum.json      | C長調のmaj5の和音の正弦波を合成し、mono音源として出力します。                          |
-| compressor.json    | compressorを使って元mono音源のレベルを抑制します。                             |
-| limiter.json       | limiterを使って元mono音源のレベルを抑制します。                                |
-| fir_lpf.json       | `wav_mono.json`と設定は同じです。FIRフィルターを使い、元音源から400Hz以下だけを残します。     |
-| fir_hpf.json       | FIRフィルターを使い、元音源から2kHz以上の音だけを残します。                            |
-| fir_bpf.json       | FIRフィルターを使い、元音源から1kHz回りの音だけを残します。                            |
-| fir_bsf.json       | FIRフィルターを使い、元音源から2kHz回りを除いた音だけを残します。                         |
-| iir_lpf.json       | IIRフィルター(biquad)を使い、元音源から400Hz以下だけを残します。                     |
-| iir_hpf.json       | IIRフィルター(biquad)を使い、元音源から2kHz以上の音だけを残します。                    |
-| iir_bpf.json       | IIRフィルター(biquad)を使い、元音源から1kHz周りの音だけを残します。                    |
-| iir_bef.json       | IIRフィルター(biquad)を使い、元音源から2kHz周りを除いた音だけを残します。                 |
-| mix_stereo.json    | mono音源をステレオの各チャンネルに構成します。現在パンニングの調整はできません。                   |
-| resample.json      | 20hzから20kHzまで続くサインスイープを96kHzレートから48kHzに変換して出力します。            |
-| delay.json         | mono音源を50msずらして流します。                                         |
-| pseudo_stereo.json | Delayノードを使い、mono音源から疑似的なステレオを構築します。                          |
-| ir_conv.json       | (TODO) mono音源に対しIR畳み込みを行います。                                 |
+| File                   | Description                                        |
+|------------------------|----------------------------------------------------|
+| sine.json              | A4(440Hz)のサイン波形を3秒間発生したmonoの音源を出力します。              | 
+| square.json            | A4(440Hz)の矩形波を3秒発生したmonoの音源を出力します。                 |
+| sawtooth.json          | A4(440Hz)のノコギリ波を3秒発生したmonoの音源を出力します。               |
+| triangle.json          | A4(440Hz)の三角波を3秒発生したmonoの音源を出力します。                 |
+| whitenoise.json        | ホワイトノイズを3秒発生したmonoの音源を出力します。                       |
+| whitenoise_stereo.json | ホワイトノイズを3秒発生したmonoをstereoにして出力します。                 |
+| pinknoise.json         | ピンクノイズを3秒発生したmonoの音源を出力します。                        |
+| sweep.json             | サインスイープを20Hzから20000Hzまで発生したmonoの音源を出力します。          |
+| wav_mono.json          | 特定のmono音源を読み込み、400HzをカットオフとするLPF(FIR)をかけて出力します。    |
+| wav_stereo.json        | stereo音源を読み込み、400HzをカットオフにするLPFをかけて出力します。 |
+| dft.json               | DFT(Discrete Fourier Transform)と、逆変換を使って音源の周波数を分析して結果を出力します。 |
+| fft.json               | FFT(Fast Fourier Transform)と、その逆変換を使って音源の周波数を分析、再現します。 |
+| envelope_ad.json       | エンベロープ(AD)ノードを使って、音源の振幅を調整します。                     |
+| envelope_adsr.json     | エンベロープ(ADSR)ノードを使って、音源振幅を調整します。                    |
+| lufs.json              | mono音源のLUFSを測定します。ただしゲーティング処理や音源全体のLUFSの測定は行いません。  |
+| wave_sum.json          | C長調のmaj5の和音の正弦波を合成し、mono音源として出力します。                |
+| compressor.json        | compressorを使って元mono音源のレベルを抑制します。                   |
+| limiter.json           | limiterを使って元mono音源のレベルを抑制します。                      |
+| fir_lpf.json           | `wav_mono.json`と設定は同じです。FIRフィルターを使い、元音源から400Hz以下だけを残します。 |
+| fir_hpf.json           | FIRフィルターを使い、元音源から2kHz以上の音だけを残します。                  |
+| fir_bpf.json           | FIRフィルターを使い、元音源から1kHz回りの音だけを残します。                  |
+| fir_bsf.json           | FIRフィルターを使い、元音源から2kHz回りを除いた音だけを残します。               |
+| iir_lpf.json           | IIRフィルター(biquad)を使い、元音源から400Hz以下だけを残します。           |
+| iir_hpf.json           | IIRフィルター(biquad)を使い、元音源から2kHz以上の音だけを残します。          |
+| iir_bpf.json           | IIRフィルター(biquad)を使い、元音源から1kHz周りの音だけを残します。          |
+| iir_bef.json           | IIRフィルター(biquad)を使い、元音源から2kHz周りを除いた音だけを残します。       |
+| mix_stereo.json        | mono音源をステレオの各チャンネルに構成します。現在パンニングの調整はできません。         |
+| resample.json          | 20hzから20kHzまで続くサインスイープを96kHzレートから48kHzに変換して出力します。  |
+| delay.json             | mono音源を50msずらして流します。                               |
+| pseudo_stereo.json     | Delayノードを使い、mono音源から疑似的なステレオを構築します。                |
+| ir_conv.json           | mono音源に対しIR畳み込みリバーブを行います。                          |
 
 ---
 

@@ -87,6 +87,26 @@ impl EProcessInputContainer {
         }
     }
 
+    /// [`container_category::BUFFER_STEREO_DYNAMIC`]を指定してる時に使える。
+    pub fn buffer_stereo_dynamic(&self) -> Option<&BufferStereoDynamicItem> {
+        if let Self::BufferStereoDynamic(item) = self {
+            Some(item)
+        }
+        else {
+            None
+        }
+    }
+
+    /// [`container_category::BUFFER_STEREO_DYNAMIC`]を指定してる時に使える。
+    pub fn buffer_stereo_dynamic_mut(&mut self) -> Option<&mut BufferStereoDynamicItem> {
+        if let Self::BufferStereoDynamic(item) = self {
+            Some(item)
+        }
+        else {
+            None
+        }
+    }
+
     /// [`container_category::OUTPUT_DEVICE`]を指定してる時に使える。
     pub fn output_dynamic(&self) -> Option<&EOutputDeviceInput> {
         match self {
