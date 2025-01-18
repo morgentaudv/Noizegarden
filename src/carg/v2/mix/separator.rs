@@ -121,7 +121,7 @@ impl TProcessItem for MixSeparatorProcessData {
 }
 
 impl MixSeparatorProcessData {
-    fn update_state(&mut self, in_input: &ProcessProcessorInput) {
+    fn update_state(&mut self, _in_input: &ProcessProcessorInput) {
         let (out_1, out_2, sample_rate) = {
             let mut item = self.common.get_input_internal_mut(INPUT_IN).unwrap();
             let item = item.buffer_stereo_dynamic_mut().unwrap();

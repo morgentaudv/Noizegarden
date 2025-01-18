@@ -50,7 +50,7 @@ impl PitchShifter {
             let t = pitch_rate * (n as f64);
             let ta = t.floor() as usize;
 
-            let mut tb = 0usize;
+            let tb;
             if t == (ta as f64) {
                 tb = ta;
             } else {

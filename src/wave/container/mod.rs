@@ -34,6 +34,8 @@ pub struct WaveContainer {
     fmt: LowWaveFormatHeader,
     /// 放送業界用Chunk。
     bext: Option<LowWaveBextHeader>,
+    /// Option用
+    qlty: Option<LowWaveQualityHeader>,
     /// 非PCM形式のwaveの場合、`LowWaveFactChunk`が存在する。
     fact: Option<LowWaveFactChunk>,
     data: LowWaveDataChunk,
@@ -169,6 +171,7 @@ impl WaveContainer {
             riff: wave_riff_header.unwrap(),
             fmt: wave_fmt_header,
             bext: wave_bext_header,
+            qlty: wave_qlty_header,
             fact: wave_fact_chunk,
             data: wave_data_chunk,
             uniformed_buffer,
@@ -181,6 +184,7 @@ impl WaveContainer {
             riff: original.riff.clone(),
             fmt: original.fmt.clone(),
             bext: original.bext.clone(),
+            qlty: original.qlty.clone(),
             fact: original.fact.clone(),
             data: original.data.clone(),
             uniformed_buffer,
@@ -200,6 +204,10 @@ impl WaveContainer {
 
         if self.bext.is_some() {
             self.bext.as_ref().unwrap().write(writer);
+        }
+
+        if self.qlty.is_some() {
+            self.qlty.as_ref().unwrap().write(writer);
         }
 
         if self.fact.is_some() {
@@ -352,6 +360,7 @@ impl WaveBuilder {
             riff: riff_header,
             fmt: format_header,
             bext: None,
+            qlty: None,
             fact: None,
             data: data_chunk,
             uniformed_buffer: uniformed_samples,
@@ -398,6 +407,7 @@ impl WaveBuilder {
             riff: riff_header,
             fmt: format_header,
             bext: None,
+            qlty: None,
             fact: None,
             data: data_chunk,
             uniformed_buffer: dst_container,
@@ -435,9 +445,14 @@ impl WaveBuilder {
             riff: riff_header,
             fmt: format_header,
             bext: None,
+            qlty: None,
             fact: None,
             data: data_chunk,
             uniformed_buffer,
         })
     }
 }
+
+// ----------------------------------------------------------------------------
+// EOF
+// ----------------------------------------------------------------------------

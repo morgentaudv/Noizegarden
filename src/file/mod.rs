@@ -166,7 +166,7 @@ pub enum EFileAccessSetting {
 /// 内部ファイル接近の制御コントローラー
 ///
 /// 内部にハンドルを持っていて、他のところから接近したい時にもっているハンドルを返すようにしたい。
-struct FileController {
+pub struct FileController {
     #[allow(dead_code)]
     setting: EFileAccessSetting,
     /// 内部保持用のハンドル。増殖用。

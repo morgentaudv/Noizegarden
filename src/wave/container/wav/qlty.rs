@@ -13,6 +13,7 @@ pub(crate) struct LowWaveQualityHeader {
 }
 
 impl LowWaveQualityHeader {
+    /// `io::Read + io::Seek`から`Self`の情報を取得して作る。
     pub fn from_bufread<T>(reader: &mut T) -> Option<Self>
     where T: io::Read + io::Seek
     {
@@ -39,6 +40,29 @@ impl LowWaveQualityHeader {
             chunk_size,
             chunk_data: vec![],
         })
+    }
+
+    /// [`LowWaveQualityHeader`]の情報を[`io::Write`]ストリームに書き込む。
+    pub fn write<T>(&self, writer: &mut T)
+    where
+        T: io::Write + io::Seek,
+    {
+        let data_size = self.chunk_data.len();
+        let total_size = size_of_val(&self.chunk_id) + size_of_val(&self.chunk_size) + data_size;
+
+        let mut buffer = vec![0u8; total_size];
+        unsafe {
+            let mut pointer = buffer.as_mut_ptr();
+            std::ptr::write(pointer as *mut _, self.chunk_id);
+            pointer = pointer.add(size_of_val(&self.chunk_id));
+
+            std::ptr::write(pointer as *mut _, self.chunk_size);
+            pointer = pointer.add(size_of_val(&self.chunk_size));
+
+            std::ptr::write(pointer as *mut _, self.chunk_data.as_ptr());
+        }
+
+        writer.write_all(&buffer).expect("Failed to write Bext chunk to writer.");
     }
 }
 

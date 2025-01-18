@@ -272,7 +272,7 @@ impl IRConvolutionProcessData {
             if self.internal.last_before_finish_index.is_none() {
                 self.internal.last_before_finish_index = Some(input.buffer.len() as isize);
             } else {
-                let mut remaining_index = self.internal.last_before_finish_index.as_mut().unwrap();
+                let remaining_index = self.internal.last_before_finish_index.as_mut().unwrap();
                 *remaining_index -= remove_count as isize;
 
                 if *remaining_index < 0 {

@@ -35,29 +35,6 @@ pub struct WaveFormatSetting {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum EIntensityControlItem {
-    ConstantMultifly(f64),
-    Fade {
-        start_time: f64,
-        length: f64,
-        start_factor: f64,
-        end_factor: f64,
-    },
-    Exp {
-        start_time: f64,
-        length: Option<f64>,
-        coefficient: f64,
-    },
-}
-
-impl EIntensityControlItem {
-    ///
-    pub fn calculate_factor(&self, relative_time: f64) -> f64 {
-        0.0
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
 pub enum EFrequencyItem {
     Constant {
         frequency: f64,
