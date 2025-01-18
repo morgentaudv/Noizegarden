@@ -130,7 +130,7 @@ impl TProcess for OutputLogProcessData {
 // ----------------------------------------------------------------------------
 
 /// [`EProcessInputContainer::OutputLog`]の内部コンテナ
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EOutputLogItem {
     BuffersDynamic(BufferMonoDynamicItem),
     TextDynamic(TextDynamicItem),
@@ -159,7 +159,7 @@ impl EOutputLogItem {
 
         match output {
             EProcessOutputContainer::BufferMono(_) => {
-                *self = Self::BuffersDynamic(BufferMonoDynamicItem::new());
+                *self = Self::BuffersDynamic(BufferMonoDynamicItem::new(0));
             }
             EProcessOutputContainer::Text(_) => {
                 *self = Self::TextDynamic(TextDynamicItem::new());
@@ -172,7 +172,7 @@ impl EOutputLogItem {
     pub fn reset(&mut self) {
         match self {
             EOutputLogItem::BuffersDynamic(v) => {
-                *v = BufferMonoDynamicItem::new();
+                *v = BufferMonoDynamicItem::new(0);
             }
             EOutputLogItem::TextDynamic(v) => {
                 v.buffer.clear();

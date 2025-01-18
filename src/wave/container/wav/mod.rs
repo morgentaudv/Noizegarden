@@ -1,5 +1,4 @@
 use std::io;
-use std::io::{Read, Seek};
 
 pub mod adpcm;
 pub mod data;

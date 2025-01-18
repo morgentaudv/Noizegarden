@@ -1,7 +1,7 @@
 use crate::file::handle::FileHandle;
 use crate::file::{FileController, FileControllerPtr};
 use std::io;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter};
 use std::marker::PhantomData;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
@@ -46,8 +46,8 @@ impl FileWriter<'_> {
         unsafe {
             // lockedとbuf_writerを[u8]に変換する。
             // ManuallyDropを使って、Dropしないように。。
-            let mut locked = ManuallyDrop::new(Box::new(boxed.controller.lock().unwrap()));
-            let mut buf_writer = match locked.internal.as_ref().unwrap() {
+            let locked = ManuallyDrop::new(Box::new(boxed.controller.lock().unwrap()));
+            let buf_writer = match locked.internal.as_ref().unwrap() {
                 EInternalData::Write { file } => {
                     ManuallyDrop::new(Box::new(BufWriter::new(file)))
                 }
@@ -71,14 +71,14 @@ impl FileWriter<'_> {
 impl io::Write for FileWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         // buf_writerを生かして、書かせる。
-        let mut addr = self.buf_writer.as_ref().unwrap().as_ptr();
+        let addr = self.buf_writer.as_ref().unwrap().as_ptr();
         let buf_writer = unsafe { &mut *addr };
         buf_writer.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
         // buf_writerを生かして、書かせる。
-        let mut addr = self.buf_writer.as_ref().unwrap().as_ptr();
+        let addr = self.buf_writer.as_ref().unwrap().as_ptr();
         let buf_writer = unsafe { &mut *addr };
         buf_writer.flush()
     }
@@ -87,7 +87,7 @@ impl io::Write for FileWriter<'_> {
 impl io::Seek for FileWriter<'_> {
     fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
         // buf_writerを生かして、書かせる。
-        let mut addr = self.buf_writer.as_ref().unwrap().as_ptr();
+        let addr = self.buf_writer.as_ref().unwrap().as_ptr();
         let buf_writer = unsafe { &mut *addr };
         buf_writer.seek(pos)
     }

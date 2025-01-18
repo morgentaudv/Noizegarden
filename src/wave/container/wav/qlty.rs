@@ -1,5 +1,5 @@
 use std::{io, mem};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{SeekFrom};
 use crate::wave::container::wav::try_read_wave_header_id_str;
 
 #[repr(C)]
@@ -22,7 +22,7 @@ impl LowWaveQualityHeader {
         }
         reader.seek(SeekFrom::Current(4)).unwrap();
 
-        let mut chunk_size: u32 = {
+        let chunk_size: u32 = {
             const_assert_eq!(size_of::<u32>(), 4usize);
 
             let mut chunk_size_buffer = [0u8; 4];

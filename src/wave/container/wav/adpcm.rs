@@ -125,7 +125,7 @@ impl<'a> IMAADPCMWriter<'a> {
             return;
         }
 
-        let format_header = LowWaveFormatHeader::from_builder(fmt::EBuilder::IMA_ADPCM {
+        let format_header = LowWaveFormatHeader::from_builder(fmt::EBuilder::ImaAdpcm {
             samples_per_sec: container.samples_per_second(),
         });
 

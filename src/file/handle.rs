@@ -1,8 +1,8 @@
-use std::ops::Deref;
-use std::sync::{Arc, Mutex};
-use crate::file::{EFileAccessSetting, FileController, FileControllerPtr, FileControllerWeakPtr};
 use crate::file::reader::{FileReader, FileReaderSetting};
 use crate::file::writer::FileWriter;
+use crate::file::{EFileAccessSetting, FileController, FileControllerPtr, FileControllerWeakPtr};
+use std::ops::Deref;
+use std::sync::Arc;
 
 /// システム外部からファイルの操作を行うためのハンドル。
 /// RAIIでドロップしたらファイル制御の破棄通知がいく。

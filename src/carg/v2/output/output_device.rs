@@ -244,7 +244,7 @@ fn get_drained_buffer_from(buffer: &mut Vec<UniformedSample>, required_samples: 
 // ----------------------------------------------------------------------------
 
 /// [`OutputDeviceProcessData`]の入力用コンテナの中身
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EOutputDeviceInput {
     Mono(BufferMonoDynamicItem),
     Stereo(BufferStereoDynamicItem),
@@ -273,7 +273,7 @@ impl EOutputDeviceInput {
 
         match output {
             EProcessOutputContainer::BufferMono(_) => {
-                *self = Self::Mono(BufferMonoDynamicItem::new());
+                *self = Self::Mono(BufferMonoDynamicItem::new(0));
             }
             EProcessOutputContainer::BufferStereo(_) => {
                 *self = Self::Stereo(BufferStereoDynamicItem::new());

@@ -39,6 +39,13 @@ pub struct ProcessInputPinsSetting {
     pub sync_sample_rate: usize,
 }
 
+impl ProcessInputPinsSetting {
+    /// インプット音源バッファのリサンプリングが行えるか
+    pub fn can_sync_sample_rate(&self) -> bool {
+        self.sync_sample_rate > 0
+    }
+}
+
 impl ProcessControlItem {
     /// [`ProcessControlItem`]を生成する。
     pub fn new(setting: ProcessControlItemSetting) -> Self {
@@ -97,10 +104,31 @@ impl ProcessControlItem {
 
     /// Updateフラグが立っているすべてのInputピンを更新する。
     pub fn process_input_pins_deprecated(&mut self) {
+        let setting = ProcessInputPinsSetting {
+            sync_sample_rate: 0,
+        };
+
         //
         for (_, pin) in &mut self.input_pins {
             let mut borrowed = pin.borrow_mut();
-            borrowed.try_initialize();
+            borrowed.try_initialize(&setting);
+
+            if borrowed.is_update_requested {
+                // 何をやるかはちょっと考える…
+                assert_eq!(borrowed.is_output, false);
+                borrowed.process_input();
+            }
+        }
+
+        // フラグを全部リセット
+        self.reset_all_input_pins_update_flag();
+    }
+
+    pub fn process_input_pins(&mut self, setting: &ProcessInputPinsSetting) {
+        //
+        for (_, pin) in &mut self.input_pins {
+            let mut borrowed = pin.borrow_mut();
+            borrowed.try_initialize(setting);
 
             if borrowed.is_update_requested {
                 // 何をやるかはちょっと考える…

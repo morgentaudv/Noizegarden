@@ -1,7 +1,11 @@
+mod resample;
+
+use crate::carg::v2::meta::input::resample::InputResampleController;
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::node::common::ProcessInputPinsSetting;
+use crate::carg::v2::output::output_device::EOutputDeviceInput;
 use crate::carg::v2::output::output_file::EOutputFileInput;
 use crate::carg::v2::output::output_log::EOutputLogItem;
-use crate::carg::v2::output::output_device::EOutputDeviceInput;
 use crate::wave::sample::UniformedSample;
 
 /// [`EProcessInputContainer`]の各アイテムの識別子をまとめている。
@@ -51,7 +55,7 @@ pub mod container_category {
 
 pub type EInputContainerCategoryFlag = u64;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EProcessInputContainer {
     Uninitialized,
     Empty,
@@ -71,8 +75,7 @@ impl EProcessInputContainer {
     pub fn buffer_mono_dynamic(&self) -> Option<&BufferMonoDynamicItem> {
         if let Self::BufferMonoDynamic(item) = self {
             Some(item)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -81,8 +84,7 @@ impl EProcessInputContainer {
     pub fn buffer_mono_dynamic_mut(&mut self) -> Option<&mut BufferMonoDynamicItem> {
         if let Self::BufferMonoDynamic(item) = self {
             Some(item)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -91,8 +93,7 @@ impl EProcessInputContainer {
     pub fn buffer_stereo_dynamic(&self) -> Option<&BufferStereoDynamicItem> {
         if let Self::BufferStereoDynamic(item) = self {
             Some(item)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -101,8 +102,7 @@ impl EProcessInputContainer {
     pub fn buffer_stereo_dynamic_mut(&mut self) -> Option<&mut BufferStereoDynamicItem> {
         if let Self::BufferStereoDynamic(item) = self {
             Some(item)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -125,17 +125,23 @@ impl EProcessInputContainer {
 }
 
 /// [`EProcessInputContainer::BufferMonoDynamic`]の内部コンテナ
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BufferMonoDynamicItem {
     pub buffer: Vec<UniformedSample>,
     pub sample_rate: usize,
+    /// 0ならsyncしない。
+    pub sync_sample_rate: usize,
+    /// @todo ここに仕込む。
+    pub resampler: Option<InputResampleController>,
 }
 
 impl BufferMonoDynamicItem {
-    pub fn new() -> Self {
+    pub fn new(sync_sample_rate: usize) -> Self {
         Self {
             buffer: vec![],
             sample_rate: 0,
+            sync_sample_rate,
+            resampler: None,
         }
     }
 
@@ -144,32 +150,40 @@ impl BufferMonoDynamicItem {
         self.sample_rate != 0
     }
 
+    /// リサンプリングするか？
+    pub fn use_resampling(&self) -> bool {
+        self.sync_sample_rate > 0
+    }
+
     pub fn update(&mut self, output: &EProcessOutputContainer) {
         // WaveBufferであるかをチェック。
-        match output {
-            // 記入する。
-            EProcessOutputContainer::BufferMono(v) => {
-                self.sample_rate = v.sample_rate;
+        if let EProcessOutputContainer::BufferMono(v) = output {
+            self.sample_rate = v.sample_rate;
 
-                // 24-09-27 `sample_offset`に気をつける。
-                let sample_offset = v.sample_offset.min(self.buffer.len());
-                if sample_offset == 0 {
-                    self.buffer.append(&mut v.buffer.clone());
-                }
-                else {
-                    // bufferのラストからsample_offset分を持ってくる。
-                    {
-                        let buffer_it = self.buffer.iter_mut().rev().take(sample_offset).rev();
-                        let v_it = v.buffer.iter().take(sample_offset);
-                        buffer_it.zip(v_it).for_each(|(dst, src)| *dst += *src);
-                    }
+            // 24-09-27 `sample_offset`に気をつける。
+            let sample_offset = v.sample_offset.min(self.buffer.len());
+            if self.use_resampling() {
 
-                    // 残り分は全部Appendする。
-                    self.buffer.append(&mut v.buffer.iter().skip(sample_offset).copied().collect());
-                }
             }
-            _ => unreachable!("Unexpected output"),
+
+            if sample_offset == 0 {
+                self.buffer.append(&mut v.buffer.clone());
+            } else {
+                // bufferのラストからsample_offset分を持ってくる。
+                {
+                    let buffer_it = self.buffer.iter_mut().rev().take(sample_offset).rev();
+                    let v_it = v.buffer.iter().take(sample_offset);
+                    buffer_it.zip(v_it).for_each(|(dst, src)| *dst += *src);
+                }
+
+                // 残り分は全部Appendする。
+                self.buffer.append(&mut v.buffer.iter().skip(sample_offset).copied().collect());
+            }
+
+            return;
         }
+
+        unreachable!("Unexpected output");
     }
 }
 
@@ -194,7 +208,6 @@ impl BufferStereoDynamicItem {
     pub fn can_process(&self) -> bool {
         self.sample_rate != 0
     }
-
 }
 
 /// [`EProcessInputContainer::TextDynamic`]の内部コンテナ
@@ -234,14 +247,14 @@ impl EProcessInputContainer {
 
     /// `input_flag`からコンテナを初期化する。
     /// ただし既存状態が[`EProcessInputContainer::Uninitialized`]であること。
-    pub fn initialize(&mut self, input_flag: EInputContainerCategoryFlag) {
+    pub fn initialize(&mut self, input_flag: EInputContainerCategoryFlag, setting: &ProcessInputPinsSetting) {
         assert!(!self.is_initialized());
 
         *self = match input_flag {
             container_category::UNINITIALIZED | container_category::EMPTY => EProcessInputContainer::Empty,
             container_category::BUFFER_MONO_PHANTOM => EProcessInputContainer::BufferMonoPhantom,
             container_category::BUFFER_MONO_DYNAMIC => {
-                EProcessInputContainer::BufferMonoDynamic(BufferMonoDynamicItem::new())
+                EProcessInputContainer::BufferMonoDynamic(BufferMonoDynamicItem::new(setting.sync_sample_rate))
             }
             container_category::BUFFER_STEREO_DYNAMIC => {
                 EProcessInputContainer::BufferStereoDynamic(BufferStereoDynamicItem::new())
@@ -250,12 +263,12 @@ impl EProcessInputContainer {
             container_category::OUTPUT_LOG => {
                 EProcessInputContainer::OutputLog(EOutputLogItem::TextDynamic(TextDynamicItem { buffer: vec![] }))
             }
-            container_category::OUTPUT_FILE => {
-                EProcessInputContainer::OutputFile(EOutputFileInput::Mono(BufferMonoDynamicItem::new()))
-            }
-            container_category::OUTPUT_DEVICE => {
-                EProcessInputContainer::OutputDevice(EOutputDeviceInput::Mono(BufferMonoDynamicItem::new()))
-            }
+            container_category::OUTPUT_FILE => EProcessInputContainer::OutputFile(EOutputFileInput::Mono(
+                BufferMonoDynamicItem::new(setting.sync_sample_rate),
+            )),
+            container_category::OUTPUT_DEVICE => EProcessInputContainer::OutputDevice(EOutputDeviceInput::Mono(
+                BufferMonoDynamicItem::new(setting.sync_sample_rate),
+            )),
             container_category::FREQUENCY_PHANTOM => EProcessInputContainer::FrequencyPhantom,
             container_category::DUMMY => EProcessInputContainer::Dummy,
             _ => unreachable!("Unexpected branch"),

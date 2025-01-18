@@ -32,6 +32,8 @@ pub mod wav;
 pub struct WaveContainer {
     riff: LowWaveRiffHeader,
     fmt: LowWaveFormatHeader,
+    /// 放送業界用Chunk。
+    bext: Option<LowWaveBextHeader>,
     /// 非PCM形式のwaveの場合、`LowWaveFactChunk`が存在する。
     fact: Option<LowWaveFactChunk>,
     data: LowWaveDataChunk,
@@ -66,7 +68,6 @@ impl WaveContainer {
         let mut wave_fact_chunk = None;
         let mut wave_bext_header = None;
         let mut wave_qlty_header = None;
-        let mut wave_junk_header = None;
         loop {
             let id = try_read_wave_header_id_str(reader);
             match id.as_str() {
@@ -90,7 +91,7 @@ impl WaveContainer {
                 }
                 "junk" => {
                     // 25-01-08
-                    wave_junk_header =
+                    let _junk_header =
                         Some(LowWaveJunkHeader::from_bufread(reader).expect("Failed to get junk chunk."));
                 }
                 "qlty" => {
@@ -167,6 +168,7 @@ impl WaveContainer {
         Some(WaveContainer {
             riff: wave_riff_header.unwrap(),
             fmt: wave_fmt_header,
+            bext: wave_bext_header,
             fact: wave_fact_chunk,
             data: wave_data_chunk,
             uniformed_buffer,
@@ -178,6 +180,7 @@ impl WaveContainer {
         Self {
             riff: original.riff.clone(),
             fmt: original.fmt.clone(),
+            bext: original.bext.clone(),
             fact: original.fact.clone(),
             data: original.data.clone(),
             uniformed_buffer,
@@ -194,6 +197,11 @@ impl WaveContainer {
     {
         self.riff.write(writer);
         self.fmt.write(writer);
+
+        if self.bext.is_some() {
+            self.bext.as_ref().unwrap().write(writer);
+        }
+
         if self.fact.is_some() {
             self.fact.as_ref().unwrap().write(writer);
         }
@@ -343,6 +351,7 @@ impl WaveBuilder {
         Some(WaveContainer {
             riff: riff_header,
             fmt: format_header,
+            bext: None,
             fact: None,
             data: data_chunk,
             uniformed_buffer: uniformed_samples,
@@ -356,7 +365,7 @@ impl WaveBuilder {
         }
 
         let src_container = container.uniformed_sample_buffer();
-        let format_header = LowWaveFormatHeader::from_builder(fmt::EBuilder::PCMU);
+        let format_header = LowWaveFormatHeader::from_builder(fmt::EBuilder::Pcmu);
         let data_chunk_size = (format_header.unit_block_size() * src_container.len()) as u32;
         let data_chunk = LowWaveDataChunk::from_chunk_size(data_chunk_size + 2);
         let riff_header = LowWaveRiffHeader::from_data_chunk(&data_chunk);
@@ -388,6 +397,7 @@ impl WaveBuilder {
         Some(WaveContainer {
             riff: riff_header,
             fmt: format_header,
+            bext: None,
             fact: None,
             data: data_chunk,
             uniformed_buffer: dst_container,
@@ -424,6 +434,7 @@ impl WaveBuilder {
         Some(WaveContainer {
             riff: riff_header,
             fmt: format_header,
+            bext: None,
             fact: None,
             data: data_chunk,
             uniformed_buffer,

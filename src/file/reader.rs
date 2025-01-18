@@ -53,8 +53,8 @@ impl FileReader<'_> {
         unsafe {
             // lockedとbuf_writerを[u8]に変換する。
             // ManuallyDropを使って、Dropしないように。。
-            let mut locked = ManuallyDrop::new(Box::new(boxed.controller.lock().unwrap()));
-            let mut buf_reader = match locked.internal.as_ref().unwrap() {
+            let locked = ManuallyDrop::new(Box::new(boxed.controller.lock().unwrap()));
+            let buf_reader = match locked.internal.as_ref().unwrap() {
                 EInternalData::Read { file } => {
                     ManuallyDrop::new(Box::new(BufReader::new(file)))
                 }
@@ -78,7 +78,7 @@ impl FileReader<'_> {
 impl io::Read for FileReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // buf_readerを生かして、書かせる。
-        let mut addr = self.buf_reader.as_ref().unwrap().as_ptr();
+        let addr = self.buf_reader.as_ref().unwrap().as_ptr();
         let buf_reader = unsafe { &mut *addr };
         buf_reader.read(buf)
     }
@@ -87,7 +87,7 @@ impl io::Read for FileReader<'_> {
 impl io::Seek for FileReader<'_> {
     fn seek(&mut self, style: io::SeekFrom) -> io::Result<u64> {
         // buf_readerを生かして、書かせる。
-        let mut addr = self.buf_reader.as_ref().unwrap().as_ptr();
+        let addr = self.buf_reader.as_ref().unwrap().as_ptr();
         let buf_reader = unsafe { &mut *addr };
         buf_reader.seek(style)
     }

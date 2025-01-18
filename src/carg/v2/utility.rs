@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// * inputとoutputが空白なものがあるかを確認する。
 /// * それぞれのノードに対してCycleになっていないかを確認する。
 pub fn validate_node_relations(
-    setting: &Setting,
+    _setting: &Setting,
     nodes: &MetaNodeContainer,
     relations: &[Relation],
 ) -> anyhow::Result<()> {

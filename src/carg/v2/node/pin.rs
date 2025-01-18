@@ -4,8 +4,9 @@ use crate::carg::v2::{EProcessOutput, ItemSPtr, ItemWPtr, SItemSPtr};
 use crate::carg::v2::meta::EPinCategoryFlag;
 use crate::carg::v2::meta::input::{EInputContainerCategoryFlag, EProcessInputContainer};
 use crate::carg::v2::meta::output::EProcessOutputContainer;
+use crate::carg::v2::node::common::ProcessInputPinsSetting;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NodePinItem {
     /// ピンの名前
     name: String,
@@ -91,11 +92,11 @@ impl NodePinItem {
         }
     }
 
-    pub fn try_initialize(&mut self) {
+    pub fn try_initialize(&mut self, setting: &ProcessInputPinsSetting) {
         // もしUninitializedなら、初期化する。
         if !self.input.is_initialized() {
             // 初期化する。
-            self.input.initialize(self.input_flag);
+            self.input.initialize(self.input_flag, setting);
         }
     }
 

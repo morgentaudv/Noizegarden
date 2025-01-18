@@ -6,9 +6,7 @@ use crate::carg::v2::meta::system::{system_category, ESystemCategoryFlag, Initia
 use crate::carg::v2::meta::{input, pin_category, ENodeSpecifier, EPinCategoryFlag, TPinCategory};
 use crate::carg::v2::node::common::{EProcessState, ProcessControlItemSetting};
 use crate::carg::v2::output::EOutputFileFormat;
-use crate::carg::v2::{
-    ENode, ProcessItemCreateSetting, SItemSPtr, TProcessItem, TProcessItemPtr,
-};
+use crate::carg::v2::{ENode, ProcessItemCreateSetting, SItemSPtr, TProcessItem, TProcessItemPtr};
 use crate::file::EFileAccessSetting;
 use crate::math::window::EWindowFunction;
 use crate::{
@@ -19,10 +17,8 @@ use crate::{
     },
 };
 use chrono::Local;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cell::UnsafeCell;
-use std::io::Write;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetaOutputFileInfo {
@@ -113,18 +109,20 @@ impl OutputFileProcessData {
             return;
         }
 
-        let input = self.common.input_pins.get(INPUT_IN).unwrap().borrow().input.clone();
-        match input {
-            EProcessInputContainer::OutputFile(internal) => match internal {
-                EOutputFileInput::Mono(v) => {
-                    self.process_mono(&v);
-                }
-                EOutputFileInput::Stereo(v) => {
-                    self.process_stereo(&v);
-                }
-            },
-            _ => unreachable!("Unexpected input."),
-        };
+        {
+            let input = &self.common.input_pins.get(INPUT_IN).unwrap().borrow().input;
+            match input {
+                EProcessInputContainer::OutputFile(internal) => match internal {
+                    EOutputFileInput::Mono(v) => {
+                        self.process_mono(&v);
+                    }
+                    EOutputFileInput::Stereo(v) => {
+                        self.process_stereo(&v);
+                    }
+                },
+                _ => unreachable!("Unexpected input."),
+            };
+        }
 
         // 状態変更。
         self.common.state = EProcessState::Finished;
@@ -169,7 +167,9 @@ impl OutputFileProcessData {
             let this = unsafe { &mut **this_pointer.get() };
 
             // 書き込み。
-            let file_setting = EFileAccessSetting::Write { path: this.get_applied_file_name() };
+            let file_setting = EFileAccessSetting::Write {
+                path: this.get_applied_file_name(),
+            };
             let file_handle = system.create_handle(file_setting);
             let mut writer = file_handle.try_write().unwrap();
             container.write(&mut writer);
@@ -227,7 +227,9 @@ impl OutputFileProcessData {
             let this = unsafe { &mut **this_pointer.get() };
 
             // 書き込み。
-            let file_setting = EFileAccessSetting::Write { path: this.get_applied_file_name() };
+            let file_setting = EFileAccessSetting::Write {
+                path: this.get_applied_file_name(),
+            };
             let file_handle = system.create_handle(file_setting);
             let mut writer = file_handle.try_write().unwrap();
             container.write(&mut writer);
@@ -285,7 +287,7 @@ impl TProcess for OutputFileProcessData {
 // ----------------------------------------------------------------------------
 
 /// [`EProcessInputContainer::OutputFile`]の内部コンテナ
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EOutputFileInput {
     Mono(BufferMonoDynamicItem),
     Stereo(BufferStereoDynamicItem),
@@ -314,7 +316,7 @@ impl EOutputFileInput {
 
         match output {
             EProcessOutputContainer::BufferMono(_) => {
-                *self = Self::Mono(BufferMonoDynamicItem::new());
+                *self = Self::Mono(BufferMonoDynamicItem::new(0));
             }
             EProcessOutputContainer::BufferStereo(_) => {
                 *self = Self::Stereo(BufferStereoDynamicItem::new());

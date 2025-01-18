@@ -56,6 +56,14 @@ impl ResampleSystem {
         }
     }
 
+    /// システムに接近できるプロキシーを取得する。
+    pub fn get_proxy() -> Option<ResampleSystemProxyWeakPtr> {
+        match PROXY_ACCESSOR.get() {
+            None => None,
+            Some(v) => Some(v.clone())
+        }
+    }
+
     /// システムを解放する。
     /// すべての関連処理が終わった後に解放すべき。
     pub fn cleanup() {

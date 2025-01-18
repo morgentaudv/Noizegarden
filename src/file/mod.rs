@@ -7,7 +7,6 @@ use crate::device::ESystemProcessResult;
 use crate::file::handle::FileHandle;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Write;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::fs;
 use crate::file::internal::EInternalData;
@@ -87,7 +86,7 @@ impl FileIO {
         debug_assert!(instance.v.is_some());
 
         // 25-01-02 外部からハンドルを持たないものは消す。
-        let mut instance = instance.v.as_mut().unwrap();
+        let instance = instance.v.as_mut().unwrap();
         let mut removal_keys = vec![];
         for (key, value) in &instance.file_map {
             let value = value.lock().unwrap();
