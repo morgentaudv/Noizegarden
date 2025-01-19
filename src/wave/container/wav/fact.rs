@@ -16,6 +16,7 @@ impl LowWaveFactChunk {
     const STRUCTURE_SIZE: usize = std::mem::size_of::<LowWaveFactChunk>();
 
     /// `io::Read + io::Seek`から`Self`が読み取れるかを確認する。
+    #[allow(dead_code)]
     pub fn can_be_chunk<T>(reader: &mut T) -> bool
     where
         T: io::Read + io::Seek,

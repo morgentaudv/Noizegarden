@@ -122,6 +122,22 @@ impl EProcessInputContainer {
             _ => None,
         }
     }
+
+    /// [`container_category::OUTPUT_FILE`]を指定してる時に使える
+    pub fn output_file(&self) -> Option<&EOutputFileInput> {
+        match self {
+            Self::OutputFile(item) => Some(item),
+            _ => None,
+        }
+    }
+
+    /// [`container_category::OUTPUT_FILE`]を指定してる時に使える
+    pub fn output_file_mut(&mut self) -> Option<&mut EOutputFileInput> {
+        match self {
+            Self::OutputFile(item) => Some(item),
+            _ => None,
+        }
+    }
 }
 
 /// [`EProcessInputContainer::BufferMonoDynamic`]の内部コンテナ

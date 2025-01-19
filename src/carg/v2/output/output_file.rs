@@ -9,6 +9,7 @@ use crate::carg::v2::output::EOutputFileFormat;
 use crate::carg::v2::{ENode, ProcessItemCreateSetting, SItemSPtr, TProcessItem, TProcessItemPtr};
 use crate::file::EFileAccessSetting;
 use crate::math::window::EWindowFunction;
+use crate::wave::sample::UniformedSample;
 use crate::{
     carg::v2::{ProcessControlItem, ProcessProcessorInput, TProcess},
     wave::{
@@ -18,7 +19,6 @@ use crate::{
 };
 use chrono::Local;
 use serde::{Deserialize, Serialize};
-use std::cell::UnsafeCell;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetaOutputFileInfo {
@@ -109,131 +109,24 @@ impl OutputFileProcessData {
             return;
         }
 
+        let file_name = self.get_applied_file_name();
+        let format = self.info.format.clone();
+        let systems = self.common.systems.clone();
+
         {
-            let input = &self.common.input_pins.get(INPUT_IN).unwrap().borrow().input;
-            match input {
-                EProcessInputContainer::OutputFile(internal) => match internal {
-                    EOutputFileInput::Mono(v) => {
-                        self.process_mono(&v);
-                    }
-                    EOutputFileInput::Stereo(v) => {
-                        self.process_stereo(&v);
-                    }
-                },
-                _ => unreachable!("Unexpected input."),
+            let input = self.common.get_input_internal_mut(INPUT_IN).unwrap();
+            match input.output_file().unwrap() {
+                EOutputFileInput::Mono(v) => {
+                    process_mono(systems, format, v.sample_rate, v.buffer.clone(), file_name);
+                }
+                EOutputFileInput::Stereo(v) => {
+                    process_stereo(systems, format, v.sample_rate, v.ch_left.clone(), v.ch_right.clone(), file_name);
+                }
             };
         }
 
         // 状態変更。
         self.common.state = EProcessState::Finished;
-    }
-
-    fn process_mono(&mut self, v: &BufferMonoDynamicItem) {
-        let source_sample_rate = v.sample_rate as f64;
-
-        let container = match self.info.format {
-            EOutputFileFormat::WavLPCM16 { sample_rate } => {
-                // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、リサンプリングをしなきゃならない。
-                let dest_sample_rate = sample_rate as f64;
-                let processed_container = {
-                    let pitch_rate = source_sample_rate / dest_sample_rate;
-                    if pitch_rate == 1.0 {
-                        v.buffer.clone()
-                    } else {
-                        PitchShifterBuilder::default()
-                            .pitch_rate(pitch_rate)
-                            .window_size(128)
-                            .window_function(EWindowFunction::None)
-                            .build()
-                            .unwrap()
-                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &v.buffer })
-                            .unwrap()
-                    }
-                };
-
-                WaveBuilder {
-                    samples_per_sec: sample_rate as u32,
-                    bits_per_sample: 16,
-                }
-                .build_mono(processed_container)
-                .unwrap()
-            }
-        };
-
-        // 書き込み。
-        let this_pointer = UnsafeCell::new(self as *mut Self);
-        self.common.systems.access_file_io_fn(move |system| {
-            // これ絶対よくない。
-            let this = unsafe { &mut **this_pointer.get() };
-
-            // 書き込み。
-            let file_setting = EFileAccessSetting::Write {
-                path: this.get_applied_file_name(),
-            };
-            let file_handle = system.create_handle(file_setting);
-            let mut writer = file_handle.try_write().unwrap();
-            container.write(&mut writer);
-        });
-    }
-
-    fn process_stereo(&mut self, v: &BufferStereoDynamicItem) {
-        let source_sample_rate = v.sample_rate as f64;
-
-        let container = match self.info.format {
-            EOutputFileFormat::WavLPCM16 { sample_rate } => {
-                // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、リサンプリングをしなきゃならない。
-                let dest_sample_rate = sample_rate as f64;
-                let pitch_rate = source_sample_rate / dest_sample_rate;
-
-                // Left Right 全部それぞれPitchShiftする。
-                let (left, right) = {
-                    if pitch_rate == 1.0 {
-                        (v.ch_left.clone(), v.ch_right.clone())
-                    } else {
-                        let left = PitchShifterBuilder::default()
-                            .pitch_rate(pitch_rate)
-                            .window_size(128)
-                            .window_function(EWindowFunction::None)
-                            .build()
-                            .unwrap()
-                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &v.ch_left })
-                            .unwrap();
-                        let right = PitchShifterBuilder::default()
-                            .pitch_rate(pitch_rate)
-                            .window_size(128)
-                            .window_function(EWindowFunction::None)
-                            .build()
-                            .unwrap()
-                            .process_with_buffer(&PitchShifterBufferSetting { buffer: &v.ch_right })
-                            .unwrap();
-                        (left, right)
-                    }
-                };
-
-                WaveBuilder {
-                    samples_per_sec: sample_rate as u32,
-                    bits_per_sample: 16,
-                }
-                .build_stereo(left, right)
-                .unwrap()
-            }
-        };
-
-        // 書き込み。
-
-        let this_pointer = UnsafeCell::new(self as *mut Self);
-        self.common.systems.access_file_io_fn(move |system| {
-            // これ絶対よくない。
-            let this = unsafe { &mut **this_pointer.get() };
-
-            // 書き込み。
-            let file_setting = EFileAccessSetting::Write {
-                path: this.get_applied_file_name(),
-            };
-            let file_handle = system.create_handle(file_setting);
-            let mut writer = file_handle.try_write().unwrap();
-            container.write(&mut writer);
-        });
     }
 
     fn get_applied_file_name(&self) -> String {
@@ -280,6 +173,113 @@ impl TProcess for OutputFileProcessData {
             _ => (),
         }
     }
+}
+
+fn process_mono(
+    systems: InitializeSystemAccessor,
+    format: EOutputFileFormat,
+    in_sample_rate: usize,
+    buffer: Vec<UniformedSample>,
+    file_name: String,
+) {
+    let container = match format {
+        EOutputFileFormat::WavLPCM16 { sample_rate } => {
+            // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、リサンプリングをしなきゃならない。
+            let dest_sample_rate = sample_rate as f64;
+            let processed_container = {
+                let pitch_rate = (in_sample_rate as f64) / dest_sample_rate;
+                if pitch_rate == 1.0 {
+                    buffer
+                } else {
+                    PitchShifterBuilder::default()
+                        .pitch_rate(pitch_rate)
+                        .window_size(128)
+                        .window_function(EWindowFunction::None)
+                        .build()
+                        .unwrap()
+                        .process_with_buffer(&PitchShifterBufferSetting { buffer: &buffer })
+                        .unwrap()
+                }
+            };
+
+            WaveBuilder {
+                samples_per_sec: sample_rate as u32,
+                bits_per_sample: 16,
+            }
+            .build_mono(processed_container)
+            .unwrap()
+        }
+    };
+
+    // 書き込み。
+    systems.access_file_io_fn(move |system| {
+        // 書き込み。
+        let file_setting = EFileAccessSetting::Write { path: file_name };
+        let file_handle = system.create_handle(file_setting);
+        let mut writer = file_handle.try_write().unwrap();
+        container.write(&mut writer);
+    });
+}
+
+fn process_stereo(
+    systems: InitializeSystemAccessor,
+    format: EOutputFileFormat,
+    in_sample_rate: usize,
+    ch_left: Vec<UniformedSample>,
+    ch_right: Vec<UniformedSample>,
+    file_name: String,
+) {
+    let source_sample_rate = in_sample_rate as f64;
+
+    let container = match format {
+        EOutputFileFormat::WavLPCM16 { sample_rate } => {
+            // もしsettingのsampling_rateがoutputのsampling_rateと違ったら、リサンプリングをしなきゃならない。
+            let dest_sample_rate = sample_rate as f64;
+            let pitch_rate = source_sample_rate / dest_sample_rate;
+
+            // Left Right 全部それぞれPitchShiftする。
+            let (left, right) = {
+                if pitch_rate == 1.0 {
+                    (ch_left, ch_right)
+                } else {
+                    let left = PitchShifterBuilder::default()
+                        .pitch_rate(pitch_rate)
+                        .window_size(128)
+                        .window_function(EWindowFunction::None)
+                        .build()
+                        .unwrap()
+                        .process_with_buffer(&PitchShifterBufferSetting { buffer: &ch_left })
+                        .unwrap();
+                    let right = PitchShifterBuilder::default()
+                        .pitch_rate(pitch_rate)
+                        .window_size(128)
+                        .window_function(EWindowFunction::None)
+                        .build()
+                        .unwrap()
+                        .process_with_buffer(&PitchShifterBufferSetting { buffer: &ch_right })
+                        .unwrap();
+                    (left, right)
+                }
+            };
+
+            WaveBuilder {
+                samples_per_sec: sample_rate as u32,
+                bits_per_sample: 16,
+            }
+            .build_stereo(left, right)
+            .unwrap()
+        }
+    };
+
+    // 書き込み。
+
+    systems.access_file_io_fn(move |system| {
+        // 書き込み。
+        let file_setting = EFileAccessSetting::Write { path: file_name };
+        let file_handle = system.create_handle(file_setting);
+        let mut writer = file_handle.try_write().unwrap();
+        container.write(&mut writer);
+    });
 }
 
 // ----------------------------------------------------------------------------
